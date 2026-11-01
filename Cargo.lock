@@ -1070,7 +1070,7 @@ dependencies = [
 [[package]]
 name = "nyx-share-client"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-share.git?rev=e66363cc455687951cb168639f7c1a6f198563ce#e66363cc455687951cb168639f7c1a6f198563ce"
+source = "git+https://github.com/design-nexus/nyx-share.git?rev=53a5cacbc46a4269ba40a0fb17c1ee07f12e5177#53a5cacbc46a4269ba40a0fb17c1ee07f12e5177"
 dependencies = [
  "nyx-share-core",
  "nyx-share-dbus",
@@ -1082,7 +1082,7 @@ dependencies = [
 [[package]]
 name = "nyx-share-core"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-share.git?rev=e66363cc455687951cb168639f7c1a6f198563ce#e66363cc455687951cb168639f7c1a6f198563ce"
+source = "git+https://github.com/design-nexus/nyx-share.git?rev=53a5cacbc46a4269ba40a0fb17c1ee07f12e5177#53a5cacbc46a4269ba40a0fb17c1ee07f12e5177"
 dependencies = [
  "serde",
  "serde_json",
@@ -1091,7 +1091,7 @@ dependencies = [
 [[package]]
 name = "nyx-share-dbus"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-share.git?rev=e66363cc455687951cb168639f7c1a6f198563ce#e66363cc455687951cb168639f7c1a6f198563ce"
+source = "git+https://github.com/design-nexus/nyx-share.git?rev=53a5cacbc46a4269ba40a0fb17c1ee07f12e5177#53a5cacbc46a4269ba40a0fb17c1ee07f12e5177"
 dependencies = [
  "nyx-share-core",
  "serde",

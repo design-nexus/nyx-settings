@@ -7,12 +7,15 @@ use crate::widgets::{self, Page};
 use crate::{cmd, window};
 use gtk::{gio, glib, prelude::*};
 use nyx_share_client::{
-    Client, ComputerInfo, Destination, Direction, Job, JobState, NasInfo, NearbyStatus, NearbyUpdate, PreferencesUpdate, ProviderInfo,
+    Client, ComputerInfo, Destination, Direction, Job, JobState, LinkedDevice, NasInfo, NearbyStatus, NearbyUpdate,
+    PreferencesUpdate, ProviderInfo,
 };
+use serde_json::Value;
 
 struct Snapshot {
     nearby: NearbyStatus,
     computers: Vec<ComputerInfo>,
+    devices: Value,
     nas: Vec<NasInfo>,
     destinations: Vec<Destination>,
     providers: Vec<ProviderInfo>,
@@ -40,6 +43,7 @@ fn load() -> Result<Snapshot, String> {
     Ok(Snapshot {
         nearby: c.nearby().map_err(text)?,
         computers: c.computers().map_err(text)?,
+        devices: c.devices().map_err(text)?,
         nas: c.nas().map_err(text)?,
         destinations: c.destinations(&[], 0).map_err(text)?,
         providers: c.capabilities().map_err(text)?.providers,
@@ -91,6 +95,9 @@ pub fn build(page: &Page) {
         "Computers you keep, known by their device key whatever their address. A trusted one can send to you without asking.",
     );
     let computer_rows = holder(&computers);
+    let linked = page.group("Linked devices");
+    linked.note("One entry for a phone or computer you reach several ways. Share sends the way that's up, and tries the next if one fails.");
+    let linked_rows = holder(&linked);
     let nas = page.group("NAS folders");
     nas.note(
         "Folders on an SMB, SFTP or NFS share. Files are copied in; nothing is moved or deleted. Passwords stay in your keyring.",
@@ -103,7 +110,7 @@ pub fn build(page: &Page) {
     sheet.note("What the Share Sheet offers, in this order. Pinned ones come first; hidden ones wait behind More.");
     let sheet_rows = holder(&sheet);
     widgets::keywords(
-        "share sharing localsend nearby airdrop send receive tailscale computers nas smb sftp nfs flux phone share sheet",
+        "share sharing localsend nearby airdrop send receive tailscale computers linked devices link phone bluetooth nas smb sftp nfs flux phone share sheet",
     );
 
     cmd::background(load, move |result: Result<Snapshot, String>| {
@@ -112,17 +119,20 @@ pub fn build(page: &Page) {
             Ok(s) => {
                 fill_nearby(&nearby_rows, &s.nearby);
                 fill_computers(&computer_rows, &s.computers);
+                fill_devices(&linked_rows, &s.devices);
                 fill_nas(&nas_rows, &s.nas);
                 fill_transfers(&transfer_rows, &s.jobs, s.history);
                 fill_services(&service_rows, &s.providers);
                 fill_sheet(&sheet_rows, &s.destinations);
             }
             Err(e) => {
-                for group in [&transfers, &computers, &nas, &services, &sheet] {
+                for group in [&transfers, &computers, &linked, &nas, &services, &sheet] {
                     group.wrapper.set_visible(false);
                 }
                 nearby_rows.append(&widgets::banner(
-                    &glib::markup_escape_text(&format!("Share isn't available: {e}. If it isn't installed, install it with nyx install share.")),
+                    &glib::markup_escape_text(&format!(
+                        "Share isn't available: {e}. If it isn't installed, install it with nyx install share."
+                    )),
                     true,
                 ));
             }
@@ -253,6 +263,107 @@ fn fill_computers(rows: &gtk::Box, list: &[ComputerInfo]) {
     rows.append(&r);
 }
 
+/// How a route reaches the device: "Flux", "Bluetooth"…
+fn way(routes: &[Value], id: &str) -> &'static str {
+    match routes.iter().find(|r| r["id"] == id).and_then(|r| r["provider"].as_str()) {
+        Some("flux") => "Flux",
+        Some("bluetooth") => "Bluetooth",
+        Some("localsend") => "Nearby",
+        Some(_) => "Computer",
+        None => "Not around now",
+    }
+}
+
+/// "Pandora · Flux": a route as the user knows it.
+fn route_label(routes: &[Value], id: &str) -> String {
+    match routes.iter().find(|r| r["id"] == id).and_then(|r| r["name"].as_str()) {
+        Some(name) => format!("{name} · {}", way(routes, id)),
+        None => format!("{id} · Not around now"),
+    }
+}
+
+fn strings(v: &Value) -> Vec<String> {
+    v.as_array().map(|a| a.iter().filter_map(|s| s.as_str().map(str::to_string)).collect()).unwrap_or_default()
+}
+
+fn fill_devices(rows: &gtk::Box, list: &Value) {
+    let routes = list["routes"].as_array().cloned().unwrap_or_default();
+    for d in list["devices"].as_array().into_iter().flatten() {
+        let ids = strings(&d["routes"]);
+        let desc = ids.iter().map(|id| route_label(&routes, id)).collect::<Vec<_>>().join(", then ");
+        let id = d["id"].as_str().unwrap_or_default().to_string();
+        let remove = widgets::confirm_button("Unlink", "Unlink?", move |_| {
+            let id = id.clone();
+            act(move |c| c.remove_device(&id));
+        });
+        remove.set_valign(gtk::Align::Center);
+        let name = d["name"].as_str().unwrap_or_default();
+        rows.append(&widgets::row(name, &glib::markup_escape_text(&desc), Some(remove.upcast_ref())));
+    }
+    for s in list["suggestions"].as_array().into_iter().flatten() {
+        let (name, ids) = (s["name"].as_str().unwrap_or_default().to_string(), strings(&s["routes"]));
+        let ways = ids.iter().map(|id| way(&routes, id)).collect::<Vec<_>>().join(" and ");
+        let device = LinkedDevice { name: name.clone(), routes: ids, ..Default::default() };
+        let (r, _) = widgets::button_row(
+            &format!("Link {name}?"),
+            &format!("Looks like one device, reached by {ways}."),
+            "Link",
+            move |_| {
+                let device = device.clone();
+                act(move |c| c.save_device(&device).map(|_| ()));
+            },
+        );
+        rows.append(&r);
+    }
+    let options: Vec<(String, String)> =
+        routes.iter().filter_map(|r| r["id"].as_str().map(|id| (id.to_string(), route_label(&routes, id)))).collect();
+    let (r, b) = widgets::button_row(
+        "Link devices",
+        "Pick the ways you reach one device, in the order to try them.",
+        "Link…",
+        move |_| link_dialog(options.clone()),
+    );
+    if routes.len() < 2 {
+        b.set_sensitive(false);
+        b.set_tooltip_text(Some("Share sees fewer than two devices right now"));
+    }
+    rows.append(&r);
+}
+
+fn link_dialog(options: Vec<(String, String)>) {
+    let mut third = vec![(String::new(), "Nothing else".to_string())];
+    third.extend(options.iter().cloned());
+    let second = options.get(1).map(|(id, _)| id.clone()).unwrap_or_default();
+    dialog::ask(
+        "Link devices",
+        "Share shows them as one entry and tries them in this order.",
+        vec![
+            Field::text("Name, like My phone"),
+            Field::choice(options.clone(), options.first().map(|(id, _)| id.as_str()).unwrap_or("")),
+            Field::choice(options, &second),
+            Field::choice(third, ""),
+        ],
+        "Link",
+        None,
+        |values, _| {
+            let name = values.first().map(|s| s.trim().to_string()).unwrap_or_default();
+            if name.is_empty() {
+                return Some("Give it a name".into());
+            }
+            let mut routes: Vec<String> = Vec::new();
+            for id in values.into_iter().skip(1).filter(|id| !id.is_empty()) {
+                if routes.contains(&id) {
+                    return Some("Pick a different way each time".into());
+                }
+                routes.push(id);
+            }
+            let device = LinkedDevice { name, routes, ..Default::default() };
+            act(move |c| c.save_device(&device).map(|_| ()));
+            None
+        },
+    );
+}
+
 fn fill_nas(rows: &gtk::Box, list: &[NasInfo]) {
     for n in list {
         let mut notes = vec![n.uri.clone()];
@@ -351,7 +462,10 @@ fn fill_transfers(rows: &gtk::Box, jobs: &[Job], history: usize) {
             },
             _ => j.message.clone().unwrap_or_default(),
         };
-        let when = glib::DateTime::from_unix_local(j.updated).and_then(|d| d.format("%b %-d, %H:%M")).map(|s| s.to_string()).unwrap_or_default();
+        let when = glib::DateTime::from_unix_local(j.updated)
+            .and_then(|d| d.format("%b %-d, %H:%M"))
+            .map(|s| s.to_string())
+            .unwrap_or_default();
         let controls = widgets::hbox(6);
         match j.state {
             JobState::Queued | JobState::Running => {
@@ -421,9 +535,15 @@ fn fill_sheet(rows: &gtk::Box, list: &[Destination]) {
     let mut options = vec![(String::new(), "None".to_string())];
     options.extend(list.iter().filter(|d| !d.hidden).map(|d| (d.id.clone(), d.name.clone())));
     let current = list.iter().find(|d| d.default).map(|d| d.id.clone()).unwrap_or_default();
-    let (r, _) = widgets::choice_row("Default destination", "Listed first and chosen with Enter in the Share Sheet.", options, &current, |id| {
-        act(move |c| c.set_preferences(&PreferencesUpdate { default: Some(id), ..Default::default() }));
-    });
+    let (r, _) = widgets::choice_row(
+        "Default destination",
+        "Listed first and chosen with Enter in the Share Sheet.",
+        options,
+        &current,
+        |id| {
+            act(move |c| c.set_preferences(&PreferencesUpdate { default: Some(id), ..Default::default() }));
+        },
+    );
     rows.append(&r);
     let order: Vec<String> = list.iter().map(|d| d.id.clone()).collect();
     let pinned: Vec<String> = list.iter().filter(|d| d.pinned).map(|d| d.id.clone()).collect();
