@@ -6,13 +6,32 @@ use crate::dialog::{self, Field};
 use crate::widgets::{self, Page};
 use crate::{cmd, window};
 use gtk::{gio, glib, prelude::*};
-use nyx_share_client::{Client, ComputerInfo, Destination, NasInfo, NearbyStatus, NearbyUpdate, PreferencesUpdate};
+use nyx_share_client::{
+    Client, ComputerInfo, Destination, Direction, Job, JobState, NasInfo, NearbyStatus, NearbyUpdate, PreferencesUpdate, ProviderInfo,
+};
 
 struct Snapshot {
     nearby: NearbyStatus,
     computers: Vec<ComputerInfo>,
     nas: Vec<NasInfo>,
     destinations: Vec<Destination>,
+    providers: Vec<ProviderInfo>,
+    jobs: Vec<Job>,
+    history: usize,
+}
+
+/// The transfers as they stand, for redrawing the page when they change.
+pub fn signature() -> String {
+    Client::connect()
+        .and_then(|c| c.jobs())
+        .map(|jobs| {
+            jobs.iter()
+                .take(12)
+                .map(|j| format!("{} {:?} {}", j.id, j.state, j.fraction().map(|f| (f * 10.0) as u32).unwrap_or(0)))
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .unwrap_or_default()
 }
 
 fn load() -> Result<Snapshot, String> {
@@ -23,6 +42,9 @@ fn load() -> Result<Snapshot, String> {
         computers: c.computers().map_err(text)?,
         nas: c.nas().map_err(text)?,
         destinations: c.destinations(&[], 0).map_err(text)?,
+        providers: c.capabilities().map_err(text)?.providers,
+        jobs: c.jobs().map_err(text)?,
+        history: c.preferences().map_err(text)?.history_limit(),
     })
 }
 
@@ -61,6 +83,9 @@ pub fn build(page: &Page) {
     nearby.note("Send to and receive from phones and computers running LocalSend or Share on your network or tailnet.");
     let nearby_rows = holder(&nearby);
     nearby_rows.append(&widgets::label("Asking Share…", "dim"));
+    let transfers = page.group("Transfers");
+    transfers.note("What you sent and received. A failed send can be tried again for half an hour.");
+    let transfer_rows = holder(&transfers);
     let computers = page.group("My computers");
     computers.note(
         "Computers you keep, known by their device key whatever their address. A trusted one can send to you without asking.",
@@ -71,6 +96,9 @@ pub fn build(page: &Page) {
         "Folders on an SMB, SFTP or NFS share. Files are copied in; nothing is moved or deleted. Passwords stay in your keyring.",
     );
     let nas_rows = holder(&nas);
+    let services = page.group("Destinations");
+    services.note("Turn off a kind of destination to leave it out of the Share Sheet and of every app's Send to.");
+    let service_rows = holder(&services);
     let sheet = page.group("Share Sheet");
     sheet.note("What the Share Sheet offers, in this order. Pinned ones come first; hidden ones wait behind More.");
     let sheet_rows = holder(&sheet);
@@ -85,10 +113,12 @@ pub fn build(page: &Page) {
                 fill_nearby(&nearby_rows, &s.nearby);
                 fill_computers(&computer_rows, &s.computers);
                 fill_nas(&nas_rows, &s.nas);
+                fill_transfers(&transfer_rows, &s.jobs, s.history);
+                fill_services(&service_rows, &s.providers);
                 fill_sheet(&sheet_rows, &s.destinations);
             }
             Err(e) => {
-                for group in [&computers, &nas, &sheet] {
+                for group in [&transfers, &computers, &nas, &services, &sheet] {
                     group.wrapper.set_visible(false);
                 }
                 nearby_rows.append(&widgets::banner(
@@ -302,7 +332,99 @@ fn add_nas() {
     );
 }
 
+fn fill_transfers(rows: &gtk::Box, jobs: &[Job], history: usize) {
+    let shown: Vec<&Job> = jobs.iter().take(12).collect();
+    if shown.is_empty() {
+        rows.append(&widgets::row("No transfers yet", "What you share and receive shows here.", None));
+    }
+    for j in shown {
+        let what = j.summary.clone().unwrap_or_else(|| format!("{} items", j.items));
+        let title = match j.direction {
+            Direction::Receive => format!("{what} from {}", j.destination_name),
+            Direction::Send => format!("{what} to {}", j.destination_name),
+        };
+        let status = match j.state {
+            JobState::Queued | JobState::Running => match (&j.step, j.fraction()) {
+                (Some(step), _) => step.clone(),
+                (None, Some(f)) => format!("{:.0}%", f * 100.0),
+                (None, None) => "Sending".into(),
+            },
+            _ => j.message.clone().unwrap_or_default(),
+        };
+        let when = glib::DateTime::from_unix_local(j.updated).and_then(|d| d.format("%b %-d, %H:%M")).map(|s| s.to_string()).unwrap_or_default();
+        let controls = widgets::hbox(6);
+        match j.state {
+            JobState::Queued | JobState::Running => {
+                let id = j.id.clone();
+                let b = gtk::Button::with_label("Cancel");
+                b.set_valign(gtk::Align::Center);
+                b.connect_clicked(move |_| {
+                    let id = id.clone();
+                    act(move |c| c.cancel(&id));
+                });
+                controls.append(&b);
+            }
+            JobState::Failed if j.retryable => {
+                let id = j.id.clone();
+                let b = gtk::Button::with_label("Retry");
+                b.set_valign(gtk::Align::Center);
+                b.connect_clicked(move |_| {
+                    let id = id.clone();
+                    act(move |c| c.retry(&id).map(|_| ()));
+                });
+                controls.append(&b);
+            }
+            _ => {}
+        }
+        let desc = if when.is_empty() { status } else { format!("{status} · {when}") };
+        let row = widgets::row(&title, &glib::markup_escape_text(&desc), Some(controls.upcast_ref()));
+        if j.state == JobState::Failed {
+            row.add_css_class("error");
+        }
+        rows.append(&row);
+    }
+    let sizes: Vec<(String, String)> = [10, 50, 100, 500].iter().map(|n| (n.to_string(), format!("The last {n}"))).collect();
+    let current = if [10, 50, 100, 500].contains(&history) { history.to_string() } else { "50".into() };
+    let (r, _) = widgets::choice_row("Keep", "How many finished transfers are remembered.", sizes, &current, |n| {
+        let n: u32 = n.parse().unwrap_or(50);
+        act(move |c| c.set_preferences(&PreferencesUpdate { history: Some(n), ..Default::default() }));
+    });
+    rows.append(&r);
+    let clear = widgets::confirm_button("Clear", "Clear?", |_| act(|c| c.clear_history()));
+    clear.set_valign(gtk::Align::Center);
+    rows.append(&widgets::row("Clear the history", "Running transfers stay.", Some(clear.upcast_ref())));
+}
+
+fn fill_services(rows: &gtk::Box, providers: &[ProviderInfo]) {
+    let disabled: Vec<String> = providers.iter().filter(|p| !p.enabled).map(|p| p.id.clone()).collect();
+    for p in providers {
+        let desc = match (&p.status, p.available) {
+            (Some(s), false) => s.clone(),
+            _ if !p.enabled => "Off".into(),
+            _ if p.available => "Ready".into(),
+            _ => "Nothing to offer right now".into(),
+        };
+        let (id, now) = (p.id.clone(), disabled.clone());
+        let (r, _) = widgets::switch_row(&p.name, &glib::markup_escape_text(&desc), p.enabled, move |on| {
+            let mut list = now.clone();
+            list.retain(|x| *x != id);
+            if !on {
+                list.push(id.clone());
+            }
+            act(move |c| c.set_preferences(&PreferencesUpdate { disabled: Some(list), ..Default::default() }));
+        });
+        rows.append(&r);
+    }
+}
+
 fn fill_sheet(rows: &gtk::Box, list: &[Destination]) {
+    let mut options = vec![(String::new(), "None".to_string())];
+    options.extend(list.iter().filter(|d| !d.hidden).map(|d| (d.id.clone(), d.name.clone())));
+    let current = list.iter().find(|d| d.default).map(|d| d.id.clone()).unwrap_or_default();
+    let (r, _) = widgets::choice_row("Default destination", "Listed first and chosen with Enter in the Share Sheet.", options, &current, |id| {
+        act(move |c| c.set_preferences(&PreferencesUpdate { default: Some(id), ..Default::default() }));
+    });
+    rows.append(&r);
     let order: Vec<String> = list.iter().map(|d| d.id.clone()).collect();
     let pinned: Vec<String> = list.iter().filter(|d| d.pinned).map(|d| d.id.clone()).collect();
     let hidden: Vec<String> = list.iter().filter(|d| d.hidden).map(|d| d.id.clone()).collect();
