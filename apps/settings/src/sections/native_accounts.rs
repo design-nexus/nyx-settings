@@ -67,10 +67,14 @@ pub fn build(page: &Page) {
     .0;
     group.add(&refresh);
     group.add(
-        &widgets::button_row("Synchronization issues", "Review retained calendar and task conflicts", "Review", |_| {
+        &widgets::button_row("Synchronization issues", "Review retained calendar, task and contact conflicts", "Review", |_| {
             sync_issues()
         })
         .0,
+    );
+    group.add(
+        &widgets::button_row("Local history", "Review and recover archived versions as offline copies", "Browse", |_| history())
+            .0,
     );
     let holder = widgets::vbox(0);
     group.add(&holder);
@@ -379,7 +383,10 @@ fn manage(account: Account) {
     let id = account.id.clone();
     let remove = widgets::confirm_button("Remove account", "Disconnect this account?", move |_| {
         let id = id.clone();
-        work(move |c| c.remove(&id));
+        work(move |c| {
+            nyx_pim::Registry::connect()?.preserve_account_cache(&id)?;
+            c.remove(&id)
+        });
         dialog.close();
     });
     body.append(&widgets::row(
@@ -406,8 +413,8 @@ fn sync_issues() {
                 }
                 for issue in issues {
                     let action = gtk::Button::with_label("Review");
-                    let detail = if issue.kind == "uncertain" {
-                        "Task creation needs confirmation"
+                    let detail = if issue.kind.ends_with("uncertain") {
+                        "Creation needs confirmation"
                     } else if issue.remote_deleted {
                         "Removed on the provider"
                     } else {
@@ -436,8 +443,8 @@ fn review_issue(issue: nyx_pim::SyncIssue) {
         ("Local version", local),
         (
             "Provider version",
-            if issue.kind == "uncertain" {
-                "The provider may have created this task. Check the provider before retrying to avoid a duplicate.".into()
+            if issue.kind.ends_with("uncertain") {
+                "The provider may have created this item. Check the provider before retrying to avoid a duplicate.".into()
             } else if issue.remote_deleted {
                 "Removed on the provider.".into()
             } else {
@@ -471,10 +478,10 @@ fn review_issue(issue: nyx_pim::SyncIssue) {
         "Preserve the local item offline and accept the provider version",
         nyx_pim::Resolution::KeepOffline,
     )];
-    if issue.kind == "uncertain" {
+    if issue.kind.ends_with("uncertain") {
         choices.push((
             "Retry creation",
-            "Only after checking the provider and confirming that the task was not created",
+            "Only after checking the provider and confirming that the item was not created",
             nyx_pim::Resolution::RetryCreation,
         ));
     } else {
@@ -521,4 +528,89 @@ fn review_issue(issue: nyx_pim::SyncIssue) {
     }
     let close = dialog.clone();
     body.append(&widgets::button_row("", "", "Cancel", move |_| close.close()).0);
+}
+
+fn history() {
+    let (dialog, body) = super::cloud::dialog("Local synchronization history");
+    let list = widgets::vbox(6);
+    body.append(&list);
+    cmd::background(
+        || nyx_pim::Registry::connect().and_then(|r| r.history()),
+        move |result| match result {
+            Ok(entries) => {
+                if entries.is_empty() {
+                    list.append(&widgets::label("No archived versions yet.", "dim"));
+                }
+                for entry in entries {
+                    let key = entry.key.clone();
+                    list.append(
+                        &widgets::button_row(
+                            &entry.source,
+                            &format!("{} · {}", entry.created, entry.title),
+                            "Review",
+                            move |_| history_detail(key.clone()),
+                        )
+                        .0,
+                    );
+                }
+            }
+            Err(error) => list.append(&widgets::label(&error.to_string(), "dim")),
+        },
+    );
+    let close = dialog.clone();
+    body.append(&widgets::button_row("", "", "Close", move |_| close.close()).0);
+}
+fn history_detail(key: String) {
+    let (dialog, body) = super::cloud::dialog("Archived versions");
+    let content = widgets::vbox(8);
+    body.append(&content);
+    let close = dialog.clone();
+    body.append(&widgets::button_row("", "", "Close", move |_| close.close()).0);
+    cmd::background(
+        move || nyx_pim::Registry::connect().and_then(|r| r.history_detail(&key)),
+        move |result| match result {
+            Err(error) => content.append(&widgets::label(&error.to_string(), "dim")),
+            Ok(detail) => {
+                content.append(&widgets::label(&format!("{} · {}", detail.summary.source, detail.summary.created), "dim"));
+                for (title, payload, version) in [
+                    ("Archived local version", detail.local, nyx_pim::HistoryVersion::Local),
+                    ("Archived provider version", detail.remote, nyx_pim::HistoryVersion::Provider),
+                ] {
+                    if payload.trim().is_empty() {
+                        continue;
+                    }
+                    content.append(&widgets::label(title, "title-3"));
+                    let text = gtk::TextView::builder()
+                        .editable(false)
+                        .cursor_visible(false)
+                        .monospace(true)
+                        .wrap_mode(gtk::WrapMode::WordChar)
+                        .build();
+                    text.buffer().set_text(&payload);
+                    content.append(
+                        &gtk::ScrolledWindow::builder()
+                            .min_content_height(100)
+                            .max_content_height(180)
+                            .hscrollbar_policy(gtk::PolicyType::Never)
+                            .child(&text)
+                            .build(),
+                    );
+                    let key = detail.summary.key.clone();
+                    let button = widgets::confirm_button("Recover offline copy", "Create a separate local copy?", move |_| {
+                        let key = key.clone();
+                        cmd::background(
+                            move || nyx_pim::Registry::connect()?.recover_history(&key, version),
+                            |result| match result {
+                                Ok(_) => window::toast(
+                                    "Recovered as a separate offline copy. Refresh the owning application to view it.",
+                                ),
+                                Err(error) => window::toast(&error.to_string()),
+                            },
+                        );
+                    });
+                    content.append(&button);
+                }
+            }
+        },
+    );
 }
