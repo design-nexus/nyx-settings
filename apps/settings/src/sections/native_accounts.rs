@@ -66,6 +66,12 @@ pub fn build(page: &Page) {
     })
     .0;
     group.add(&refresh);
+    group.add(
+        &widgets::button_row("Synchronization issues", "Review retained calendar and task conflicts", "Review", |_| {
+            sync_issues()
+        })
+        .0,
+    );
     let holder = widgets::vbox(0);
     group.add(&holder);
     cmd::background(
@@ -381,4 +387,138 @@ fn manage(account: Account) {
         "Provider data and local cached copies are preserved",
         Some(remove.upcast_ref()),
     ));
+}
+
+fn sync_issues() {
+    let (dialog, body) = super::cloud::dialog("Synchronization issues");
+    body.append(&widgets::label(
+        "Review local and provider versions before deciding. Previous versions are retained in the local resolution history.",
+        "dim",
+    ));
+    let list = widgets::vbox(12);
+    body.append(&list);
+    cmd::background(
+        || nyx_pim::Registry::connect().and_then(|r| r.sync_issues()),
+        move |result| match result {
+            Ok(issues) => {
+                if issues.is_empty() {
+                    list.append(&widgets::label("No synchronization issues.", "dim"));
+                }
+                for issue in issues {
+                    let action = gtk::Button::with_label("Review");
+                    let detail = if issue.kind == "uncertain" {
+                        "Task creation needs confirmation"
+                    } else if issue.remote_deleted {
+                        "Removed on the provider"
+                    } else {
+                        "Local and provider versions differ"
+                    };
+                    list.append(&widgets::row(&issue.source_label, detail, Some(action.upcast_ref())));
+                    action.connect_clicked(move |_| review_issue(issue.clone()));
+                }
+            }
+            Err(error) => list.append(&widgets::label(&error.to_string(), "dim")),
+        },
+    );
+    let close = dialog.clone();
+    body.append(&widgets::button_row("", "", "Close", move |_| close.close()).0);
+}
+fn review_issue(issue: nyx_pim::SyncIssue) {
+    let (dialog, body) = super::cloud::dialog("Resolve synchronization issue");
+    body.append(&widgets::label(&issue.source_label, "title-3"));
+    let records: Vec<(String, String, bool)> = serde_json::from_str(&issue.local).unwrap_or_default();
+    let local = records
+        .into_iter()
+        .map(|(_, payload, deleted)| format!("{}{}", if deleted { "Local deletion queued\n" } else { "" }, payload))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for (title, value) in [
+        ("Local version", local),
+        (
+            "Provider version",
+            if issue.kind == "uncertain" {
+                "The provider may have created this task. Check the provider before retrying to avoid a duplicate.".into()
+            } else if issue.remote_deleted {
+                "Removed on the provider.".into()
+            } else {
+                issue.remote.clone()
+            },
+        ),
+    ] {
+        body.append(&widgets::label(title, "title-3"));
+        let text = gtk::TextView::builder()
+            .editable(false)
+            .cursor_visible(false)
+            .monospace(true)
+            .wrap_mode(gtk::WrapMode::WordChar)
+            .build();
+        text.buffer().set_text(&value);
+        let scroll = gtk::ScrolledWindow::builder()
+            .min_content_height(110)
+            .max_content_height(180)
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .child(&text)
+            .build();
+        body.append(&scroll);
+    }
+    let status =
+        widgets::label("Your changes are retained. Synchronization resumes in the owning application after resolution.", "dim");
+    body.append(&status);
+    let actions = widgets::vbox(6);
+    body.append(&actions);
+    let mut choices = vec![(
+        "Keep a local copy",
+        "Preserve the local item offline and accept the provider version",
+        nyx_pim::Resolution::KeepOffline,
+    )];
+    if issue.kind == "uncertain" {
+        choices.push((
+            "Retry creation",
+            "Only after checking the provider and confirming that the task was not created",
+            nyx_pim::Resolution::RetryCreation,
+        ));
+    } else {
+        choices.push((
+            "Use provider version",
+            "Accept the provider version; the previous local version remains archived",
+            nyx_pim::Resolution::UseRemote,
+        ));
+        if !issue.remote_deleted {
+            choices.push((
+                "Keep local changes",
+                "Queue your local version against the provider’s latest revision",
+                nyx_pim::Resolution::KeepLocal,
+            ));
+        }
+    }
+    for (title, description, resolution) in choices {
+        let issue = issue.clone();
+        let action_controls = actions.clone();
+        let status = status.clone();
+        let dialog = dialog.clone();
+        let button = widgets::confirm_button(title, "Apply this resolution?", move |_| {
+            action_controls.set_sensitive(false);
+            status.set_text("Saving resolution…");
+            let issue = issue.clone();
+            let actions = action_controls.clone();
+            let status = status.clone();
+            let dialog = dialog.clone();
+            cmd::background(
+                move || nyx_pim::Registry::connect()?.resolve_sync_issue(&issue, resolution),
+                move |result| match result {
+                    Ok(()) => {
+                        dialog.close();
+                        window::toast("Resolution saved. Refresh the owning application to synchronize.");
+                    }
+                    Err(error) => {
+                        actions.set_sensitive(true);
+                        status.set_text(&error.to_string());
+                    }
+                },
+            );
+        });
+        actions.append(&widgets::row(title, description, Some(button.upcast_ref())));
+    }
+    let close = dialog.clone();
+    body.append(&widgets::button_row("", "", "Cancel", move |_| close.close()).0);
 }

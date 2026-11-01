@@ -22,3 +22,5 @@ wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 
 nyx-accounts-native = { package = "nyx-accounts-service", path = "../../../nyx-accounts" }
+
+nyx-pim = { path = "../../../nyx-core/crates/nyx-pim" }
