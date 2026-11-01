@@ -1057,6 +1057,7 @@ dependencies = [
  "nyx-accounts",
  "nyx-cloud",
  "nyx-core",
+ "nyx-share-client",
  "nyx-theme",
  "nyx-ui",
  "serde",
@@ -1064,6 +1065,37 @@ dependencies = [
  "toml",
  "wayland-client",
  "wayland-protocols",
+]
+
+[[package]]
+name = "nyx-share-client"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-share.git?rev=0bafe928762bfd0b635800226cecaed21fcd00ce#0bafe928762bfd0b635800226cecaed21fcd00ce"
+dependencies = [
+ "nyx-share-core",
+ "nyx-share-dbus",
+ "serde",
+ "serde_json",
+ "zbus",
+]
+
+[[package]]
+name = "nyx-share-core"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-share.git?rev=0bafe928762bfd0b635800226cecaed21fcd00ce#0bafe928762bfd0b635800226cecaed21fcd00ce"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "nyx-share-dbus"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-share.git?rev=0bafe928762bfd0b635800226cecaed21fcd00ce#0bafe928762bfd0b635800226cecaed21fcd00ce"
+dependencies = [
+ "nyx-share-core",
+ "serde",
+ "zbus",
 ]
 
 [[package]]

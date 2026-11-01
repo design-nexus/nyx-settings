@@ -42,6 +42,7 @@ pub mod printers;
 pub mod region;
 pub mod rules;
 pub mod services;
+pub mod sharing;
 pub mod software;
 pub mod theme;
 pub mod trackpad;
@@ -195,6 +196,19 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "mounts fstab nas samba smb cifs windows share nfs sshfs ssh network drive automount startup",
             files: || vec![std::path::PathBuf::from("/etc/fstab")],
             build: Build::Native(mounts::build),
+            visible: always,
+        },
+        Section {
+            id: "sharing",
+            title: "Sharing",
+            icon: "send-to-symbolic",
+            group: "Connections",
+            description: "Nearby sharing, your computers, NAS folders and what the Share Sheet offers.",
+            keywords: "share sharing localsend nearby airdrop send receive tailscale computers trusted nas smb sftp nfs flux phone share sheet pin hide",
+            files: || {
+                vec![paths::config_home().join("nyx-share/nearby.toml"), paths::config_home().join("nyx-share/destinations.toml")]
+            },
+            build: Build::Native(sharing::build),
             visible: always,
         },
         // ----- Hardware -----

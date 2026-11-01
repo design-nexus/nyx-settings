@@ -14,6 +14,7 @@ nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "52cba5
 nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "34e9acee71ea9af4e87a43a678f98048dccdbfdb" }
 nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "34e9acee71ea9af4e87a43a678f98048dccdbfdb" }
 nyx-accounts = { git = "https://github.com/design-nexus/nyx-core.git", rev = "52cba5e27a3dd5f00c780f53e423302b4b5f9c9c" }
+nyx-share-client = { git = "https://github.com/design-nexus/nyx-share.git", rev = "0bafe928762bfd0b635800226cecaed21fcd00ce" }
 anyhow = "1.0.104"
 gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
 serde = { version = "1.0.229", features = ["derive"] }
