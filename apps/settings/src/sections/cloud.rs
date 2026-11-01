@@ -42,7 +42,7 @@ pub fn build(page: &Page) {
     accounts.add(&holder);
     cmd::background(
         || {
-            let accounts = nyx_accounts::Client::connect().ok().and_then(|c| c.list().ok()).unwrap_or_default();
+            let accounts = nyx_accounts_native::Client::connect().ok().and_then(|c| c.list().ok()).unwrap_or_default();
             Ok(Client::connect()?
                 .list()?
                 .into_iter()
@@ -204,7 +204,13 @@ fn append_preferences(body: &gtk::Box, remote: Remote, close: glib::WeakRef<gtk:
     let r = remote.clone();
     let reauth = gtk::Button::with_label("Sign in again");
     reauth.connect_clicked(move |_| {
-        if r.managed { onboarding(Some(r.clone()), None); }
+        if r.native_account {
+            let Some(id)=r.account_id.clone()else{window::toast("The native account link is unavailable.");return;};
+            cmd::background(move||nyx_accounts_native::Client::connect()?.authorize(&id),|result|match result{
+                Ok(url)=>{let _=gtk::gio::AppInfo::launch_default_for_uri(&url,None::<&gtk::gio::AppLaunchContext>);},
+                Err(_)=>window::toast("Update this account’s app password or OAuth client configuration above, then retry."),
+            });
+        }else if r.managed { onboarding(Some(r.clone()), None); }
         else { window::toast("This account uses an external rclone configuration. Reauthenticate with its original configuration tool, then retry here."); }
     });
     body.append(&reauth);
@@ -638,14 +644,14 @@ fn load_services(holder: &gtk::Box, account_id: String, resolved: Rc<std::cell::
                         return;
                     }
                     holder.append(&widgets::label("Storage and Notes", "section-title"));
-                    holder.append(&widgets::label(
-                        "Authorize storage or link an existing connection. Notes can sync without showing the account in Files.",
-                        "dim",
-                    ));
-                    let add = gtk::Button::with_label("Enable Storage or Notes…");
+                    holder.append(&widgets::label("Connect using this account’s native authorization.", "dim"));
+                    let connect = gtk::Button::with_label("Connect storage");
                     let id = account_id.clone();
-                    add.connect_clicked(move |_| link_dialog(&id));
-                    holder.append(&add);
+                    connect.connect_clicked(move |_| {
+                        let id=id.clone();
+                        work(move |client|client.link_native_account(&id));
+                    });
+                    holder.append(&connect);
                 }
                 Err(_) => holder
                     .append(&widgets::label("Storage services are unavailable. Install Cloud and rclone, then retry.", "dim")),

@@ -84,12 +84,14 @@ impl Logo {
     }
 }
 
-/// The logo for a GOA provider type.
-pub fn logo_for_goa(provider_type: &str) -> Logo {
+/// The logo for a native provider type.
+pub fn logo_for_provider(provider_type: &str) -> Logo {
     match provider_type {
         "google" => Logo::Google,
-        "ms_graph" => Logo::Microsoft,
-        "owncloud" => Logo::Nextcloud,
+        "fastmail" => Logo::Fastmail,
+        "zoho" => Logo::Zoho,
+        "microsoft_personal" => Logo::Microsoft,
+        "nextcloud" => Logo::Nextcloud,
         "imap_smtp" => Logo::Mail,
         "webdav" => Logo::WebDav,
         _ => Logo::Generic,

@@ -1,8 +1,8 @@
 [workspace]
 resolver = "3"
-members = ["apps/settings", "crates/nyx-goa-helper"]
+members = ["apps/settings"]
 
-exclude = ["extensions"]
+exclude = ["extensions", "crates/nyx-goa-helper"]
 
 [workspace.package]
 edition = "2024"

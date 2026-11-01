@@ -26,7 +26,7 @@ die() { printf '\033[31m==>\033[0m %s\n' "$*" >&2; exit 1; }
 app_info() {
   dir=$1 pkg="nyx-$1" bins="nyx-$1" deps="" ids="" old_bins="" old_desktops="" old_icons="" defaults=false
   case $1 in
-    settings) ids="Settings" old_bins="settings settings-helper"; bins="nyx-settings nyx-settings-helper nyx-goa-helper" ;;
+    settings) ids="Settings" old_bins="settings settings-helper"; bins="nyx-settings nyx-settings-helper" ;;
     glimpse) ids="Glimpse" bins="nyx-glimpse nyx-glimpsed nyx-glimpse-settings" deps="bubblewrap" ;;
     contacts) ids="Contacts" defaults=true ;;
     git) ids="Git" deps="gtksourceview5 libsecret git-lfs" ;;
@@ -183,7 +183,6 @@ if [[ $prebuilt == false ]]; then
   fi
   pkgs=()
   for a in "${apps[@]}"; do app_info "$a"; pkgs+=(-p "$pkg"); done
-  if [[ " ${apps[*]} " == *" settings "* ]]; then pkgs+=(-p nyx-goa-helper); fi
   if [[ " ${apps[*]} " == *" news "* ]]; then pkgs+=(-p nyx-news-glimpse); fi
   if [[ " ${apps[*]} " == *" capture "* ]]; then pkgs+=(-p nyx-capture-glimpse); fi
   if [[ " ${apps[*]} " == *" pulse "* ]]; then pkgs+=(-p nyx-pulse-glimpse); fi
