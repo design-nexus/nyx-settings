@@ -9,7 +9,7 @@ edition = "2024"
 default-run = "nyx-settings"
 
 [dependencies]
-nyx-cloud = { path = "../../../nyx-cloud" }
+nyx-cloud = { git = "https://github.com/design-nexus/nyx-cloud.git", rev = "709168078a32a3fe93632574c00281fbe5cdd01f" }
 nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "52cba5e27a3dd5f00c780f53e423302b4b5f9c9c" }
 nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "34e9acee71ea9af4e87a43a678f98048dccdbfdb" }
 nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "34e9acee71ea9af4e87a43a678f98048dccdbfdb" }
@@ -21,6 +21,6 @@ toml = "1.1.6"
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 
-nyx-accounts-native = { package = "nyx-accounts-service", path = "../../../nyx-accounts" }
+nyx-accounts-native = { package = "nyx-accounts-service", git = "https://github.com/design-nexus/nyx-accounts.git", rev = "ecbe31cbfe6688dd5b3d7803c58e433715427c57" }
 
-nyx-pim = { path = "../../../nyx-core/crates/nyx-pim" }
+nyx-pim = { git = "https://github.com/design-nexus/nyx-core.git", rev = "1fa444e8c427f8d2f4b6fd6d1ace1c5298e4d623" }
