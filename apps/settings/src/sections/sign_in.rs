@@ -388,7 +388,7 @@ fn set_overlay(surface: &str, key: &str, value: Value) {
 /// How scanning looks on the lock screen. The lock screen reads the file as it changes.
 fn look_group(page: &Page) {
     let g = page.group("Look");
-    g.note("How the lock screen shows a face scan. It only appears while a scan runs.");
+    g.note("How a face scan looks. It only appears while a scan runs.");
     let current = overlay();
     let lock = &current["lock-screen"];
     let style = lock["style"].as_str().unwrap_or("circular").to_string();
@@ -402,6 +402,22 @@ fn look_group(page: &Page) {
         set_overlay("lock-screen", "style", Value::from(id));
     });
     widgets::keywords("overlay style circular cyberpunk minimal edge glow animation lock screen look");
+    g.add(&r);
+
+    let polkit_style = current["polkit"]["style"].as_str().unwrap_or("circular").to_string();
+    let options = vec![
+        ("circular".to_string(), "Circular face scan".to_string()),
+        ("cyberpunk".to_string(), "Cyberpunk scanner".to_string()),
+        ("edge".to_string(), "Edge glow".to_string()),
+    ];
+    let (r, _) = widgets::choice_row(
+        "Administrator prompt style",
+        "With the Nyx administrator prompt in use.",
+        options,
+        &polkit_style,
+        |id| set_overlay("polkit", "style", Value::from(id)),
+    );
+    widgets::keywords("overlay style polkit administrator prompt");
     g.add(&r);
 
     let strength = match lock["intensity"].as_f64() {
@@ -421,12 +437,14 @@ fn look_group(page: &Page) {
             _ => 0.7,
         };
         set_overlay("lock-screen", "intensity", Value::from(v));
+        set_overlay("polkit", "intensity", Value::from(v));
     });
     widgets::keywords("overlay intensity glow brightness");
     g.add(&r);
 
     let (r, _) = widgets::switch_row("Animations", "Sweeps, scan lines and pulses while scanning.", lock["animate"].as_bool().unwrap_or(true), |on| {
         set_overlay("lock-screen", "animate", Value::from(on));
+        set_overlay("polkit", "animate", Value::from(on));
     });
     widgets::keywords("overlay animation motion");
     g.add(&r);
