@@ -82,6 +82,12 @@ curl -fsSL https://raw.githubusercontent.com/design-nexus/nyx-settings/main/inst
   or a Windows PC; the password is kept in a root-only file), NFS shares and
   folders on another computer over SSH, each mounted when first opened so a
   missing network never holds up starting. Each one shows whether it's mounted.
+- **Sharing**: [Nyx Share](https://github.com/design-nexus/nyx-share)'s
+  settings, through its service: whether this computer is visible to nearby
+  devices, its name, receive folder and Tailscale discovery; your saved
+  computers and whether they're trusted; NAS folders (passwords go to the
+  keyring); and which destinations the Share Sheet offers, pinned, hidden and in
+  what order.
 - **Bar layout**: drag widgets to reorder them or move them between the left,
   center and right sections; add widgets, remove them, and add as many
   **spacers** as you like, each with its own width.
