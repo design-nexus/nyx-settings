@@ -44,6 +44,7 @@ pub mod region;
 pub mod rules;
 pub mod services;
 pub mod sharing;
+pub mod sign_in;
 pub mod software;
 pub mod theme;
 pub mod trackpad;
@@ -462,6 +463,17 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "accounts users groups accounts sudo admin administrator password login ssh keys fido2 fingerprint docker wheel security encryption",
             files: accounts::files,
             build: Build::Native(accounts::build),
+            visible: always,
+        },
+        Section {
+            id: "sign-in",
+            title: "Sign-in & Security",
+            icon: "security-high-symbolic",
+            group: "Accounts",
+            description: "Face, fingerprint and security keys, and where each one signs you in.",
+            keywords: "face recognition irlume windows hello fingerprint fprintd security key yubikey fido2 u2f pam sudo polkit lock screen biometric sign in",
+            files: Vec::new,
+            build: Build::Native(sign_in::build),
             visible: always,
         },
         Section {

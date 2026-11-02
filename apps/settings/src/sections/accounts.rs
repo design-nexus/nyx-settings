@@ -830,12 +830,29 @@ fn sign_in_section(page: &Page) {
             "docker group sudoless containers",
         ),
     ];
-    let items: Vec<_> = items.iter().filter(|i| cmd::present(i.0)).collect();
+    // With Nyx Biometrics, face, fingerprint and keys live on their own page; Omarchy's
+    // scripts would wire the same PAM files a second way.
+    let biometrics = super::sign_in::available();
+    let items: Vec<_> = items
+        .iter()
+        .filter(|i| cmd::present(i.0))
+        .filter(|i| !biometrics || i.0 == "omarchy-setup-security-sudoless-docker")
+        .collect();
     let drive = cmd::present("omarchy-drive-password");
-    if items.is_empty() && !drive {
+    if items.is_empty() && !drive && !biometrics {
         return;
     }
-    let g = page.collapsible("Sign-in security", false);
+    let g = page.collapsible("Sign-in security", biometrics);
+    if biometrics {
+        let (r, _) = widgets::button_row(
+            "Face, fingerprint and security keys",
+            "Sign in to sudo, administrator prompts and the lock screen without typing.",
+            "Open…",
+            |_| window::navigate("sign-in"),
+        );
+        widgets::keywords("face fingerprint security key fido2 yubikey biometric");
+        g.add(&r);
+    }
     for (_, title, desc, setup, remove, kw) in items {
         let controls = widgets::hbox(8);
         let (setup, remove) = (*setup, *remove);
