@@ -85,6 +85,8 @@ pub fn build(page: &Page) {
     let hw = page.collapsible("This computer", false);
     let hw_h = holder(&hw, "");
 
+    look_group(page);
+
     let undo = page.group("If something goes wrong");
     let (r, _) = widgets::button_row(
         "Undo the last change",
@@ -349,4 +351,83 @@ mod tests {
         assert_eq!(safe_name(""), None);
         assert_eq!(safe_name(&"a".repeat(49)), None);
     }
+}
+
+fn overlay_path() -> std::path::PathBuf {
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config"));
+    base.join("nyx/auth/overlay.json")
+}
+
+fn overlay() -> Value {
+    std::fs::read_to_string(overlay_path()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}))
+}
+
+/// Change one setting for one surface, keeping everything else in the file.
+fn set_overlay(surface: &str, key: &str, value: Value) {
+    let mut all = overlay();
+    if !all.is_object() {
+        all = serde_json::json!({});
+    }
+    let entry = all.as_object_mut().expect("object").entry(surface).or_insert_with(|| serde_json::json!({}));
+    if let Some(o) = entry.as_object_mut() {
+        o.insert(key.into(), value);
+    }
+    let path = overlay_path();
+    let written = path
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|_| std::fs::write(path.with_extension("json.new"), serde_json::to_string_pretty(&all).unwrap_or_default()))
+        .and_then(|_| std::fs::rename(path.with_extension("json.new"), &path));
+    if let Err(e) = written {
+        window::toast(&format!("Couldn't save: {e}"));
+    }
+}
+
+/// How scanning looks on the lock screen. The lock screen reads the file as it changes.
+fn look_group(page: &Page) {
+    let g = page.group("Look");
+    g.note("How the lock screen shows a face scan. It only appears while a scan runs.");
+    let current = overlay();
+    let lock = &current["lock-screen"];
+    let style = lock["style"].as_str().unwrap_or("circular").to_string();
+    let options = vec![
+        ("circular".to_string(), "Circular face scan".to_string()),
+        ("cyberpunk".to_string(), "Cyberpunk scanner".to_string()),
+        ("minimal".to_string(), "Minimal".to_string()),
+        ("edge".to_string(), "Edge glow".to_string()),
+    ];
+    let (r, _) = widgets::choice_row("Lock screen style", "", options, &style, |id| {
+        set_overlay("lock-screen", "style", Value::from(id));
+    });
+    widgets::keywords("overlay style circular cyberpunk minimal edge glow animation lock screen look");
+    g.add(&r);
+
+    let strength = match lock["intensity"].as_f64() {
+        Some(v) if v < 0.55 => "subtle",
+        Some(v) if v > 0.85 => "strong",
+        _ => "normal",
+    };
+    let levels = vec![
+        ("subtle".to_string(), "Subtle".to_string()),
+        ("normal".to_string(), "Normal".to_string()),
+        ("strong".to_string(), "Strong".to_string()),
+    ];
+    let (r, _) = widgets::choice_row("Glow", "How bright the scan and edge glow are.", levels, strength, |id| {
+        let v = match id.as_str() {
+            "subtle" => 0.4,
+            "strong" => 1.0,
+            _ => 0.7,
+        };
+        set_overlay("lock-screen", "intensity", Value::from(v));
+    });
+    widgets::keywords("overlay intensity glow brightness");
+    g.add(&r);
+
+    let (r, _) = widgets::switch_row("Animations", "Sweeps, scan lines and pulses while scanning.", lock["animate"].as_bool().unwrap_or(true), |on| {
+        set_overlay("lock-screen", "animate", Value::from(on));
+    });
+    widgets::keywords("overlay animation motion");
+    g.add(&r);
 }
