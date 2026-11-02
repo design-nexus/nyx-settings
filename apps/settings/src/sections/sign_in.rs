@@ -391,8 +391,9 @@ fn look_group(page: &Page) {
     g.note("How a face scan looks. It only appears while a scan runs.");
     let current = overlay();
     let lock = &current["lock-screen"];
-    let style = lock["style"].as_str().unwrap_or("circular").to_string();
+    let style = lock["style"].as_str().unwrap_or("halo").to_string();
     let options = vec![
+        ("halo".to_string(), "Halo".to_string()),
         ("circular".to_string(), "Circular face scan".to_string()),
         ("cyberpunk".to_string(), "Cyberpunk scanner".to_string()),
         ("minimal".to_string(), "Minimal".to_string()),
@@ -404,8 +405,9 @@ fn look_group(page: &Page) {
     widgets::keywords("overlay style circular cyberpunk minimal edge glow animation lock screen look");
     g.add(&r);
 
-    let polkit_style = current["polkit"]["style"].as_str().unwrap_or("circular").to_string();
+    let polkit_style = current["polkit"]["style"].as_str().unwrap_or("halo").to_string();
     let options = vec![
+        ("halo".to_string(), "Halo".to_string()),
         ("circular".to_string(), "Circular face scan".to_string()),
         ("cyberpunk".to_string(), "Cyberpunk scanner".to_string()),
         ("edge".to_string(), "Edge glow".to_string()),
