@@ -71,7 +71,8 @@ pub fn newer(candidate: &str, current: &str) -> bool {
 /// The latest release of Settings: (version, page).
 pub fn latest_release() -> Result<(String, String)> {
     let url = format!("https://api.github.com/repos/{REPO}/releases?per_page=100");
-    let out = Command::new("curl").args(["-fsSL", "--max-time", "15", "-H", "Accept: application/vnd.github+json", &url]).output()?;
+    let out =
+        Command::new("curl").args(["-fsSL", "--max-time", "15", "-H", "Accept: application/vnd.github+json", &url]).output()?;
     if !out.status.success() {
         bail!("couldn't reach GitHub");
     }
@@ -106,7 +107,8 @@ pub fn check(force: bool) -> Status {
         s.latest = latest;
         s.url = url;
     }
-    s.extensions = ext::installed().iter().filter(|e| ext::manage::has_update(e).unwrap_or(false)).map(|e| e.id().to_string()).collect();
+    s.extensions =
+        ext::installed().iter().filter(|e| ext::manage::has_update(e).unwrap_or(false)).map(|e| e.id().to_string()).collect();
     save(&s);
     s
 }

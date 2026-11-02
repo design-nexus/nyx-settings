@@ -70,7 +70,9 @@ pub fn list(items: &[String]) -> String {
 
 /// The daemon's health (`status --json`): running, model loaded, pending approvals…
 pub fn status() -> Option<Value> {
-    run(&["status", "--json"]).ok().and_then(|t| t.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).find(|v| v.get("ok").is_some()))
+    run(&["status", "--json"])
+        .ok()
+        .and_then(|t| t.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).find(|v| v.get("ok").is_some()))
 }
 
 pub fn running() -> bool {
@@ -87,7 +89,10 @@ mod tests {
 
     #[test]
     fn reads_settings_by_key() {
-        let cfg: Value = serde_json::from_str(r#"{"duplex":{"on_speech":"pause","duck_gain":0.25},"mcp":{"permissions":{"files.write":"deny"}}}"#).unwrap();
+        let cfg: Value = serde_json::from_str(
+            r#"{"duplex":{"on_speech":"pause","duck_gain":0.25},"mcp":{"permissions":{"files.write":"deny"}}}"#,
+        )
+        .unwrap();
         assert_eq!(get_str(&cfg, "duplex.on_speech"), "pause");
         assert_eq!(get(&cfg, "duplex.duck_gain").as_f64(), Some(0.25));
         assert_eq!(get_str(&cfg, "mcp.permissions.files.write"), "deny");

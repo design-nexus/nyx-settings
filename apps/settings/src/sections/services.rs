@@ -71,7 +71,12 @@ pub fn build(page: &Page) {
     let mine = list(true);
     let system = list(false);
 
-    let failed: Vec<(bool, Unit)> = mine.iter().filter(|u| u.active == "failed").map(|u| (true, u.clone())).chain(system.iter().filter(|u| u.active == "failed").map(|u| (false, u.clone()))).collect();
+    let failed: Vec<(bool, Unit)> = mine
+        .iter()
+        .filter(|u| u.active == "failed")
+        .map(|u| (true, u.clone()))
+        .chain(system.iter().filter(|u| u.active == "failed").map(|u| (false, u.clone())))
+        .collect();
     if !failed.is_empty() {
         let g = page.group("Needs attention");
         g.note("These stopped because of an error.");
@@ -104,7 +109,13 @@ fn section(page: &Page, title: &str, note: &str, user: bool, units: Vec<Unit>, c
                 results.remove(&c);
             }
             let q = query.borrow().to_lowercase();
-            let shown: Vec<Unit> = units.borrow().iter().filter(|u| q.is_empty() || u.name.to_lowercase().contains(&q) || u.description.to_lowercase().contains(&q)).take(20).cloned().collect();
+            let shown: Vec<Unit> = units
+                .borrow()
+                .iter()
+                .filter(|u| q.is_empty() || u.name.to_lowercase().contains(&q) || u.description.to_lowercase().contains(&q))
+                .take(20)
+                .cloned()
+                .collect();
             if shown.is_empty() {
                 results.append(&widgets::label("No services match.", "dim"));
             }
@@ -113,12 +124,15 @@ fn section(page: &Page, title: &str, note: &str, user: bool, units: Vec<Unit>, c
                 Rc::new(move || {
                     // Read the units again off the main thread, then redraw the list.
                     let (units, refill) = (units.clone(), refill.clone());
-                    cmd::background(move || list(user), move |fresh| {
-                        *units.borrow_mut() = fresh;
-                        if let Some(f) = refill.borrow().as_ref().and_then(Weak::upgrade) {
-                            f();
-                        }
-                    });
+                    cmd::background(
+                        move || list(user),
+                        move |fresh| {
+                            *units.borrow_mut() = fresh;
+                            if let Some(f) = refill.borrow().as_ref().and_then(Weak::upgrade) {
+                                f();
+                            }
+                        },
+                    );
                 })
             };
             for u in shown {
@@ -169,7 +183,12 @@ fn unit_row(u: &Unit, user: bool, can_edit: bool, refill: Rc<dyn Fn()>) -> gtk::
             });
             b
         };
-        controls.append(&act(if running { "Stop" } else { "Start" }, if running { "stop" } else { "start" }, u.name.clone(), refill.clone()));
+        controls.append(&act(
+            if running { "Stop" } else { "Start" },
+            if running { "stop" } else { "start" },
+            u.name.clone(),
+            refill.clone(),
+        ));
         if running {
             controls.append(&act("Restart", "restart", u.name.clone(), refill.clone()));
         }
@@ -179,7 +198,13 @@ fn unit_row(u: &Unit, user: bool, can_edit: bool, refill: Rc<dyn Fn()>) -> gtk::
             _ => {}
         }
     }
-    let state = if u.active == "failed" { "failed".to_string() } else if running { "running".to_string() } else { "stopped".to_string() };
+    let state = if u.active == "failed" {
+        "failed".to_string()
+    } else if running {
+        "running".to_string()
+    } else {
+        "stopped".to_string()
+    };
     let boot = match u.enabled.as_str() {
         "enabled" => " · starts at boot",
         _ => "",

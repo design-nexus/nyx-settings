@@ -42,7 +42,10 @@ pub fn current_icon_theme() -> String {
 
 /// The icon theme the current Omarchy theme asks for.
 pub fn omarchy_icon_theme() -> Option<String> {
-    std::fs::read_to_string(paths::omarchy_theme_dir().join("icons.theme")).ok().map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
+    std::fs::read_to_string(paths::omarchy_theme_dir().join("icons.theme"))
+        .ok()
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
 }
 
 /// Apply what the config says: the override, or the Omarchy theme's icons.
@@ -59,21 +62,24 @@ pub fn apply_icons(c: &Config) -> anyhow::Result<()> {
 /// Whether a directory is an icon theme (not just cursors or a fallback shell).
 pub fn is_icon_theme(dir: &Path) -> bool {
     let Ok(index) = std::fs::read_to_string(dir.join("index.theme")) else { return false };
-    let has_dirs = index.lines().any(|l| l.trim_start().starts_with("Directories=") && l.split('=').nth(1).is_some_and(|v| !v.trim().is_empty()));
+    let has_dirs = index
+        .lines()
+        .any(|l| l.trim_start().starts_with("Directories=") && l.split('=').nth(1).is_some_and(|v| !v.trim().is_empty()));
     let hidden = index.lines().any(|l| l.trim() == "Hidden=true");
     has_dirs && !hidden
 }
 
 /// Installed icon themes, sorted, without duplicates.
 pub fn icon_themes() -> Vec<String> {
-    let mut out: Vec<String> = [PathBuf::from("/usr/share/icons"), paths::home().join(".local/share/icons"), paths::home().join(".icons")]
-        .iter()
-        .filter_map(|d| std::fs::read_dir(d).ok())
-        .flat_map(|rd| rd.flatten())
-        .filter(|e| is_icon_theme(&e.path()))
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .filter(|n| n != "default" && n != "hicolor" && n != "locolor")
-        .collect();
+    let mut out: Vec<String> =
+        [PathBuf::from("/usr/share/icons"), paths::home().join(".local/share/icons"), paths::home().join(".icons")]
+            .iter()
+            .filter_map(|d| std::fs::read_dir(d).ok())
+            .flat_map(|rd| rd.flatten())
+            .filter(|e| is_icon_theme(&e.path()))
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| n != "default" && n != "hicolor" && n != "locolor")
+            .collect();
     out.sort_by_key(|n| n.to_lowercase());
     out.dedup();
     out

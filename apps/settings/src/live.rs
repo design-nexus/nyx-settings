@@ -32,7 +32,8 @@ fn wifi() -> String {
 }
 
 fn bluetooth() -> String {
-    let mut out: Vec<String> = bt::devices().into_iter().map(|d| format!("{} {} {} {}", d.address, d.name, d.paired, d.connected)).collect();
+    let mut out: Vec<String> =
+        bt::devices().into_iter().map(|d| format!("{} {} {} {}", d.address, d.name, d.paired, d.connected)).collect();
     out.push(bt::powered().to_string());
     out.join("\n")
 }

@@ -19,11 +19,14 @@ use serde_json::Value;
 /// Save one setting off the main thread; say why if the assistant refused it.
 pub fn save(key: &str, value: String) {
     let key = key.to_string();
-    cmd::background(move || client::set(&key, &value), |r| {
-        if let Err(e) = r {
-            window::toast(&format!("Couldn't save: {e}"));
-        }
-    });
+    cmd::background(
+        move || client::set(&key, &value),
+        |r| {
+            if let Err(e) = r {
+                window::toast(&format!("Couldn't save: {e}"));
+            }
+        },
+    );
 }
 
 /// The settings, or a banner saying why they couldn't be read (the page then stops).
@@ -48,7 +51,15 @@ pub fn choice(cfg: &Value, key: &'static str, title: &str, desc: &str, options: 
 }
 
 /// A number setting; saved once the slider rests.
-pub fn slider(cfg: &Value, key: &'static str, title: &str, desc: &str, range: (f64, f64, f64), digits: u32, unit: &str) -> gtk::Box {
+pub fn slider(
+    cfg: &Value,
+    key: &'static str,
+    title: &str,
+    desc: &str,
+    range: (f64, f64, f64),
+    digits: u32,
+    unit: &str,
+) -> gtk::Box {
     let value = client::get(cfg, key).as_f64().unwrap_or(range.0);
     let wait = Debounce::default();
     widgets::slider_row(title, desc, range, value, digits, unit, move |v| {
@@ -60,7 +71,10 @@ pub fn slider(cfg: &Value, key: &'static str, title: &str, desc: &str, range: (f
 
 /// A list of words, edited as comma-separated text.
 pub fn words(cfg: &Value, key: &'static str, title: &str, desc: &str, placeholder: &str) -> gtk::Box {
-    let now: Vec<String> = client::get(cfg, key).as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default();
+    let now: Vec<String> = client::get(cfg, key)
+        .as_array()
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
     let (row, entry) = widgets::entry_row(title, desc, &now.join(", "), placeholder, move |text| {
         let items: Vec<String> = text.split(',').map(|w| w.trim().to_string()).filter(|w| !w.is_empty()).collect();
         save(key, client::list(&items));

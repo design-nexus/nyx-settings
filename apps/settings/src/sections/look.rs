@@ -39,17 +39,32 @@ pub fn build(page: &Page) {
     ));
     g.add(&hypr_slider("decoration.rounding", "Corner rounding", "Radius of window corners.", (0.0, 24.0, 1.0), 0, " px", true));
     widgets::keywords("radius round corners");
-    g.add(&pictured("general.resize_on_border", "Resize from borders", "Drag a window's border to resize it.", Sketch::ResizeOnBorder));
+    g.add(&pictured(
+        "general.resize_on_border",
+        "Resize from borders",
+        "Drag a window's border to resize it.",
+        Sketch::ResizeOnBorder,
+    ));
 
     let g = page.collapsible("Transparency", false);
     g.add(&hypr_slider("decoration.active_opacity", "Focused window opacity", "", (0.5, 1.0, 0.01), 2, "", false));
     g.add(&hypr_slider("decoration.inactive_opacity", "Unfocused window opacity", "", (0.5, 1.0, 0.01), 2, "", false));
-    g.add(&pictured("decoration.dim_inactive", "Dim unfocused windows", "Windows you're not using are darkened, so the one you are stands out.", Sketch::Dim));
+    g.add(&pictured(
+        "decoration.dim_inactive",
+        "Dim unfocused windows",
+        "Windows you're not using are darkened, so the one you are stands out.",
+        Sketch::Dim,
+    ));
     g.add(&hypr_slider("decoration.dim_strength", "Dim amount", "", (0.0, 0.8, 0.01), 2, "", false));
 
     let g = page.collapsible("Blur", false);
     g.note("Blur shows behind transparent windows, the bar and menus. It costs some GPU time.");
-    g.add(&pictured("decoration.blur.enabled", "Blur", "What's behind a transparent window looks frosted, so its text stays readable.", Sketch::Blur));
+    g.add(&pictured(
+        "decoration.blur.enabled",
+        "Blur",
+        "What's behind a transparent window looks frosted, so its text stays readable.",
+        Sketch::Blur,
+    ));
     g.add(&hypr_slider("decoration.blur.size", "Blur size", "", (1.0, 20.0, 1.0), 0, "", true));
     g.add(&hypr_slider("decoration.blur.passes", "Blur passes", "More passes look smoother.", (1.0, 6.0, 1.0), 0, "", true));
     g.add(&hypr_slider(
@@ -63,7 +78,12 @@ pub fn build(page: &Page) {
     ));
 
     let g = page.collapsible("Shadows", false);
-    g.add(&pictured("decoration.shadow.enabled", "Window shadows", "A soft shadow lifts each window off the wallpaper.", Sketch::Shadow));
+    g.add(&pictured(
+        "decoration.shadow.enabled",
+        "Window shadows",
+        "A soft shadow lifts each window off the wallpaper.",
+        Sketch::Shadow,
+    ));
     g.add(&hypr_slider("decoration.shadow.range", "Shadow size", "", (0.0, 50.0, 1.0), 0, " px", true));
     g.add(&hypr_slider(
         "decoration.shadow.render_power",
@@ -76,7 +96,12 @@ pub fn build(page: &Page) {
     ));
 
     let g = page.collapsible("Animations", false);
-    g.add(&pictured("animations.enabled", "Animations", "Windows and workspaces slide and fade as they open, move and switch.", Sketch::Animations));
+    g.add(&pictured(
+        "animations.enabled",
+        "Animations",
+        "Windows and workspaces slide and fade as they open, move and switch.",
+        Sketch::Animations,
+    ));
     g.add(&hypr_switch("misc.animate_manual_resizes", "Animate resizing", "Smooth out keyboard and mouse resizes."));
 
     let g = page.collapsible("Cursor", false);

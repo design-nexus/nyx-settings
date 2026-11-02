@@ -46,13 +46,16 @@ fn speech_model_row() -> gtk::Box {
         |b| {
             b.set_sensitive(false);
             b.set_label("Downloading…");
-            cmd::background(|| client::run(&["models", "fetch", "asr"]), |r| {
-                match r {
-                    Ok(_) => window::toast("Speech model installed. Restart the assistant to use it."),
-                    Err(e) => window::toast(&format!("Couldn't download the speech model: {e}")),
-                }
-                window::rebuild("assistant-voice");
-            });
+            cmd::background(
+                || client::run(&["models", "fetch", "asr"]),
+                |r| {
+                    match r {
+                        Ok(_) => window::toast("Speech model installed. Restart the assistant to use it."),
+                        Err(e) => window::toast(&format!("Couldn't download the speech model: {e}")),
+                    }
+                    window::rebuild("assistant-voice");
+                },
+            );
         },
     );
     r
@@ -71,7 +74,13 @@ pub fn build(page: &Page) {
     ));
     if client::get_str(&cfg, "stt.provider") == "streaming" {
         g.add(&speech_model_row());
-        g.add(&choice(&cfg, "stt.device", "Run recognition on", "The graphics card is faster but shares its memory with the language model.", &[("cpu", "Processor"), ("cuda", "Graphics card")]));
+        g.add(&choice(
+            &cfg,
+            "stt.device",
+            "Run recognition on",
+            "The graphics card is faster but shares its memory with the language model.",
+            &[("cpu", "Processor"), ("cuda", "Graphics card")],
+        ));
     }
     g.add(&device_row(&cfg, "audio.source", "Microphone", audio::sources()));
     g.add(&device_row(&cfg, "audio.sink", "Speaker", audio::hardware_sinks()));
@@ -79,15 +88,51 @@ pub fn build(page: &Page) {
 
     let g = page.group("Talking over it");
     g.add(&switch(&cfg, "barge_in.enabled", "Interrupt by speaking", "Speaking while it talks stops or lowers its voice."));
-    g.add(&switch(&cfg, "duplex.enabled", "Listen while talking", "It keeps listening during its answer, so you can say “stop” or add to the request."));
-    g.add(&choice(&cfg, "duplex.on_speech", "When you speak over it", "", &[("pause", "Pause its voice"), ("duck", "Lower its voice")]));
-    g.add(&slider(&cfg, "duplex.duck_gain", "Lowered volume", "How loud its voice stays while you talk.", (0.0, 1.0, 0.05), 2, ""));
-    g.add(&slider(&cfg, "duplex.min_rms", "Quietest speech", "Lower hears softer speech, and more background noise.", (0.0, 0.1, 0.001), 3, ""));
-    g.add(&slider(&cfg, "barge_in.grace_ms", "Ignore the start of its answer for", "So its own first words aren't taken for yours.", (0.0, 2000.0, 50.0), 0, " ms"));
+    g.add(&switch(
+        &cfg,
+        "duplex.enabled",
+        "Listen while talking",
+        "It keeps listening during its answer, so you can say “stop” or add to the request.",
+    ));
+    g.add(&choice(
+        &cfg,
+        "duplex.on_speech",
+        "When you speak over it",
+        "",
+        &[("pause", "Pause its voice"), ("duck", "Lower its voice")],
+    ));
+    g.add(&slider(
+        &cfg,
+        "duplex.duck_gain",
+        "Lowered volume",
+        "How loud its voice stays while you talk.",
+        (0.0, 1.0, 0.05),
+        2,
+        "",
+    ));
+    g.add(&slider(
+        &cfg,
+        "duplex.min_rms",
+        "Quietest speech",
+        "Lower hears softer speech, and more background noise.",
+        (0.0, 0.1, 0.001),
+        3,
+        "",
+    ));
+    g.add(&slider(
+        &cfg,
+        "barge_in.grace_ms",
+        "Ignore the start of its answer for",
+        "So its own first words aren't taken for yours.",
+        (0.0, 2000.0, 50.0),
+        0,
+        " ms",
+    ));
     widgets::keywords("duplex barge in interrupt duck pause stop sensitivity");
 
     let g = page.group("Voice");
-    let picked = Rc::new(RefCell::new((client::get_str(&cfg, "tts.voice"), client::get(&cfg, "tts.speed").as_f64().unwrap_or(1.0))));
+    let picked =
+        Rc::new(RefCell::new((client::get_str(&cfg, "tts.voice"), client::get(&cfg, "tts.speed").as_f64().unwrap_or(1.0))));
     let options: Vec<(String, String)> = VOICES.iter().map(|(id, l)| (id.to_string(), l.to_string())).collect();
     let p = picked.clone();
     let (r, _) = widgets::choice_row("Voice", "", options, &picked.borrow().0, move |id| {
@@ -105,12 +150,15 @@ pub fn build(page: &Page) {
         let (voice, speed) = picked.borrow().clone();
         b.set_sensitive(false);
         let b = b.clone();
-        cmd::background(move || client::run(&["preview", &voice, &format!("{speed:.2}")]), move |r| {
-            b.set_sensitive(true);
-            if let Err(e) = r {
-                window::toast(&format!("Couldn't preview: {e}"));
-            }
-        });
+        cmd::background(
+            move || client::run(&["preview", &voice, &format!("{speed:.2}")]),
+            move |r| {
+                b.set_sensitive(true);
+                if let Err(e) = r {
+                    window::toast(&format!("Couldn't preview: {e}"));
+                }
+            },
+        );
     });
     g.add(&r);
     widgets::keywords("tts voice kokoro speed preview");

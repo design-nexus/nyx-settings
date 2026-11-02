@@ -46,7 +46,9 @@ pub fn devices() -> Vec<Device> {
         })
         .filter(|d| d.paired || !unnamed(&d.address, &d.name))
         .collect();
-    out.sort_by(|a, b| b.connected.cmp(&a.connected).then(b.paired.cmp(&a.paired)).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    out.sort_by(|a, b| {
+        b.connected.cmp(&a.connected).then(b.paired.cmp(&a.paired)).then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
     out
 }
 

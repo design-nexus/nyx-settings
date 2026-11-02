@@ -24,13 +24,13 @@
 //!   nyx-settings-helper clean-pkg-cache | remove-orphans | vacuum-journal SIZE
 //!   nyx-settings-helper --version              needs no root; Settings compares it
 
-#[path = "../backend/passwd.rs"]
-mod passwd;
 #[path = "../backend/helper_version.rs"]
 mod helper_version;
 #[path = "../backend/mounts.rs"]
 #[allow(dead_code)]
 mod mounts;
+#[path = "../backend/passwd.rs"]
+mod passwd;
 
 use passwd::{Group, User};
 use std::io::Write;
@@ -81,7 +81,11 @@ fn group(name: &str) -> Result<Group> {
 }
 
 fn shell(path: &str) -> Result<&str> {
-    if passwd::shells().iter().any(|s| s == path) { Ok(path) } else { Err(format!("{path} isn't a login shell listed in /etc/shells")) }
+    if passwd::shells().iter().any(|s| s == path) {
+        Ok(path)
+    } else {
+        Err(format!("{path} isn't a login shell listed in /etc/shells"))
+    }
 }
 
 fn flag(s: &str) -> Result<bool> {
@@ -303,7 +307,8 @@ fn run(args: &[&str]) -> Result<String> {
                 return Err("expected a number of seconds".into());
             }
             std::fs::create_dir_all("/etc/systemd/sleep.conf.d").map_err(|e| e.to_string())?;
-            std::fs::write("/etc/systemd/sleep.conf.d/50-settings.conf", format!("[Sleep]\nHibernateDelaySec={secs}\n")).map_err(|e| e.to_string())?;
+            std::fs::write("/etc/systemd/sleep.conf.d/50-settings.conf", format!("[Sleep]\nHibernateDelaySec={secs}\n"))
+                .map_err(|e| e.to_string())?;
             Ok(String::new())
         }
         ["service", action, unit] => {
@@ -379,7 +384,8 @@ fn run(args: &[&str]) -> Result<String> {
         }
         ["remove-orphans"] => {
             let list = Command::new("/usr/bin/pacman").args(["-Qdtq"]).output().map_err(|e| e.to_string())?;
-            let names: Vec<String> = String::from_utf8_lossy(&list.stdout).lines().map(str::to_string).filter(|n| passwd_safe_pkg(n)).collect();
+            let names: Vec<String> =
+                String::from_utf8_lossy(&list.stdout).lines().map(str::to_string).filter(|n| passwd_safe_pkg(n)).collect();
             if names.is_empty() {
                 return Ok(String::new());
             }
@@ -437,7 +443,11 @@ fn valid_locale(s: &str) -> bool {
 }
 
 fn valid_hostname(s: &str) -> bool {
-    !s.is_empty() && s.len() <= 63 && !s.starts_with('-') && !s.ends_with('-') && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    !s.is_empty()
+        && s.len() <= 63
+        && !s.starts_with('-')
+        && !s.ends_with('-')
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
 fn valid_unit(s: &str) -> bool {
@@ -468,7 +478,8 @@ const LOGIND_KEYS: &[&str] = &[
     "HandleSuspendKey",
     "HandleHibernateKey",
 ];
-const LOGIND_ACTIONS: &[&str] = &["ignore", "poweroff", "reboot", "halt", "suspend", "hibernate", "hybrid-sleep", "suspend-then-hibernate", "lock"];
+const LOGIND_ACTIONS: &[&str] =
+    &["ignore", "poweroff", "reboot", "halt", "suspend", "hibernate", "hybrid-sleep", "suspend-then-hibernate", "lock"];
 const LOGIND_FILE: &str = "/etc/systemd/logind.conf.d/50-settings.conf";
 
 fn set_logind(key: &str, value: &str) -> Result<String> {
@@ -485,7 +496,8 @@ fn set_logind(key: &str, value: &str) -> Result<String> {
 
 /// The drop-in with `key` set to `value`, keeping the other keys.
 fn merge_logind(old: &str, key: &str, value: &str) -> String {
-    let mut lines: Vec<String> = old.lines().filter(|l| !l.starts_with('[') && !l.trim().is_empty()).map(str::to_string).collect();
+    let mut lines: Vec<String> =
+        old.lines().filter(|l| !l.starts_with('[') && !l.trim().is_empty()).map(str::to_string).collect();
     let prefix = format!("{key}=");
     lines.retain(|l| !l.starts_with(&prefix));
     lines.push(format!("{key}={value}"));
@@ -501,7 +513,11 @@ fn enable_locale(entry: &str) -> Result<String> {
     }
     let gen_text = std::fs::read_to_string("/etc/locale.gen").map_err(|e| e.to_string())?;
     let (text, found) = uncomment_locale(&gen_text, entry);
-    let text = if found { text } else { format!("{}{entry}\n", if gen_text.ends_with('\n') { gen_text } else { format!("{gen_text}\n") }) };
+    let text = if found {
+        text
+    } else {
+        format!("{}{entry}\n", if gen_text.ends_with('\n') { gen_text } else { format!("{gen_text}\n") })
+    };
     std::fs::write("/etc/locale.gen", text).map_err(|e| e.to_string())?;
     exec("/usr/bin/locale-gen", &[], None)
 }
@@ -527,7 +543,11 @@ fn uncomment_locale(text: &str, entry: &str) -> (String, bool) {
 /// The signed-in user's home folder, where their mounts may also go.
 fn invoker_home() -> Result<std::path::PathBuf> {
     let uid = invoker().ok_or("run through pkexec")?;
-    passwd::users().into_iter().find(|u| u.uid == uid).map(|u| std::path::PathBuf::from(u.home)).ok_or_else(|| "unknown user".into())
+    passwd::users()
+        .into_iter()
+        .find(|u| u.uid == uid)
+        .map(|u| std::path::PathBuf::from(u.home))
+        .ok_or_else(|| "unknown user".into())
 }
 
 /// A package name pacman printed.
@@ -568,7 +588,8 @@ fn write_private(path: &str, text: &str) -> Result<()> {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
     }
-    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path).map_err(|e| e.to_string())?;
+    let mut f =
+        std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path).map_err(|e| e.to_string())?;
     f.write_all(text.as_bytes()).map_err(|e| e.to_string())
 }
 
@@ -682,7 +703,8 @@ fn mount_remove(id: &str) -> Result<String> {
 fn mount_test(fstype: &str, source: &str, options: &str) -> Result<String> {
     let creds = if fstype == "cifs" { smb_login()? } else { None };
     let dir = format!("/run/nyx-settings-test-{}", std::process::id());
-    let mut opts: Vec<String> = options_list(options).into_iter().filter(|o| !o.starts_with("x-systemd") && o != "nofail" && o != "_netdev").collect();
+    let mut opts: Vec<String> =
+        options_list(options).into_iter().filter(|o| !o.starts_with("x-systemd") && o != "nofail" && o != "_netdev").collect();
     // Checked as a line would be, with a stand-in folder.
     mounts::network_line("test", fstype, source, "/mnt/test", &opts, false, std::path::Path::new("/nonexistent"))?;
     let cred_file = format!("/run/nyx-settings-test-{}.cred", std::process::id());
@@ -706,7 +728,8 @@ fn mount_test(fstype: &str, source: &str, options: &str) -> Result<String> {
     }
     let _ = std::fs::remove_dir(&dir);
     let _ = std::fs::remove_file(&cred_file);
-    r.map(|_| String::new()).map_err(|e| if e.contains("timeout failed") || e.is_empty() { "It didn't answer within 20 seconds".into() } else { e })
+    r.map(|_| String::new())
+        .map_err(|e| if e.contains("timeout failed") || e.is_empty() { "It didn't answer within 20 seconds".into() } else { e })
 }
 
 #[cfg(test)]
@@ -715,7 +738,24 @@ mod tests {
 
     #[test]
     fn rejects_malformed_requests() {
-        for args in [&[][..], &["rm", "-rf"], &["add-user", "x"], &["delete-user", "root", "0"], &["firewall", "allow", "22; ls", "tcp"], &["firewall", "delete", "x"], &["rename-user", "root", "x", "0"], &["rename-group", "wheel", "x"], &["set-fullname", "root", "a"], &["printer-set-uri", "a b", "ipp://x"], &["service", "start", "a b.service"], &["logind", "HandleLidSwitch", "rm"], &["set-timezone", "../etc/passwd"], &["lock-user", "a b"], &["add-group", "Bad"], &["set-shell", "root", "/bin/sh"]] {
+        for args in [
+            &[][..],
+            &["rm", "-rf"],
+            &["add-user", "x"],
+            &["delete-user", "root", "0"],
+            &["firewall", "allow", "22; ls", "tcp"],
+            &["firewall", "delete", "x"],
+            &["rename-user", "root", "x", "0"],
+            &["rename-group", "wheel", "x"],
+            &["set-fullname", "root", "a"],
+            &["printer-set-uri", "a b", "ipp://x"],
+            &["service", "start", "a b.service"],
+            &["logind", "HandleLidSwitch", "rm"],
+            &["set-timezone", "../etc/passwd"],
+            &["lock-user", "a b"],
+            &["add-group", "Bad"],
+            &["set-shell", "root", "/bin/sh"],
+        ] {
             assert!(run(args).is_err(), "{args:?}");
         }
     }
@@ -740,9 +780,19 @@ mod tests {
     fn names_and_times() {
         assert!(valid_hostname("hades-2") && !valid_hostname("-a") && !valid_hostname("a b") && !valid_hostname(""));
         assert!(valid_time("2026-01-31 14:05:00") && !valid_time("2026-01-31T14:05:00") && !valid_time("now"));
-        assert!(valid_unit("cups.service") && valid_unit("getty@tty1.service") && !valid_unit("a b.service") && !valid_unit("x.mount") && !valid_unit("--now.service"));
+        assert!(
+            valid_unit("cups.service")
+                && valid_unit("getty@tty1.service")
+                && !valid_unit("a b.service")
+                && !valid_unit("x.mount")
+                && !valid_unit("--now.service")
+        );
         assert!(valid_printer("HP_LaserJet-1") && !valid_printer("a b") && !valid_printer(""));
-        assert!(valid_printer_uri("ipp://printer.local/ipp/print") && !valid_printer_uri("file:///etc/passwd") && !valid_printer_uri("ipp://a;b"));
+        assert!(
+            valid_printer_uri("ipp://printer.local/ipp/print")
+                && !valid_printer_uri("file:///etc/passwd")
+                && !valid_printer_uri("ipp://a;b")
+        );
         assert!(valid_locale("en_US.UTF-8") && !valid_locale("en US") && !valid_locale(""));
         assert!(!valid_zone("../etc/passwd") && !valid_zone("/etc/passwd") && !valid_zone("") && !valid_zone("Not/AZone"));
     }

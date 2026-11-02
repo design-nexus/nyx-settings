@@ -44,18 +44,13 @@ pub fn build(page: &Page) {
     g.note("Every Nyx app uses these, and follows a change within a second.");
     let follow = suite.mode == ThemeMode::Omarchy;
     let themes: Vec<(String, String)> = nyx_theme::all().into_iter().map(|t| (t.id, t.name)).collect();
-    let (theme_row, theme_dd) = widgets::choice_row(
-        "Theme",
-        "The colors to use when not following Omarchy.",
-        themes,
-        &suite.theme,
-        |id| {
+    let (theme_row, theme_dd) =
+        widgets::choice_row("Theme", "The colors to use when not following Omarchy.", themes, &suite.theme, |id| {
             nyx_theme::update_suite(|s| {
                 s.mode = ThemeMode::Theme;
                 s.theme = id;
             })
-        },
-    );
+        });
     theme_dd.set_sensitive(!follow || !nyx_theme::omarchy_available());
     if nyx_theme::omarchy_available() {
         let dd = theme_dd.clone();
@@ -111,11 +106,8 @@ pub fn build(page: &Page) {
         }
         g.add(&widgets::row(name, desc, Some(control.upcast_ref())));
     }
-    let (r, _) = widgets::button_row(
-        "Update every app",
-        "Rebuild the installed apps from the latest source.",
-        "Update",
-        |_| in_terminal("update"),
-    );
+    let (r, _) = widgets::button_row("Update every app", "Rebuild the installed apps from the latest source.", "Update", |_| {
+        in_terminal("update")
+    });
     g.add(&r);
 }

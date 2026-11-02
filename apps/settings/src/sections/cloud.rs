@@ -648,8 +648,8 @@ fn load_services(holder: &gtk::Box, account_id: String, resolved: Rc<std::cell::
                     let connect = gtk::Button::with_label("Connect storage");
                     let id = account_id.clone();
                     connect.connect_clicked(move |_| {
-                        let id=id.clone();
-                        work(move |client|client.link_native_account(&id));
+                        let id = id.clone();
+                        work(move |client| client.link_native_account(&id));
                     });
                     holder.append(&connect);
                 }

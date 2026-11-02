@@ -72,8 +72,10 @@ mod tests {
 
     #[test]
     fn parses_history_entries() {
-        let e = parse_entry(r#"{"id":6,"app":"Firefox","summary":"Download finished","body":"report.pdf","glyph":"","timestamp":1790711524161}"#)
-            .unwrap();
+        let e = parse_entry(
+            r#"{"id":6,"app":"Firefox","summary":"Download finished","body":"report.pdf","glyph":"","timestamp":1790711524161}"#,
+        )
+        .unwrap();
         assert_eq!(e.app, "Firefox");
         assert_eq!(e.summary, "Download finished");
         assert_eq!(e.body, "report.pdf");

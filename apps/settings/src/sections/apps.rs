@@ -97,7 +97,13 @@ struct Category {
 }
 
 const CATEGORIES: &[Category] = &[
-    Category { title: "File manager", desc: "Opens folders from every app.", types: &["inode/directory"], keywords: "folders files browse", skip: &[] },
+    Category {
+        title: "File manager",
+        desc: "Opens folders from every app.",
+        types: &["inode/directory"],
+        keywords: "folders files browse",
+        skip: &[],
+    },
     Category {
         title: "Image viewer",
         desc: "Opens photos and pictures.",
@@ -130,7 +136,13 @@ const CATEGORIES: &[Category] = &[
         keywords: "music songs audio mp3 flac player",
         skip: &["AudioVideoEditing", "TextEditor"],
     },
-    Category { title: "PDFs", desc: "Opens PDF documents.", types: &["application/pdf"], keywords: "pdf reader document viewer", skip: &[] },
+    Category {
+        title: "PDFs",
+        desc: "Opens PDF documents.",
+        types: &["application/pdf"],
+        keywords: "pdf reader document viewer",
+        skip: &[],
+    },
     Category {
         title: "Documents",
         desc: "Word processing files (.docx, .odt, .doc).",
@@ -197,7 +209,13 @@ const CATEGORIES: &[Category] = &[
         keywords: "zip archive compressed extract unzip rar 7z",
         skip: &["WebBrowser", "TextEditor"],
     },
-    Category { title: "Email", desc: "Opens <tt>mailto:</tt> links.", types: &["x-scheme-handler/mailto"], keywords: "mail email mailto", skip: &["WebBrowser", "TextEditor"] },
+    Category {
+        title: "Email",
+        desc: "Opens <tt>mailto:</tt> links.",
+        types: &["x-scheme-handler/mailto"],
+        keywords: "mail email mailto",
+        skip: &["WebBrowser", "TextEditor"],
+    },
     Category {
         title: "Calendar",
         desc: "Opens calendar invites and subscriptions.",
@@ -310,7 +328,8 @@ mod tests {
 
     #[test]
     fn choices_hide_helpers_and_keep_the_default() {
-        let apps = [app("imv.desktop", true), app("imv.desktop", true), app("userapp-x.desktop", false), app("pinta.desktop", true)];
+        let apps =
+            [app("imv.desktop", true), app("imv.desktop", true), app("userapp-x.desktop", false), app("pinta.desktop", true)];
         let c = choices(&apps, Some(("imv.desktop".into(), "imv".into())));
         assert_eq!(c.iter().map(|(i, _)| i.as_str()).collect::<Vec<_>>(), ["imv.desktop", "pinta.desktop"]);
         // A default that doesn't list the type is still shown, first.
@@ -321,7 +340,11 @@ mod tests {
 
     #[test]
     fn same_names_get_their_program() {
-        let mut o = vec![("a.desktop".to_string(), "Image Viewer".to_string()), ("b.desktop".into(), "Image Viewer".into()), ("c.desktop".into(), "Zed".into())];
+        let mut o = vec![
+            ("a.desktop".to_string(), "Image Viewer".to_string()),
+            ("b.desktop".into(), "Image Viewer".into()),
+            ("c.desktop".into(), "Zed".into()),
+        ];
         disambiguate(&mut o, |id| id.trim_end_matches(".desktop").to_string());
         assert_eq!(o.iter().map(|(_, n)| n.as_str()).collect::<Vec<_>>(), ["Image Viewer (a)", "Image Viewer (b)", "Zed"]);
     }

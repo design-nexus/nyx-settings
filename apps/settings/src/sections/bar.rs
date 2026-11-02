@@ -103,11 +103,14 @@ fn notifications(page: &Page) {
                 if syncing.get() {
                     return;
                 }
-                cmd::background(move || notify::set_dnd(on), |r| {
-                    if let Err(e) = r {
-                        window::toast(&format!("Couldn't change Do not disturb: {e}"));
-                    }
-                });
+                cmd::background(
+                    move || notify::set_dnd(on),
+                    |r| {
+                        if let Err(e) = r {
+                            window::toast(&format!("Couldn't change Do not disturb: {e}"));
+                        }
+                    },
+                );
             }
         },
     );
@@ -144,7 +147,8 @@ fn notifications(page: &Page) {
                 list.append(&widgets::row("Nothing yet", "Notifications you've had appear here after they close.", None));
                 return;
             }
-            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0);
+            let now =
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0);
             for e in entries.iter().take(20) {
                 let when = crate::units::ago((now - e.timestamp) / 1000);
                 let meta = if e.app.is_empty() || e.app == "omarchy-action" { when } else { format!("{} · {when}", e.app) };

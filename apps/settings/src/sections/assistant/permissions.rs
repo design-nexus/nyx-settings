@@ -49,12 +49,15 @@ fn rule_row(tool: String, current: &str) -> gtk::Box {
     let t = tool.clone();
     remove.connect_clicked(move |_| {
         let key = format!("mcp.permissions.{t}");
-        cmd::background(move || client::run(&["config", "unset", &key]), |r| {
-            if let Err(e) = r {
-                window::toast(&format!("Couldn't remove the rule: {e}"));
-            }
-            window::rebuild("assistant-permissions");
-        });
+        cmd::background(
+            move || client::run(&["config", "unset", &key]),
+            |r| {
+                if let Err(e) = r {
+                    window::toast(&format!("Couldn't remove the rule: {e}"));
+                }
+                window::rebuild("assistant-permissions");
+            },
+        );
     });
     let controls = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     controls.append(&dd);
@@ -75,17 +78,21 @@ fn add_rule_form(tools: Vec<String>) -> gtk::Box {
     let opts = decisions(false);
     let (t, c) = (tool.clone(), choice.clone());
     add.connect_clicked(move |_| {
-        let (Some(name), Some((d, _))) = (tools.get(t.selected() as usize).cloned(), opts.get(c.selected() as usize).cloned()) else {
+        let (Some(name), Some((d, _))) = (tools.get(t.selected() as usize).cloned(), opts.get(c.selected() as usize).cloned())
+        else {
             window::toast("Pick a tool first.");
             return;
         };
         let key = format!("mcp.permissions.{name}");
-        cmd::background(move || client::set(&key, &client::quoted(&d)), |r| {
-            if let Err(e) = r {
-                window::toast(&format!("Couldn't add the rule: {e}"));
-            }
-            window::rebuild("assistant-permissions");
-        });
+        cmd::background(
+            move || client::set(&key, &client::quoted(&d)),
+            |r| {
+                if let Err(e) = r {
+                    window::toast(&format!("Couldn't add the rule: {e}"));
+                }
+                window::rebuild("assistant-permissions");
+            },
+        );
     });
     form.append(&tool);
     form.append(&choice);
@@ -98,7 +105,8 @@ pub fn build(page: &Page) {
 
     let g = page.group("What it may do");
     for &(key, title, desc) in CAPABILITIES {
-        let (r, _) = widgets::choice_row(title, desc, decisions(false), &decision(&cfg, key), move |id| save(key, client::quoted(&id)));
+        let (r, _) =
+            widgets::choice_row(title, desc, decisions(false), &decision(&cfg, key), move |id| save(key, client::quoted(&id)));
         g.add(&r);
     }
     let (r, _) = widgets::choice_row(
@@ -135,23 +143,60 @@ pub fn build(page: &Page) {
     }
     widgets::keywords("tool rule mcp");
 
-    let g=page.group("Capability health");
-    if let Some(status)=client::status() {
-        let (search_row,search)=widgets::entry_row("Find capability","Search registered tools and current permission reasons.","","Search tools",|_|{});g.add(&search_row);
-        let list=gtk::ListBox::new();list.set_selection_mode(gtk::SelectionMode::None);
-        let mut rows=Vec::new();
-        for item in status["capability_health"].as_array().into_iter().flatten(){
-            let name=item["name"].as_str().unwrap_or("");let permission=item["permission"].as_str().unwrap_or("unknown");let reason=item["reason"].as_str().unwrap_or("");
-            let row=widgets::row(name,&format!("{permission} · {reason}"),None);list.append(&row);rows.push((name.to_lowercase(),row));
+    let g = page.group("Capability health");
+    if let Some(status) = client::status() {
+        let (search_row, search) = widgets::entry_row(
+            "Find capability",
+            "Search registered tools and current permission reasons.",
+            "",
+            "Search tools",
+            |_| {},
+        );
+        g.add(&search_row);
+        let list = gtk::ListBox::new();
+        list.set_selection_mode(gtk::SelectionMode::None);
+        let mut rows = Vec::new();
+        for item in status["capability_health"].as_array().into_iter().flatten() {
+            let name = item["name"].as_str().unwrap_or("");
+            let permission = item["permission"].as_str().unwrap_or("unknown");
+            let reason = item["reason"].as_str().unwrap_or("");
+            let row = widgets::row(name, &format!("{permission} · {reason}"), None);
+            list.append(&row);
+            rows.push((name.to_lowercase(), row));
         }
-        search.connect_changed(move |entry|{let query=entry.text().to_lowercase();for (name,row) in &rows{row.set_visible(query.is_empty()||name.contains(&query));}});
-        let scroll=gtk::ScrolledWindow::new();scroll.set_max_content_height(360);scroll.set_propagate_natural_height(true);scroll.set_child(Some(&list));g.add(&scroll);
-        for error in status["mcp_errors"].as_array().into_iter().flatten(){g.note(&gtk::glib::markup_escape_text(&format!("Unavailable: {error}")));}
-    }else{g.note("Start the assistant to inspect current capability health.");}
+        search.connect_changed(move |entry| {
+            let query = entry.text().to_lowercase();
+            for (name, row) in &rows {
+                row.set_visible(query.is_empty() || name.contains(&query));
+            }
+        });
+        let scroll = gtk::ScrolledWindow::new();
+        scroll.set_max_content_height(360);
+        scroll.set_propagate_natural_height(true);
+        scroll.set_child(Some(&list));
+        g.add(&scroll);
+        for error in status["mcp_errors"].as_array().into_iter().flatten() {
+            g.note(&gtk::glib::markup_escape_text(&format!("Unavailable: {error}")));
+        }
+    } else {
+        g.note("Start the assistant to inspect current capability health.");
+    }
 
     let g = page.group("Using apps for you");
-    g.add(&words(&cfg, "computer.deny_classes", "Never touch these apps", "Window classes, comma-separated. Password managers, terminals and lock screens are never touched anyway.", "e.g. keepassxc"));
-    g.add(&words(&cfg, "computer.confirm_words", "Always ask before clicking", "Buttons with these words ask first, even during an approved task.", "send, buy, delete"));
+    g.add(&words(
+        &cfg,
+        "computer.deny_classes",
+        "Never touch these apps",
+        "Window classes, comma-separated. Password managers, terminals and lock screens are never touched anyway.",
+        "e.g. keepassxc",
+    ));
+    g.add(&words(
+        &cfg,
+        "computer.confirm_words",
+        "Always ask before clicking",
+        "Buttons with these words ask first, even during an approved task.",
+        "send, buy, delete",
+    ));
     widgets::keywords("computer use click type window");
 
     let g = page.group("Administrator helper");

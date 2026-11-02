@@ -139,7 +139,10 @@ mod tests {
 
     #[test]
     fn window_rules() {
-        assert_eq!(lua_line(false, &rule("^mpv$", "", "float", "")).unwrap(), "hl.window_rule({ match = { class = \"^mpv$\" }, float = true })");
+        assert_eq!(
+            lua_line(false, &rule("^mpv$", "", "float", "")).unwrap(),
+            "hl.window_rule({ match = { class = \"^mpv$\" }, float = true })"
+        );
         assert_eq!(
             lua_line(false, &rule("foo", "bar", "opacity", "0.9 0.8")).unwrap(),
             "hl.window_rule({ match = { class = \"foo\", title = \"bar\" }, opacity = \"0.9 0.8\" })"
@@ -149,7 +152,10 @@ mod tests {
 
     #[test]
     fn layer_rules() {
-        assert_eq!(lua_line(true, &rule("waybar", "", "blur", "")).unwrap(), "hl.layer_rule({ match = { namespace = \"waybar\" }, blur = true })");
+        assert_eq!(
+            lua_line(true, &rule("waybar", "", "blur", "")).unwrap(),
+            "hl.layer_rule({ match = { namespace = \"waybar\" }, blur = true })"
+        );
     }
 
     #[test]

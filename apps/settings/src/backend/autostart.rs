@@ -270,9 +270,7 @@ pub fn add_app_in(user_dir: &Path, app: &gio::AppInfo) -> Result<String, String>
     std::fs::create_dir_all(user_dir).map_err(|e| format!("Couldn't create autostart directory: {e}"))?;
 
     let name = app.name().to_string();
-    let id = app.id().map(|i| i.to_string()).unwrap_or_else(|| {
-        format!("{}.desktop", name.to_lowercase().replace(' ', "-"))
-    });
+    let id = app.id().map(|i| i.to_string()).unwrap_or_else(|| format!("{}.desktop", name.to_lowercase().replace(' ', "-")));
     let id = if id.ends_with(".desktop") { id } else { format!("{id}.desktop") };
 
     let target = user_dir.join(&id);
@@ -357,11 +355,8 @@ mod tests {
         std::fs::create_dir_all(&sys_dir).unwrap();
 
         // 1. User app: Enabled
-        std::fs::write(
-            user_dir.join("dropbox.desktop"),
-            "[Desktop Entry]\nName=Dropbox\nExec=dropbox\nType=Application\n",
-        )
-        .unwrap();
+        std::fs::write(user_dir.join("dropbox.desktop"), "[Desktop Entry]\nName=Dropbox\nExec=dropbox\nType=Application\n")
+            .unwrap();
 
         // 2. System app: Enabled
         std::fs::write(
@@ -371,18 +366,10 @@ mod tests {
         .unwrap();
 
         // 3. System app with NoDisplay: should be ignored
-        std::fs::write(
-            sys_dir.join("daemon.desktop"),
-            "[Desktop Entry]\nName=Daemon\nExec=daemon\nNoDisplay=true\n",
-        )
-        .unwrap();
+        std::fs::write(sys_dir.join("daemon.desktop"), "[Desktop Entry]\nName=Daemon\nExec=daemon\nNoDisplay=true\n").unwrap();
 
         // 4. System app masked by user with Hidden=true: should be disabled
-        std::fs::write(
-            sys_dir.join("print-applet.desktop"),
-            "[Desktop Entry]\nName=Print Applet\nExec=printapp\n",
-        )
-        .unwrap();
+        std::fs::write(sys_dir.join("print-applet.desktop"), "[Desktop Entry]\nName=Print Applet\nExec=printapp\n").unwrap();
         std::fs::write(user_dir.join("print-applet.desktop"), "[Desktop Entry]\nHidden=true\n").unwrap();
 
         let items = list_from(&user_dir, &[sys_dir]);
@@ -407,11 +394,7 @@ mod tests {
         std::fs::create_dir_all(&user_dir).unwrap();
         std::fs::create_dir_all(&sys_dir).unwrap();
 
-        std::fs::write(
-            user_dir.join("app.desktop"),
-            "[Desktop Entry]\nName=App\nExec=app\nType=Application\n",
-        )
-        .unwrap();
+        std::fs::write(user_dir.join("app.desktop"), "[Desktop Entry]\nName=App\nExec=app\nType=Application\n").unwrap();
 
         // Disable
         set_enabled_in(&user_dir, "app.desktop", false, false).unwrap();
@@ -455,7 +438,8 @@ mod tests {
         let sys_dir = temp.path().join("sys_autostart");
         std::fs::create_dir_all(&sys_dir).unwrap();
         std::fs::write(sys_dir.join("gnome-only.desktop"), "[Desktop Entry]\nName=G\nExec=g\nOnlyShowIn=GNOME;\n").unwrap();
-        std::fs::write(sys_dir.join("missing.desktop"), "[Desktop Entry]\nName=M\nExec=m\nTryExec=/nonexistent/program\n").unwrap();
+        std::fs::write(sys_dir.join("missing.desktop"), "[Desktop Entry]\nName=M\nExec=m\nTryExec=/nonexistent/program\n")
+            .unwrap();
         std::fs::write(sys_dir.join("fine.desktop"), "[Desktop Entry]\nName=Fine\nExec=f\n").unwrap();
 
         let names: Vec<String> = list_from(&temp.path().join("none"), &[sys_dir]).into_iter().map(|i| i.name).collect();

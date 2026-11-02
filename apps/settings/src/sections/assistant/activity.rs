@@ -99,7 +99,11 @@ fn approval_row(id: &str, a: &Value) -> gtk::Box {
         add("Allow for this task", true, true);
     }
     add("Deny", false, false);
-    widgets::stacked_row(&title, &gtk::glib::markup_escape_text(&format!("{tool} · {}", brief(&a["arguments"]))), buttons.upcast_ref())
+    widgets::stacked_row(
+        &title,
+        &gtk::glib::markup_escape_text(&format!("{tool} · {}", brief(&a["arguments"]))),
+        buttons.upcast_ref(),
+    )
 }
 
 fn task_row(t: &Value) -> gtk::Box {
@@ -117,9 +121,23 @@ fn task_row(t: &Value) -> gtk::Box {
     if let Some(d) = t["detail"].as_str() {
         content.append(&dim(d));
     }
-    if matches!(state,"failed"|"partially_completed"|"paused") {
-        let resume=gtk::Button::with_label("Resume from checkpoint");let task_id=id.clone();
-        resume.set_halign(gtk::Align::Start);resume.connect_clicked(move |button|{button.set_sensitive(false);let id=task_id.clone();cmd::background(move ||client::run(&["tasks","resume",&id]),|result|{if let Err(error)=result{window::toast(&format!("Couldn't resume: {error}"));}window::rebuild("assistant-activity");});});
+    if matches!(state, "failed" | "partially_completed" | "paused") {
+        let resume = gtk::Button::with_label("Resume from checkpoint");
+        let task_id = id.clone();
+        resume.set_halign(gtk::Align::Start);
+        resume.connect_clicked(move |button| {
+            button.set_sensitive(false);
+            let id = task_id.clone();
+            cmd::background(
+                move || client::run(&["tasks", "resume", &id]),
+                |result| {
+                    if let Err(error) = result {
+                        window::toast(&format!("Couldn't resume: {error}"));
+                    }
+                    window::rebuild("assistant-activity");
+                },
+            );
+        });
         content.append(&resume);
     }
     if active(state) {
@@ -129,11 +147,14 @@ fn task_row(t: &Value) -> gtk::Box {
         stop.connect_clicked(move |b| {
             b.set_sensitive(false);
             let id = id.clone();
-            cmd::background(move || client::run(&["tasks", "cancel", &id]), |r| {
-                if let Err(e) = r {
-                    window::toast(&format!("Couldn't stop the task: {e}"));
-                }
-            });
+            cmd::background(
+                move || client::run(&["tasks", "cancel", &id]),
+                |r| {
+                    if let Err(e) = r {
+                        window::toast(&format!("Couldn't stop the task: {e}"));
+                    }
+                },
+            );
         });
         content.append(&stop);
     }
@@ -145,7 +166,8 @@ fn task_row(t: &Value) -> gtk::Box {
             if steps.first_child().is_some() {
                 return;
             }
-            let shown = client::json(&["tasks", "show", &id, "--json"]).and_then(|v| v["steps"].as_array().cloned()).unwrap_or_default();
+            let shown =
+                client::json(&["tasks", "show", &id, "--json"]).and_then(|v| v["steps"].as_array().cloned()).unwrap_or_default();
             if shown.is_empty() {
                 steps.append(&dim("No steps."));
             }
@@ -155,7 +177,12 @@ fn task_row(t: &Value) -> gtk::Box {
                     Some("failed") => "✗",
                     _ => "·",
                 };
-                let line = format!("{mark} {}. {} — {}", s["index"].as_u64().unwrap_or(0) + 1, s["tool"].as_str().unwrap_or(""), step_text(s["summary"].as_str().unwrap_or("")));
+                let line = format!(
+                    "{mark} {}. {} — {}",
+                    s["index"].as_u64().unwrap_or(0) + 1,
+                    s["tool"].as_str().unwrap_or(""),
+                    step_text(s["summary"].as_str().unwrap_or(""))
+                );
                 steps.append(&dim(&line));
             }
         });
@@ -165,7 +192,12 @@ fn task_row(t: &Value) -> gtk::Box {
 
 fn audit_row(r: &Value) -> gtk::Box {
     let title = format!("{} · {}", r["tool"].as_str().unwrap_or(""), r["outcome"].as_str().unwrap_or(""));
-    let mut desc = format!("{} · {} ({})", when(r["at_ms"].as_u64().unwrap_or(0)), r["decision"].as_str().unwrap_or(""), r["rule"].as_str().unwrap_or(""));
+    let mut desc = format!(
+        "{} · {} ({})",
+        when(r["at_ms"].as_u64().unwrap_or(0)),
+        r["decision"].as_str().unwrap_or(""),
+        r["rule"].as_str().unwrap_or("")
+    );
     if let Some(d) = r["duration_ms"].as_u64() {
         desc.push_str(&format!(" · {d} ms"));
     }

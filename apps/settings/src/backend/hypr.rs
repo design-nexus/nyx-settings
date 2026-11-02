@@ -192,7 +192,9 @@ fn workspace_lines(state: &State) -> Vec<String> {
             }
         }
         out.push(format!("hl.workspace_rule({{ {} }})", parts.join(", ")));
-        if let Some(mode) = rule.and_then(|r| r.mode.as_deref()).filter(|m| ["dwindle", "master", "scrolling", "floating"].contains(m)) {
+        if let Some(mode) =
+            rule.and_then(|r| r.mode.as_deref()).filter(|m| ["dwindle", "master", "scrolling", "floating"].contains(m))
+        {
             out.push(format!("o.workspace_mode({{ workspace = {}, mode = {} }})", quote(&id.to_string()), quote(mode)));
         }
     }
@@ -357,7 +359,12 @@ mod tests {
             ..Default::default()
         });
         // A bad monitor name and an unknown mode are left out.
-        s.workspaces.push(WorkspaceRule { workspace: 4, monitor: Some("DP-1\") --".into()), mode: Some("weird".into()), ..Default::default() });
+        s.workspaces.push(WorkspaceRule {
+            workspace: 4,
+            monitor: Some("DP-1\") --".into()),
+            mode: Some("weird".into()),
+            ..Default::default()
+        });
         let lines = workspace_lines(&s);
         assert_eq!(lines[0], "hl.workspace_rule({ workspace = \"1\", persistent = true })");
         assert_eq!(lines[1], "hl.workspace_rule({ workspace = \"2\", persistent = true })");

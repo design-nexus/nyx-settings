@@ -98,7 +98,13 @@ fn launcher_icon(icon: &str, fallback: &str) -> gtk::Image {
 
 /// A launcher's row: its icon, name and detail, with Edit and Remove that show
 /// on hover or keyboard focus.
-fn launcher_row(l: &Launcher, desc: &str, fallback_icon: &str, edit: impl Fn() + 'static, remove: impl Fn() + 'static) -> gtk::Box {
+fn launcher_row(
+    l: &Launcher,
+    desc: &str,
+    fallback_icon: &str,
+    edit: impl Fn() + 'static,
+    remove: impl Fn() + 'static,
+) -> gtk::Box {
     let actions = widgets::hbox(2);
     actions.add_css_class("row-actions");
     let e = gtk::Button::from_icon_name("document-edit-symbolic");
@@ -221,14 +227,26 @@ fn replace_launcher(remove: &'static str, id: String, install: Vec<String>, done
 
 fn edit_web_app(id: &str, name: &str, url: &str) {
     let id = id.to_string();
-    ask("Edit web app", "The icon is fetched from the site again.", vec![Field::text_with("Name", name), Field::text_with("https://example.com", url)], "Save", None, move |v, _| {
-        let (n, u) = (v[0].trim().to_string(), v[1].trim().to_string());
-        if n.is_empty() || u.is_empty() || n.contains('/') {
-            return Some("Enter a name (without /) and a web address.".into());
-        }
-        replace_launcher("omarchy-webapp-remove", id.clone(), vec!["omarchy-webapp-install".into(), n, u, String::new()], "Web app updated");
-        None
-    });
+    ask(
+        "Edit web app",
+        "The icon is fetched from the site again.",
+        vec![Field::text_with("Name", name), Field::text_with("https://example.com", url)],
+        "Save",
+        None,
+        move |v, _| {
+            let (n, u) = (v[0].trim().to_string(), v[1].trim().to_string());
+            if n.is_empty() || u.is_empty() || n.contains('/') {
+                return Some("Enter a name (without /) and a web address.".into());
+            }
+            replace_launcher(
+                "omarchy-webapp-remove",
+                id.clone(),
+                vec!["omarchy-webapp-install".into(), n, u, String::new()],
+                "Web app updated",
+            );
+            None
+        },
+    );
 }
 
 fn edit_terminal_app(id: &str, name: &str, command: &str, float: bool) {
@@ -237,7 +255,11 @@ fn edit_terminal_app(id: &str, name: &str, command: &str, float: bool) {
     ask(
         "Edit terminal app",
         "",
-        vec![Field::text_with("Name", name), Field::text_with("Command", command), Field::choice(styles, if float { "float" } else { "tile" })],
+        vec![
+            Field::text_with("Name", name),
+            Field::text_with("Command", command),
+            Field::choice(styles, if float { "float" } else { "tile" }),
+        ],
         "Save",
         None,
         move |v, _| {
@@ -245,7 +267,12 @@ fn edit_terminal_app(id: &str, name: &str, command: &str, float: bool) {
             if n.is_empty() || c.is_empty() || n.contains('/') {
                 return Some("Enter a name (without /) and a command.".into());
             }
-            replace_launcher("omarchy-tui-remove", id.clone(), vec!["omarchy-tui-install".into(), n, c, v[2].clone(), "utilities-terminal".into()], "Terminal app updated");
+            replace_launcher(
+                "omarchy-tui-remove",
+                id.clone(),
+                vec!["omarchy-tui-install".into(), n, c, v[2].clone(), "utilities-terminal".into()],
+                "Terminal app updated",
+            );
             None
         },
     );
@@ -273,7 +300,10 @@ fn terminal_apps(page: &Page, all: &[Launcher]) {
                     match r {
                         Ok(_) => window::toast_action(&format!("Removed {name}"), "Undo", move || {
                             let style = if float { "float" } else { "tile" };
-                            cmd::run_async(&["omarchy-tui-install", &name, &command, style, "utilities-terminal"], after("Terminal app restored"));
+                            cmd::run_async(
+                                &["omarchy-tui-install", &name, &command, style, "utilities-terminal"],
+                                after("Terminal app restored"),
+                            );
                         }),
                         Err(e) => window::toast(&format!("{e}")),
                     }
@@ -316,7 +346,10 @@ fn terminal_apps(page: &Page, all: &[Launcher]) {
 // ----- Packages -----
 
 fn valid_package(s: &str) -> bool {
-    !s.is_empty() && s.len() < 100 && !s.starts_with(['-', '.']) && s.chars().all(|c| c.is_ascii_alphanumeric() || "@._+-".contains(c))
+    !s.is_empty()
+        && s.len() < 100
+        && !s.starts_with(['-', '.'])
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || "@._+-".contains(c))
 }
 
 fn packages(page: &Page) {
@@ -359,7 +392,8 @@ fn search(results: &gtk::Box, query: &str) {
     cmd::background(
         move || {
             let found = cmd::output(&[helper, "-Ssq", "--", &q]).unwrap_or_default();
-            let installed: HashSet<String> = cmd::output(&["pacman", "-Qq"]).unwrap_or_default().lines().map(str::to_string).collect();
+            let installed: HashSet<String> =
+                cmd::output(&["pacman", "-Qq"]).unwrap_or_default().lines().map(str::to_string).collect();
             (found, installed)
         },
         move |(found, installed)| {
@@ -418,12 +452,42 @@ const GROUPS: &[(&str, &str, &[Item])] = &[
         &[
             ("Steam", Check::Pkgs(&["steam"]), "omarchy-install-gaming-steam", Some("omarchy-remove-gaming-steam")),
             ("Lutris", Check::Pkgs(&["lutris"]), "omarchy-install-gaming-lutris", Some("omarchy-remove-gaming-lutris")),
-            ("Heroic", Check::Pkgs(&["heroic-games-launcher-bin"]), "omarchy-install-gaming-heroic", Some("omarchy-remove-gaming-heroic")),
-            ("RetroArch", Check::Pkgs(&["retroarch"]), "omarchy-install-gaming-retroarch", Some("omarchy-remove-gaming-retroarch")),
-            ("Battle.net", Check::Desktop("battlenet"), "omarchy-install-gaming-battlenet", Some("omarchy-remove-gaming-battlenet")),
-            ("GeForce Now", Check::Flatpak("com.nvidia.geforcenow"), "omarchy-install-gaming-geforce-now", Some("omarchy-remove-gaming-geforce-now")),
-            ("Xbox Cloud Gaming", Check::Desktop("Xbox Cloud Gaming"), "omarchy-install-gaming-xbox-cloud", Some("omarchy-remove-gaming-xbox-cloud")),
-            ("Xbox controllers", Check::Pkgs(&["xpadneo-dkms"]), "omarchy-install-gaming-xbox-controllers", Some("omarchy-remove-gaming-xbox-controllers")),
+            (
+                "Heroic",
+                Check::Pkgs(&["heroic-games-launcher-bin"]),
+                "omarchy-install-gaming-heroic",
+                Some("omarchy-remove-gaming-heroic"),
+            ),
+            (
+                "RetroArch",
+                Check::Pkgs(&["retroarch"]),
+                "omarchy-install-gaming-retroarch",
+                Some("omarchy-remove-gaming-retroarch"),
+            ),
+            (
+                "Battle.net",
+                Check::Desktop("battlenet"),
+                "omarchy-install-gaming-battlenet",
+                Some("omarchy-remove-gaming-battlenet"),
+            ),
+            (
+                "GeForce Now",
+                Check::Flatpak("com.nvidia.geforcenow"),
+                "omarchy-install-gaming-geforce-now",
+                Some("omarchy-remove-gaming-geforce-now"),
+            ),
+            (
+                "Xbox Cloud Gaming",
+                Check::Desktop("Xbox Cloud Gaming"),
+                "omarchy-install-gaming-xbox-cloud",
+                Some("omarchy-remove-gaming-xbox-cloud"),
+            ),
+            (
+                "Xbox controllers",
+                Check::Pkgs(&["xpadneo-dkms"]),
+                "omarchy-install-gaming-xbox-controllers",
+                Some("omarchy-remove-gaming-xbox-controllers"),
+            ),
         ],
     ),
     (
@@ -435,7 +499,12 @@ const GROUPS: &[(&str, &str, &[Item])] = &[
             ("Hermes", Check::Desktop("hermes"), "omarchy-install-ai-hermes", Some("omarchy-remove-ai-hermes")),
             ("OpenClaw", Check::Pkgs(&["openclaw"]), "omarchy-install-ai-openclaw", Some("omarchy-remove-ai-openclaw")),
             ("T3 Code", Check::Pkgs(&["t3code-bin"]), "omarchy-install-ai-t3-code", Some("omarchy-remove-ai-t3-code")),
-            ("Ollama", Check::Pkgs(&["ollama", "ollama-cuda", "ollama-rocm", "ollama-vulkan"]), "", Some("omarchy-remove-ai-ollama")),
+            (
+                "Ollama",
+                Check::Pkgs(&["ollama", "ollama-cuda", "ollama-rocm", "ollama-vulkan"]),
+                "",
+                Some("omarchy-remove-ai-ollama"),
+            ),
             ("LM Studio", Check::Pkgs(&["lmstudio-bin"]), "", Some("omarchy-remove-ai-lm-studio")),
         ],
     ),
@@ -443,12 +512,22 @@ const GROUPS: &[(&str, &str, &[Item])] = &[
         "Services",
         "service 1password dropbox signal spotify sunshine tailscale nordvpn",
         &[
-            ("1Password", Check::Pkgs(&["1password"]), "omarchy-install-service-1password", Some("omarchy-remove-service-1password")),
+            (
+                "1Password",
+                Check::Pkgs(&["1password"]),
+                "omarchy-install-service-1password",
+                Some("omarchy-remove-service-1password"),
+            ),
             ("Dropbox", Check::Pkgs(&["dropbox"]), "omarchy-install-service-dropbox", Some("omarchy-remove-service-dropbox")),
             ("Signal", Check::Pkgs(&["signal-desktop"]), "omarchy-install-service-signal", None),
             ("Spotify", Check::Pkgs(&["spotify"]), "omarchy-install-service-spotify", None),
             ("Sunshine", Check::Pkgs(&["sunshine"]), "omarchy-install-service-sunshine", Some("omarchy-remove-service-sunshine")),
-            ("Tailscale", Check::Pkgs(&["tailscale"]), "omarchy-install-service-tailscale", Some("omarchy-remove-service-tailscale")),
+            (
+                "Tailscale",
+                Check::Pkgs(&["tailscale"]),
+                "omarchy-install-service-tailscale",
+                Some("omarchy-remove-service-tailscale"),
+            ),
             ("NordVPN", Check::Pkgs(&["nordvpn-bin"]), "omarchy-install-service-nordvpn", None),
         ],
     ),
@@ -462,8 +541,11 @@ struct Installed {
 
 impl Installed {
     fn read() -> Installed {
-        let list = |args: &[&str]| cmd::output(args).unwrap_or_default().lines().map(|l| l.split_whitespace().next().unwrap_or("").to_string()).collect();
-        let flatpaks = if cmd::present("flatpak") { list(&["flatpak", "list", "--app", "--columns=application"]) } else { HashSet::new() };
+        let list = |args: &[&str]| {
+            cmd::output(args).unwrap_or_default().lines().map(|l| l.split_whitespace().next().unwrap_or("").to_string()).collect()
+        };
+        let flatpaks =
+            if cmd::present("flatpak") { list(&["flatpak", "list", "--app", "--columns=application"]) } else { HashSet::new() };
         Installed { packages: list(&["pacman", "-Qq"]), flatpaks }
     }
 
@@ -500,8 +582,11 @@ fn installers(page: &Page) {
                     Some(script) => icon_button("user-trash-symbolic", "Remove", move || terminal(script)),
                     None => match check {
                         Check::Pkgs(names) => {
-                            let found: Vec<String> = names.iter().filter(|n| installed.packages.contains(**n)).map(|n| cmd::shell_quote(n)).collect();
-                            icon_button("user-trash-symbolic", "Remove", move || terminal(&format!("sudo pacman -Rns -- {}", found.join(" "))))
+                            let found: Vec<String> =
+                                names.iter().filter(|n| installed.packages.contains(**n)).map(|n| cmd::shell_quote(n)).collect();
+                            icon_button("user-trash-symbolic", "Remove", move || {
+                                terminal(&format!("sudo pacman -Rns -- {}", found.join(" ")))
+                            })
                         }
                         _ => continue,
                     },
@@ -528,7 +613,11 @@ fn installers(page: &Page) {
         }
     }
     if controls.first_child().is_some() {
-        g.add(&widgets::row("Starter apps", "The apps Omarchy comes with, installed or removed together.", Some(controls.upcast_ref())));
+        g.add(&widgets::row(
+            "Starter apps",
+            "The apps Omarchy comes with, installed or removed together.",
+            Some(controls.upcast_ref()),
+        ));
         widgets::keywords("preinstalls default bundled bloat");
     }
 }
@@ -545,14 +634,20 @@ fn channel(page: &Page) {
     if !["stable", "rc", "edge"].contains(&current.as_str()) {
         options.insert(0, (current.clone(), current.clone()));
     }
-    let (r, _) = widgets::choice_row("Update channel", "Stable is tested the most. Edge gets changes first and may break. Switching opens a terminal.", options, &current, {
-        let current = current.clone();
-        move |c| {
-            if c != current && ["stable", "rc", "edge"].contains(&c.as_str()) {
-                terminal(&format!("omarchy-channel-set {c}"));
+    let (r, _) = widgets::choice_row(
+        "Update channel",
+        "Stable is tested the most. Edge gets changes first and may break. Switching opens a terminal.",
+        options,
+        &current,
+        {
+            let current = current.clone();
+            move |c| {
+                if c != current && ["stable", "rc", "edge"].contains(&c.as_str()) {
+                    terminal(&format!("omarchy-channel-set {c}"));
+                }
             }
-        }
-    });
+        },
+    );
     widgets::keywords("release edge rc beta omarchy version");
     g.add(&r);
 }
@@ -561,7 +656,12 @@ fn maintenance(page: &Page) {
     let tools: &[(&str, &str, &str, &str)] = &[
         ("omarchy-update-firmware", "Firmware updates", "Update the firmware of your hardware.", "fwupd bios device"),
         ("omarchy-update-aur-pkgs", "AUR package updates", "Update the packages built from the AUR.", "yay aur"),
-        ("omarchy-update-keyring", "Refresh package keys", "Fix 'invalid signature' errors when installing packages.", "pacman keyring gpg signature"),
+        (
+            "omarchy-update-keyring",
+            "Refresh package keys",
+            "Fix 'invalid signature' errors when installing packages.",
+            "pacman keyring gpg signature",
+        ),
         ("omarchy-update-orphan-pkgs", "Remove unused packages", "Packages nothing needs any more.", "orphans cleanup clean"),
         ("omarchy-update-analyze-logs", "Check the last update", "Look through the update log for problems.", "log errors"),
     ];
@@ -584,14 +684,20 @@ mod tests {
 
     #[test]
     fn web_launcher() {
-        let l = parse_launcher("Google Docs", "[Desktop Entry]\nName=Google Docs\nExec=omarchy-launch-webapp \"https://docs.google.com\"\n").unwrap();
+        let l = parse_launcher(
+            "Google Docs",
+            "[Desktop Entry]\nName=Google Docs\nExec=omarchy-launch-webapp \"https://docs.google.com\"\n",
+        )
+        .unwrap();
         assert_eq!(l.kind, Kind::Web("https://docs.google.com".into()));
         assert_eq!(l.name, "Google Docs");
     }
 
     #[test]
     fn terminal_launcher() {
-        let l = parse_launcher("Disk Usage", "Name=Disk Usage\nExec=xdg-terminal-exec --app-id=TUI.float -e bash -c \"dua i /\"\n").unwrap();
+        let l =
+            parse_launcher("Disk Usage", "Name=Disk Usage\nExec=xdg-terminal-exec --app-id=TUI.float -e bash -c \"dua i /\"\n")
+                .unwrap();
         assert_eq!(l.kind, Kind::Tui("bash -c \"dua i /\"".into(), true));
         let l = parse_launcher("Docker", "Exec=xdg-terminal-exec --app-id=TUI.tile -e omarchy-launch-docker-tui\n").unwrap();
         assert_eq!(l.kind, Kind::Tui("omarchy-launch-docker-tui".into(), false));

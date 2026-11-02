@@ -25,7 +25,11 @@ fn theme_image(dir: &std::path::Path) -> Option<PathBuf> {
         .ok()?
         .flatten()
         .map(|e| e.path())
-        .filter(|p| p.extension().and_then(|e| e.to_str()).is_some_and(|e| ["png", "jpg", "jpeg", "webp"].contains(&e.to_lowercase().as_str())))
+        .filter(|p| {
+            p.extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| ["png", "jpg", "jpeg", "webp"].contains(&e.to_lowercase().as_str()))
+        })
         .collect();
     backgrounds.sort();
     backgrounds.into_iter().next()
@@ -36,9 +40,13 @@ fn colour_strip(dir: &std::path::Path) -> Option<gtk::Box> {
     let text = std::fs::read_to_string(dir.join("colors.toml")).ok()?;
     let table: toml::Table = toml::from_str(&text).ok()?;
     let keys = ["background", "foreground", "accent", "color1", "color2", "color3", "color4", "color5", "color6"];
-    let colours: Vec<String> = keys.iter().filter_map(|k| table.get(*k).and_then(|v| v.as_str()))
+    let colours: Vec<String> = keys
+        .iter()
+        .filter_map(|k| table.get(*k).and_then(|v| v.as_str()))
         // Only plain hex colours go into the stylesheet.
-        .filter(|c| c.len() <= 9 && c.strip_prefix('#').is_some_and(|h| !h.is_empty() && h.chars().all(|ch| ch.is_ascii_hexdigit())))
+        .filter(|c| {
+            c.len() <= 9 && c.strip_prefix('#').is_some_and(|h| !h.is_empty() && h.chars().all(|ch| ch.is_ascii_hexdigit()))
+        })
         .map(String::from)
         .collect();
     if colours.is_empty() {
@@ -199,19 +207,14 @@ pub fn build(page: &Page) {
         .collect();
     let current_font = cmd::output(&["omarchy-font-current"]).unwrap_or_default();
     g.add(&interface_font_row());
-    let (r, _) = widgets::choice_row(
-        "Monospace font",
-        "Used by terminals, the bar and the lock screen.",
-        fonts,
-        &current_font,
-        |font| {
+    let (r, _) =
+        widgets::choice_row("Monospace font", "Used by terminals, the bar and the lock screen.", fonts, &current_font, |font| {
             cmd::run_async(&["omarchy-font-set", &font], move |r| {
                 if let Err(e) = r {
                     crate::window::toast(&format!("Couldn't set font: {e}"));
                 }
             });
-        },
-    );
+        });
     g.add(&r);
     icons_row(&g);
 
@@ -351,12 +354,15 @@ fn apps_group(page: &Page) {
         let refresh = refresh.clone();
         let (r, _) = widgets::switch_row(t.title, t.desc, *on, move |on| {
             let refresh = refresh.clone();
-            cmd::background(move || chroma::set_enabled(t, on), move |r| {
-                refresh();
-                if let Err(e) = r {
-                    crate::window::toast(&format!("Couldn't change {}: {e}", t.title));
-                }
-            });
+            cmd::background(
+                move || chroma::set_enabled(t, on),
+                move |r| {
+                    refresh();
+                    if let Err(e) = r {
+                        crate::window::toast(&format!("Couldn't change {}: {e}", t.title));
+                    }
+                },
+            );
         });
         if st.status.iter().any(|(k, v)| k == key && v == "not-installed") {
             widgets::tag_row(&r, "App not installed");
@@ -386,11 +392,14 @@ fn apps_group(page: &Page) {
         "Re-theme apps in the background whenever the Omarchy theme or font changes.",
         chroma::service_active(),
         |on| {
-            cmd::background(move || chroma::set_service(on), |r| {
-                if let Err(e) = r {
-                    crate::window::toast(&format!("Couldn't change automatic sync: {e}"));
-                }
-            });
+            cmd::background(
+                move || chroma::set_service(on),
+                |r| {
+                    if let Err(e) = r {
+                        crate::window::toast(&format!("Couldn't change automatic sync: {e}"));
+                    }
+                },
+            );
         },
     );
     g.add(&r);
@@ -509,11 +518,14 @@ fn interface_font_row() -> gtk::Box {
         if desc == appearance::interface_font() {
             return;
         }
-        cmd::background(move || appearance::set_interface_font(&desc), |r| {
-            if let Err(e) = r {
-                crate::window::toast(&format!("Couldn't set font: {e}"));
-            }
-        });
+        cmd::background(
+            move || appearance::set_interface_font(&desc),
+            |r| {
+                if let Err(e) = r {
+                    crate::window::toast(&format!("Couldn't set font: {e}"));
+                }
+            },
+        );
     });
     widgets::keywords("interface font ui text gtk qt size");
     widgets::row("Interface font", "Text in app windows, menus and dialogs (GTK and Qt).", Some(button.upcast_ref()))

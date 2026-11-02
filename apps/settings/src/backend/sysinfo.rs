@@ -67,7 +67,12 @@ pub fn tidy_model(vendor: &str, product: &str) -> String {
         // Drop company suffixes.
         vendor
             .split_whitespace()
-            .filter(|w| !matches!(w.trim_end_matches(['.', ',']).to_lowercase().as_str(), "inc" | "corp" | "corporation" | "co" | "ltd" | "computer" | "llc" | "gmbh"))
+            .filter(|w| {
+                !matches!(
+                    w.trim_end_matches(['.', ',']).to_lowercase().as_str(),
+                    "inc" | "corp" | "corporation" | "co" | "ltd" | "computer" | "llc" | "gmbh"
+                )
+            })
             .collect::<Vec<_>>()
             .join(" ")
     });
@@ -85,7 +90,9 @@ pub fn tidy_model(vendor: &str, product: &str) -> String {
         product = product[vendor.len()..].trim().to_string();
     }
     // Placeholder strings some boards ship with.
-    let junk = |s: &str| s.is_empty() || ["to be filled by o.e.m.", "system product name", "default string"].contains(&s.to_lowercase().as_str());
+    let junk = |s: &str| {
+        s.is_empty() || ["to be filled by o.e.m.", "system product name", "default string"].contains(&s.to_lowercase().as_str())
+    };
     match (junk(&vendor), junk(&product)) {
         (true, true) => String::new(),
         (true, false) => product,

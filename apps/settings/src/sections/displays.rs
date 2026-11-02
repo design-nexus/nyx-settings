@@ -1,5 +1,5 @@
-use crate::backend::state::Monitor;
 use super::arrange;
+use crate::backend::state::Monitor;
 use crate::backend::{hypr, store};
 use crate::widgets::{self, Page, opts};
 use crate::{cmd, window};
@@ -174,7 +174,9 @@ fn laptop_screen(page: &Page) {
         "Built-in screen",
         "Turn the laptop's own screen off, for example with the lid closed on a desk.",
         !flag("internal-monitor-disable"),
-        move |on| run(if on { &["omarchy-hyprland-monitor-internal", "on"] } else { &["omarchy-hyprland-monitor-internal", "off"] }),
+        move |on| {
+            run(if on { &["omarchy-hyprland-monitor-internal", "on"] } else { &["omarchy-hyprland-monitor-internal", "off"] })
+        },
     );
     g.add(&r);
     widgets::keywords("internal laptop display eDP clamshell off disable");
@@ -183,12 +185,23 @@ fn laptop_screen(page: &Page) {
             "Mirror to an external screen",
             "Show the laptop's screen on the connected monitor too, for presenting.",
             flag("internal-monitor-mirror"),
-            move |on| run(if on { &["omarchy-hyprland-monitor-internal-mirror", "on"] } else { &["omarchy-hyprland-monitor-internal-mirror", "off"] }),
+            move |on| {
+                run(if on {
+                    &["omarchy-hyprland-monitor-internal-mirror", "on"]
+                } else {
+                    &["omarchy-hyprland-monitor-internal-mirror", "off"]
+                })
+            },
         );
         g.add(&r);
         widgets::keywords("duplicate projector presentation external monitor");
     }
-    let (r, _) = widgets::button_row("Recover the built-in screen", "Use this if the laptop screen stays dark after unplugging a monitor.", "Recover", move |_| run(&["omarchy-hyprland-monitor-internal", "recover"]));
+    let (r, _) = widgets::button_row(
+        "Recover the built-in screen",
+        "Use this if the laptop screen stays dark after unplugging a monitor.",
+        "Recover",
+        move |_| run(&["omarchy-hyprland-monitor-internal", "recover"]),
+    );
     widgets::keywords("black dark blank fix");
     g.add(&r);
 }
@@ -200,8 +213,19 @@ fn arrangement(page: &Page, monitors: &[Value]) {
         .iter()
         .filter(|m| !m.get("disabled").and_then(|v| v.as_bool()).unwrap_or(false))
         .map(|m| {
-            let (w, h) = arrange::logical_size(num(m, "width"), num(m, "height"), num(m, "scale"), m.get("transform").and_then(|v| v.as_i64()).unwrap_or(0));
-            arrange::Rect { name: m.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(), x: num(m, "x"), y: num(m, "y"), w, h }
+            let (w, h) = arrange::logical_size(
+                num(m, "width"),
+                num(m, "height"),
+                num(m, "scale"),
+                m.get("transform").and_then(|v| v.as_i64()).unwrap_or(0),
+            );
+            arrange::Rect {
+                name: m.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                x: num(m, "x"),
+                y: num(m, "y"),
+                w,
+                h,
+            }
         })
         .collect();
     if rects.len() < 2 {
@@ -225,7 +249,8 @@ fn arrangement(page: &Page, monitors: &[Value]) {
     card.add_css_class("bare");
     widgets::keywords("arrange arrangement position layout drag left right above below multiple monitors");
     g.add(&card);
-    let (r, _) = widgets::button_row("Identify", "Shows each display's name on the display itself.", "Identify", |_| arrange::identify());
+    let (r, _) =
+        widgets::button_row("Identify", "Shows each display's name on the display itself.", "Identify", |_| arrange::identify());
     widgets::keywords("which monitor name");
     g.add(&r);
 }

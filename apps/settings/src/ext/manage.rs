@@ -296,8 +296,7 @@ pub fn cli(args: &[String]) -> Result<()> {
             Ok(())
         }
         "update" => {
-            let targets: Vec<Extension> =
-                super::installed().into_iter().filter(|e| arg.is_empty() || e.id() == arg).collect();
+            let targets: Vec<Extension> = super::installed().into_iter().filter(|e| arg.is_empty() || e.id() == arg).collect();
             if targets.is_empty() {
                 bail!("nothing to update");
             }
@@ -404,12 +403,24 @@ mod tests {
         assert!(!has_update(&e).unwrap());
         // A change outside the extension's folder doesn't count.
         std::fs::write(repo.join("index.json"), "{\"x\":1}").unwrap();
-        assert!(Command::new("git").args(["-C", &r, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "other"]).status().unwrap().success());
+        assert!(
+            Command::new("git")
+                .args(["-C", &r, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "other"])
+                .status()
+                .unwrap()
+                .success()
+        );
         assert!(!has_update(&e).unwrap(), "only its own folder matters");
         // Several commits upstream (a plain shallow pull fails on these).
         for n in 1..=3 {
             std::fs::write(ext.join("demo.sh"), format!("#!/bin/sh\necho '[]' # v{n}\n")).unwrap();
-            assert!(Command::new("git").args(["-C", &r, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "next"]).status().unwrap().success());
+            assert!(
+                Command::new("git")
+                    .args(["-C", &r, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "next"])
+                    .status()
+                    .unwrap()
+                    .success()
+            );
         }
         std::fs::write(e.dir.join("bin-output"), "kept").unwrap();
         assert!(has_update(&e).unwrap());

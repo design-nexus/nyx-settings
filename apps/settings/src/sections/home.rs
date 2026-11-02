@@ -108,7 +108,9 @@ fn fact(grid: &gtk::Grid, i: i32, title: &str, value: &str) -> gtk::Label {
 /// "4.0.0.r6694.g821ae58" → "4.0.0": the build suffix of a development version.
 fn short_version(v: &str) -> String {
     match v.split_once(".r") {
-        Some((base, rest)) if rest.split_once(".g").is_some_and(|(n, _)| n.chars().all(|c| c.is_ascii_digit())) => base.to_string(),
+        Some((base, rest)) if rest.split_once(".g").is_some_and(|(n, _)| n.chars().all(|c| c.is_ascii_digit())) => {
+            base.to_string()
+        }
         _ => v.to_string(),
     }
 }
@@ -736,13 +738,21 @@ fn quick_settings(page: &Page) {
     }
     let g = page.group("Quick settings");
     if has_dnd {
-        let (r, _) = widgets::switch_row("Do not disturb", "Silence notifications until you turn it back on.", crate::backend::notify::dnd(), |on| {
-            cmd::background(move || crate::backend::notify::set_dnd(on), |r| {
-                if let Err(e) = r {
-                    window::toast(&format!("Couldn't change Do not disturb: {e}"));
-                }
-            });
-        });
+        let (r, _) = widgets::switch_row(
+            "Do not disturb",
+            "Silence notifications until you turn it back on.",
+            crate::backend::notify::dnd(),
+            |on| {
+                cmd::background(
+                    move || crate::backend::notify::set_dnd(on),
+                    |r| {
+                        if let Err(e) = r {
+                            window::toast(&format!("Couldn't change Do not disturb: {e}"));
+                        }
+                    },
+                );
+            },
+        );
         widgets::keywords("dnd silence notifications quiet");
         g.add(&r);
     }
@@ -762,7 +772,11 @@ fn quick_settings(page: &Page) {
                 }
             });
         });
-        g.add(&widgets::row("Power profile", "Battery life or speed, right now. Power &amp; Battery sets it per power source.", Some(seg.upcast_ref())));
+        g.add(&widgets::row(
+            "Power profile",
+            "Battery life or speed, right now. Power &amp; Battery sets it per power source.",
+            Some(seg.upcast_ref()),
+        ));
         widgets::keywords("performance balanced power saver battery");
     }
 }

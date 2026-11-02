@@ -482,9 +482,7 @@ pub fn reload_sections(fresh: bool) {
         .pages
         .keys()
         .copied()
-        .filter(|id| {
-            sections.iter().find(|s| s.id == *id).is_none_or(|s| matches!(s.build, sections::Build::Extension(_)))
-        })
+        .filter(|id| sections.iter().find(|s| s.id == *id).is_none_or(|s| matches!(s.build, sections::Build::Extension(_))))
         .collect();
     for id in &stale {
         if let Some(p) = u.pages.remove(id) {
@@ -627,7 +625,11 @@ fn apply_compact(compact: bool) {
         wdg.set_visible(!compact);
     }
     show_dividers(&u.nav_list, compact);
-    u.collapse_button.set_tooltip_text(Some(if compact { "Expand the sidebar (Ctrl+B)" } else { "Collapse the sidebar (Ctrl+B)" }));
+    u.collapse_button.set_tooltip_text(Some(if compact {
+        "Expand the sidebar (Ctrl+B)"
+    } else {
+        "Collapse the sidebar (Ctrl+B)"
+    }));
     centre_icons(u.nav.upcast_ref(), compact);
 }
 
@@ -901,7 +903,12 @@ fn filter(query: &str) {
         let u = ui.borrow();
         u.sections
             .iter()
-            .filter(|s| crate::search::matches(&crate::search::normalise(&format!("{} {} {}", s.title, s.description, s.keywords)), &terms))
+            .filter(|s| {
+                crate::search::matches(
+                    &crate::search::normalise(&format!("{} {} {}", s.title, s.description, s.keywords)),
+                    &terms,
+                )
+            })
             .map(|s| s.id)
             .collect()
     };
@@ -918,7 +925,9 @@ fn filter(query: &str) {
             let show = terms.is_empty() || hit || whole_section;
             item.row.set_visible(show);
             if hit {
-                if !terms.is_empty() { widgets::reveal_disclosure_ancestors(&item.row); }
+                if !terms.is_empty() {
+                    widgets::reveal_disclosure_ancestors(&item.row);
+                }
                 *section_hits.entry(item.section.clone()).or_default() += 1;
                 hit_rows.push((item.section.clone(), item.row.clone()));
             }

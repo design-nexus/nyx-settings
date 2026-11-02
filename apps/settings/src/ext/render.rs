@@ -84,7 +84,15 @@ fn load(st: &Shared, quiet: bool) {
                                 return;
                             }
                             // Structural polls wait while an entry is being edited.
-                            if quiet && st.content.root().and_then(|r|r.focus()).is_some_and(|w|w.is::<gtk::Text>()||w.is::<gtk::Entry>()) {return;}
+                            if quiet
+                                && st
+                                    .content
+                                    .root()
+                                    .and_then(|r| r.focus())
+                                    .is_some_and(|w| w.is::<gtk::Text>() || w.is::<gtk::Entry>())
+                            {
+                                return;
+                            }
                             *st.last.borrow_mut() = text;
                             render(&st, &desc);
                         }
@@ -104,30 +112,59 @@ fn status_shape(text: &str) -> Option<serde_json::Value> {
     fn strip(value: &mut serde_json::Value) {
         match value {
             serde_json::Value::Object(object) => {
-                if object.get("kind").and_then(|v|v.as_str())==Some("info") {object.remove("value");}
+                if object.get("kind").and_then(|v| v.as_str()) == Some("info") {
+                    object.remove("value");
+                }
                 object.remove("disabled");
-                for child in object.values_mut() {strip(child);}
+                for child in object.values_mut() {
+                    strip(child);
+                }
             }
-            serde_json::Value::Array(array) => {for child in array {strip(child);}}
-            _ => {},
+            serde_json::Value::Array(array) => {
+                for child in array {
+                    strip(child);
+                }
+            }
+            _ => {}
         }
     }
-    let mut value=serde_json::from_str(text).ok()?;strip(&mut value);Some(value)
+    let mut value = serde_json::from_str(text).ok()?;
+    strip(&mut value);
+    Some(value)
 }
 fn update_status(st: &State, text: &str, desc: &PageDesc) -> bool {
-    let Some(old)=status_shape(&st.last.borrow()) else {return false;};
-    if Some(old)!=status_shape(text) {return false;}
+    let Some(old) = status_shape(&st.last.borrow()) else {
+        return false;
+    };
+    if Some(old) != status_shape(text) {
+        return false;
+    }
     fn visit(st: &State, rows: &[Row], index: &mut usize) {
         for row in rows {
-            let id=*index;*index+=1;
-            if let Some(widget)=st.row_widgets.borrow().get(&id) && widget.is_sensitive()==row.disabled {widget.set_sensitive(!row.disabled);}
-            if row.kind==Kind::Info && let Some(label)=st.info_labels.borrow().get(&id) {
-                let value=row.str_value();if label.text().as_str()!=value {label.set_text(&value);}
+            let id = *index;
+            *index += 1;
+            if let Some(widget) = st.row_widgets.borrow().get(&id)
+                && widget.is_sensitive() == row.disabled
+            {
+                widget.set_sensitive(!row.disabled);
             }
-            if matches!(row.kind,Kind::Switch|Kind::Disclosure) {visit(st,&row.rows,index);}
+            if row.kind == Kind::Info
+                && let Some(label) = st.info_labels.borrow().get(&id)
+            {
+                let value = row.str_value();
+                if label.text().as_str() != value {
+                    label.set_text(&value);
+                }
+            }
+            if matches!(row.kind, Kind::Switch | Kind::Disclosure) {
+                visit(st, &row.rows, index);
+            }
         }
     }
-    let mut index=0;for group in &desc.groups {visit(st,&group.rows,&mut index);}
+    let mut index = 0;
+    for group in &desc.groups {
+        visit(st, &group.rows, &mut index);
+    }
     true
 }
 
@@ -261,10 +298,11 @@ fn children(st: &Shared, rows: &[Row]) -> gtk::Box {
 }
 
 fn row_widget(st: &Shared, row: &Row) -> gtk::Widget {
-    let id=st.next_row.get();st.next_row.set(id+1);
-    let widget=row_widget_inner(st,row,id);
+    let id = st.next_row.get();
+    st.next_row.set(id + 1);
+    let widget = row_widget_inner(st, row, id);
     widget.set_sensitive(!row.disabled);
-    st.row_widgets.borrow_mut().insert(id,widget.clone());
+    st.row_widgets.borrow_mut().insert(id, widget.clone());
     widget
 }
 fn row_widget_inner(st: &Shared, row: &Row, id: usize) -> gtk::Widget {
@@ -272,7 +310,7 @@ fn row_widget_inner(st: &Shared, row: &Row, id: usize) -> gtk::Widget {
     match row.kind {
         Kind::Info => {
             let (r, label) = widgets::info_row(&row.title, &row.str_value());
-            st.info_labels.borrow_mut().insert(id,label);
+            st.info_labels.borrow_mut().insert(id, label);
             if !row.desc.is_empty() && row.tooltip.is_empty() {
                 r.set_tooltip_text(Some(&row.desc));
             }
@@ -382,7 +420,8 @@ fn row_widget_inner(st: &Shared, row: &Row, id: usize) -> gtk::Widget {
             r.upcast()
         }
         Kind::Unknown => {
-            let (r, _) = widgets::info_row(if row.title.is_empty() { "Unsupported row" } else { &row.title }, "Needs a newer Settings");
+            let (r, _) =
+                widgets::info_row(if row.title.is_empty() { "Unsupported row" } else { &row.title }, "Needs a newer Settings");
             r.upcast()
         }
         Kind::Disclosure => {
@@ -391,11 +430,19 @@ fn row_widget_inner(st: &Shared, row: &Row, id: usize) -> gtk::Widget {
                 widgets::keywords(&row.keywords);
             }
             content.append(&children(st, &row.rows));
-            let key=format!("{}/disclosure/{}", st.section, if row.key.is_empty() {&row.title} else {&row.key});
-            if crate::prefs::get().open_groups.get(&key).copied().unwrap_or(false) { widgets::open_disclosure(&wrapper); }
-            if let Some(button)=wrapper.first_child().and_downcast::<gtk::Button>() {
-                let content=content.clone();
-                button.connect_clicked(move |_| {let open=content.is_visible();let key=key.clone();crate::prefs::update(|p|{p.open_groups.insert(key,open);});});
+            let key = format!("{}/disclosure/{}", st.section, if row.key.is_empty() { &row.title } else { &row.key });
+            if crate::prefs::get().open_groups.get(&key).copied().unwrap_or(false) {
+                widgets::open_disclosure(&wrapper);
+            }
+            if let Some(button) = wrapper.first_child().and_downcast::<gtk::Button>() {
+                let content = content.clone();
+                button.connect_clicked(move |_| {
+                    let open = content.is_visible();
+                    let key = key.clone();
+                    crate::prefs::update(|p| {
+                        p.open_groups.insert(key, open);
+                    });
+                });
             }
             wrapper.upcast()
         }
@@ -533,7 +580,8 @@ fn curve(st: &Shared, row: &Row) -> gtk::Box {
         }
     };
     if n > 1 {
-        let opts: Vec<(String, String)> = series.borrow().iter().enumerate().map(|(i, s)| (i.to_string(), s.label.clone())).collect();
+        let opts: Vec<(String, String)> =
+            series.borrow().iter().enumerate().map(|(i, s)| (i.to_string(), s.label.clone())).collect();
         let (graph, series, selected, copy, copy_label) =
             (graph.clone(), series.clone(), selected.clone(), copy.clone(), copy_label.clone());
         head.append(&widgets::segmented(&opts, "0", move |id| {
@@ -606,9 +654,9 @@ mod status_tests {
     use super::status_shape;
     #[test]
     fn changing_status_does_not_change_layout() {
-        let a=r#"{"groups":[{"rows":[{"kind":"info","key":"ai-status","value":"Downloading 1%"},{"kind":"choice","key":"theme","disabled":true}]}]}"#;
-        let b=r#"{"groups":[{"rows":[{"kind":"info","key":"ai-status","value":"Downloading 50%"},{"kind":"choice","key":"theme","disabled":false}]}]}"#;
-        assert_eq!(status_shape(a),status_shape(b));
-        assert_ne!(status_shape(a),status_shape(r#"{"groups":[]}"#));
+        let a = r#"{"groups":[{"rows":[{"kind":"info","key":"ai-status","value":"Downloading 1%"},{"kind":"choice","key":"theme","disabled":true}]}]}"#;
+        let b = r#"{"groups":[{"rows":[{"kind":"info","key":"ai-status","value":"Downloading 50%"},{"kind":"choice","key":"theme","disabled":false}]}]}"#;
+        assert_eq!(status_shape(a), status_shape(b));
+        assert_ne!(status_shape(a), status_shape(r#"{"groups":[]}"#));
     }
 }

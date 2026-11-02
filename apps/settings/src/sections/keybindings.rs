@@ -227,7 +227,9 @@ pub fn build(page: &Page) {
         let taken: Vec<(String, String)> = existing_binds()
             .into_iter()
             .map(|e| (e.keys, e.description))
-            .chain(custom.iter().enumerate().filter(|(i, _)| Some(*i) != editing).map(|(_, b)| (normalise(&b.keys), if b.description.is_empty() { b.command.clone() } else { b.description.clone() })))
+            .chain(custom.iter().enumerate().filter(|(i, _)| Some(*i) != editing).map(|(_, b)| {
+                (normalise(&b.keys), if b.description.is_empty() { b.command.clone() } else { b.description.clone() })
+            }))
             .collect();
         let clash = clash.clone();
         keys.connect_changed(move |e| {
@@ -384,15 +386,35 @@ const CATEGORIES: &[&str] = &["Apps & menus", "Windows", "Workspaces & monitors"
 fn category(description: &str, keys: &str) -> &'static str {
     let d = description.to_lowercase();
     let has = |words: &[&str]| words.iter().any(|w| d.contains(w));
-    if keys.contains("XF86") || has(&["volume", "brightness", "mute", "media", "play", "pause", "track", "backlight", "microphone"]) {
+    if keys.contains("XF86")
+        || has(&["volume", "brightness", "mute", "media", "play", "pause", "track", "backlight", "microphone"])
+    {
         "Media & hardware"
     } else if has(&["screenshot", "screen record", "recording", "color picker", "colour picker", "ocr", "qr code", "capture"]) {
         "Screenshots & recording"
     } else if has(&["workspace", "monitor"]) {
         "Workspaces & monitors"
     } else if has(&[
-        "window", "focus", "full screen", "fullscreen", "float", "group", "split", "resize", "grow", "shrink", "swap", "pin", "close", "kill",
-        "pseudo", "tile", "move", "scratchpad", "transparen", "width",
+        "window",
+        "focus",
+        "full screen",
+        "fullscreen",
+        "float",
+        "group",
+        "split",
+        "resize",
+        "grow",
+        "shrink",
+        "swap",
+        "pin",
+        "close",
+        "kill",
+        "pseudo",
+        "tile",
+        "move",
+        "scratchpad",
+        "transparen",
+        "width",
     ]) {
         "Windows"
     } else {

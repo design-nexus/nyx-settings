@@ -48,7 +48,13 @@ fn screenshots(page: &Page) {
     let (r, _) = widgets::choice_row(
         "What to capture",
         "Smart picks a window or lets you drag a region. Scroll captures a page longer than the screen.",
-        widgets::opts(&[("smart", "Smart"), ("region", "A region"), ("windows", "A window"), ("fullscreen", "The whole screen"), ("scroll", "Scrolling capture")]),
+        widgets::opts(&[
+            ("smart", "Smart"),
+            ("region", "A region"),
+            ("windows", "A window"),
+            ("fullscreen", "The whole screen"),
+            ("scroll", "Scrolling capture"),
+        ]),
         "smart",
         {
             let mode = mode.clone();
@@ -56,10 +62,16 @@ fn screenshots(page: &Page) {
         },
     );
     g.add(&r);
-    let (r, _) = widgets::choice_row("Where it goes", "Copy puts it on the clipboard; save writes a file to your Pictures folder.", widgets::opts(&[("copy", "Copy to the clipboard"), ("save", "Save to a file")]), "copy", {
-        let save = save.clone();
-        move |s| save.set(s == "save")
-    });
+    let (r, _) = widgets::choice_row(
+        "Where it goes",
+        "Copy puts it on the clipboard; save writes a file to your Pictures folder.",
+        widgets::opts(&[("copy", "Copy to the clipboard"), ("save", "Save to a file")]),
+        "copy",
+        {
+            let save = save.clone();
+            move |s| save.set(s == "save")
+        },
+    );
     g.add(&r);
     let (r, _) = widgets::button_row("Take a screenshot", "Settings steps aside first.", "Capture", move |_| {
         let mut args = vec!["omarchy-capture-screenshot".to_string(), mode.borrow().clone()];
@@ -69,12 +81,19 @@ fn screenshots(page: &Page) {
     widgets::keywords("screenshot screen capture print region window scroll clipboard");
     g.add(&r);
     if cmd::present("omarchy-capture-text") {
-        let (r, _) = widgets::button_row("Copy text from the screen", "Drag over text in an image or video to copy it.", "Select…", |_| hide_and_run(vec!["omarchy-capture-text".into()]));
+        let (r, _) = widgets::button_row(
+            "Copy text from the screen",
+            "Drag over text in an image or video to copy it.",
+            "Select…",
+            |_| hide_and_run(vec!["omarchy-capture-text".into()]),
+        );
         widgets::keywords("ocr text recognition extract");
         g.add(&r);
     }
     if cmd::present("omarchy-capture-qr") {
-        let (r, _) = widgets::button_row("Read a QR code", "Drag over a QR code on the screen.", "Scan…", |_| hide_and_run(vec!["omarchy-capture-qr".into()]));
+        let (r, _) = widgets::button_row("Read a QR code", "Drag over a QR code on the screen.", "Scan…", |_| {
+            hide_and_run(vec!["omarchy-capture-qr".into()])
+        });
         widgets::keywords("qr code scan");
         g.add(&r);
     }
@@ -217,21 +236,35 @@ fn weather(page: &Page) {
         return;
     }
     let g = page.collapsible("Weather and status", false);
-    let (r, _) = widgets::entry_row("Weather location", "A town or city name, used by the weather panel and bar. Empty finds it automatically. Press Enter.", "", "e.g. Austin", |place| {
-        let place = place.trim().to_string();
-        if place.starts_with('-') {
-            return;
-        }
-        let args: Vec<&str> = if place.is_empty() { vec!["omarchy-weather-location", "--clear"] } else { vec!["omarchy-weather-location", "--set", &place] };
-        cmd::run_async(&args, |r| match r {
-            Ok(_) => window::toast("Weather location saved"),
-            Err(e) => window::toast(&format!("{e}")),
-        });
-    });
+    let (r, _) = widgets::entry_row(
+        "Weather location",
+        "A town or city name, used by the weather panel and bar. Empty finds it automatically. Press Enter.",
+        "",
+        "e.g. Austin",
+        |place| {
+            let place = place.trim().to_string();
+            if place.starts_with('-') {
+                return;
+            }
+            let args: Vec<&str> = if place.is_empty() {
+                vec!["omarchy-weather-location", "--clear"]
+            } else {
+                vec!["omarchy-weather-location", "--set", &place]
+            };
+            cmd::run_async(&args, |r| match r {
+                Ok(_) => window::toast("Weather location saved"),
+                Err(e) => window::toast(&format!("{e}")),
+            });
+        },
+    );
     widgets::keywords("weather location city forecast");
     g.add(&r);
     let controls = widgets::hbox(8);
-    for (script, label) in [("omarchy-notification-time", "Time"), ("omarchy-notification-battery", "Battery"), ("omarchy-notification-weather", "Weather")] {
+    for (script, label) in [
+        ("omarchy-notification-time", "Time"),
+        ("omarchy-notification-battery", "Battery"),
+        ("omarchy-notification-weather", "Weather"),
+    ] {
         if cmd::present(script) {
             let b = gtk::Button::with_label(label);
             b.connect_clicked(move |_| cmd::spawn(&[script]));
@@ -269,7 +302,11 @@ fn dictation(page: &Page) {
         b.connect_clicked(|_| terminal("omarchy-voxtype-install"));
         controls.append(&b);
     }
-    g.add(&widgets::row("Speech to text", if on { "Installed. Type by talking, in any app." } else { "Type by talking, in any app. Runs on this computer." }, Some(controls.upcast_ref())));
+    g.add(&widgets::row(
+        "Speech to text",
+        if on { "Installed. Type by talking, in any app." } else { "Type by talking, in any app. Runs on this computer." },
+        Some(controls.upcast_ref()),
+    ));
     widgets::keywords("voxtype dictation voice speech whisper microphone typing");
 }
 
@@ -297,7 +334,10 @@ fn tools(page: &Page) {
     let g = page.collapsible("Tools", false);
     if cmd::present("omarchy-default-agent") {
         // The choice is a one-line file; asking the script to read it would be the same.
-        let current = std::fs::read_to_string(crate::paths::config_home().join("omarchy/defaults/agent")).unwrap_or_default().trim().to_string();
+        let current = std::fs::read_to_string(crate::paths::config_home().join("omarchy/defaults/agent"))
+            .unwrap_or_default()
+            .trim()
+            .to_string();
         let mut options = widgets::opts(AGENTS);
         if current.is_empty() {
             options.insert(0, (String::new(), "None chosen".into()));
@@ -323,18 +363,21 @@ fn tools(page: &Page) {
     }
     if cmd::present("omarchy-toggle-crash-capture") {
         let off = cmd::run(&["omarchy-toggle-enabled", "crash-capture-off"]).is_ok();
-        let (r, _) = widgets::switch_row("Tell me when a program crashes", "A notification with a way to look into it.", !off, |_| {
-            cmd::run_async(&["omarchy-toggle-crash-capture"], |r| {
-                if let Err(e) = r {
-                    window::toast(&format!("{e}"));
-                }
+        let (r, _) =
+            widgets::switch_row("Tell me when a program crashes", "A notification with a way to look into it.", !off, |_| {
+                cmd::run_async(&["omarchy-toggle-crash-capture"], |r| {
+                    if let Err(e) = r {
+                        window::toast(&format!("{e}"));
+                    }
+                });
             });
-        });
         widgets::keywords("crash coredump notification report debug");
         g.add(&r);
     }
     if cmd::present("omarchy-disk-speedtest") {
-        let (r, _) = widgets::button_row("Disk speed test", "Measures how fast the drive reads and writes.", "Run…", |_| terminal("omarchy-disk-speedtest"));
+        let (r, _) = widgets::button_row("Disk speed test", "Measures how fast the drive reads and writes.", "Run…", |_| {
+            terminal("omarchy-disk-speedtest")
+        });
         widgets::keywords("ssd nvme benchmark storage");
         g.add(&r);
     }
@@ -370,7 +413,10 @@ mod tests {
     fn recorder_arguments() {
         assert_eq!(recording_args(&Rec::default()), ["omarchy-capture-screenrecording"]);
         let r = Rec { desktop: true, mic: true, webcam: false, full: true };
-        assert_eq!(recording_args(&r), ["omarchy-capture-screenrecording", "--fullscreen", "--with-desktop-audio", "--with-microphone-audio"]);
+        assert_eq!(
+            recording_args(&r),
+            ["omarchy-capture-screenrecording", "--fullscreen", "--with-desktop-audio", "--with-microphone-audio"]
+        );
     }
 
     #[test]
@@ -384,7 +430,10 @@ mod tests {
     #[test]
     fn reminders() {
         assert_eq!(reminder_args("5", ""), Some(vec!["omarchy-reminder".into(), "5".into()]));
-        assert_eq!(reminder_args(" 30 ", " Check the oven "), Some(vec!["omarchy-reminder".into(), "30".into(), "Check the oven".into()]));
+        assert_eq!(
+            reminder_args(" 30 ", " Check the oven "),
+            Some(vec!["omarchy-reminder".into(), "30".into(), "Check the oven".into()])
+        );
         assert_eq!(reminder_args("5", "--help"), Some(vec!["omarchy-reminder".into(), "5".into(), "help".into()]));
         assert_eq!(reminder_args("0", ""), None);
         assert_eq!(reminder_args("abc", ""), None);

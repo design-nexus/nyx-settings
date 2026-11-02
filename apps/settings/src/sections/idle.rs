@@ -100,7 +100,14 @@ pub fn build(page: &Page) {
     card.add_css_class("preview-card");
     card.append(&line);
     g.add(&card);
-    g.add(&idle_row("screensaver", "Start the screensaver after", "0 turns the screensaver off.", 150, times.clone(), line.clone()));
+    g.add(&idle_row(
+        "screensaver",
+        "Start the screensaver after",
+        "0 turns the screensaver off.",
+        150,
+        times.clone(),
+        line.clone(),
+    ));
     g.add(&idle_row("lock", "Lock the screen after", "0 never locks on its own.", 300, times, line));
     widgets::keywords("timeout minutes");
 

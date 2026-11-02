@@ -93,18 +93,21 @@ pub fn build(page: &Page) {
     }
 
     if !installed.iter().any(|e| e.id() == "asus") && cmd::present("asusctl") && is_asus_laptop() {
-        let b = page.banner(
-            "<b>ASUS controls are now an extension.</b> Install it to get the ASUS and Aura Lighting pages back.",
-            false,
-        );
+        let b = page
+            .banner("<b>ASUS controls are now an extension.</b> Install it to get the ASUS and Aura Lighting pages back.", false);
         let install = gtk::Button::with_label("Install");
         install.add_css_class("suggested-action");
         install.set_valign(gtk::Align::Center);
         install.connect_clicked(|b| {
-            busy(b, "Installing…", || manage::install("asus"), |e| {
-                window::toast(&format!("Installed {}", e.manifest.name));
-                after_change();
-            })
+            busy(
+                b,
+                "Installing…",
+                || manage::install("asus"),
+                |e| {
+                    window::toast(&format!("Installed {}", e.manifest.name));
+                    after_change();
+                },
+            )
         });
         b.append(&install);
     }
@@ -136,20 +139,30 @@ pub fn build(page: &Page) {
         let rescan = gtk::Button::with_label("Look for devices");
         rescan.set_tooltip_text(Some("After plugging something in, ask every extension what it can see"));
         rescan.connect_clicked(|b| {
-            busy(b, "Looking…", || Ok(ext::refresh_pages()), |changed| {
-                window::toast(if changed { "Found changes" } else { "Nothing new" });
-                after_change();
-            });
+            busy(
+                b,
+                "Looking…",
+                || Ok(ext::refresh_pages()),
+                |changed| {
+                    window::toast(if changed { "Found changes" } else { "Nothing new" });
+                    after_change();
+                },
+            );
         });
         let check = gtk::Button::with_label("Check for updates");
         check.set_tooltip_text(Some("Settings also checks once a day when it opens"));
         check.connect_clicked(|b| {
-            busy(b, "Checking…", || Ok(crate::backend::updates::check(true)), |s| {
-                if s.extensions.is_empty() {
-                    window::toast("Extensions are up to date");
-                }
-                window::after_update_check(s);
-            });
+            busy(
+                b,
+                "Checking…",
+                || Ok(crate::backend::updates::check(true)),
+                |s| {
+                    if s.extensions.is_empty() {
+                        window::toast("Extensions are up to date");
+                    }
+                    window::after_update_check(s);
+                },
+            );
         });
         tools.append(&rescan);
         tools.append(&check);
@@ -165,13 +178,18 @@ pub fn build(page: &Page) {
                 update.connect_clicked(move |b| {
                     let id_for_clear = id_for_clear.clone();
                     let (e3, name) = (e2.clone(), e2.manifest.name.clone());
-                    busy(b, "Updating…", move || manage::update(&e3), move |changed| {
-                        crate::backend::updates::clear_extension(&id_for_clear);
-                        window::toast(&if changed { format!("Updated {name}") } else { format!("{name} is up to date") });
-                        if changed {
-                            after_change();
-                        }
-                    });
+                    busy(
+                        b,
+                        "Updating…",
+                        move || manage::update(&e3),
+                        move |changed| {
+                            crate::backend::updates::clear_extension(&id_for_clear);
+                            window::toast(&if changed { format!("Updated {name}") } else { format!("{name} is up to date") });
+                            if changed {
+                                after_change();
+                            }
+                        },
+                    );
                 });
                 controls.append(&update);
             }
@@ -179,11 +197,16 @@ pub fn build(page: &Page) {
             let remove = widgets::confirm_button("Remove", "Remove?", move |b| {
                 let (e3, name) = (e2.clone(), e2.manifest.name.clone());
                 let id = e3.id().to_string();
-                busy(b, "Removing…", move || manage::remove(&e3), move |_| {
-                    crate::backend::updates::clear_extension(&id);
-                    window::toast(&format!("Removed {name}"));
-                    after_change();
-                });
+                busy(
+                    b,
+                    "Removing…",
+                    move || manage::remove(&e3),
+                    move |_| {
+                        crate::backend::updates::clear_extension(&id);
+                        window::toast(&format!("Removed {name}"));
+                        after_change();
+                    },
+                );
             });
             controls.append(&remove);
             let on = gtk::Switch::new();
@@ -235,15 +258,20 @@ pub fn build(page: &Page) {
             let id = c.id.clone();
             install.connect_clicked(move |b| {
                 let id = id.clone();
-                busy(b, "Installing…", move || manage::install(&id), |e| {
-                    let n = ext::cached_pages(e.id()).map(|p| p.len()).unwrap_or(0);
-                    window::toast(&if n == 0 {
-                        format!("Installed {}. No matching devices found yet.", e.manifest.name)
-                    } else {
-                        format!("Installed {}", e.manifest.name)
-                    });
-                    after_change();
-                });
+                busy(
+                    b,
+                    "Installing…",
+                    move || manage::install(&id),
+                    |e| {
+                        let n = ext::cached_pages(e.id()).map(|p| p.len()).unwrap_or(0);
+                        window::toast(&if n == 0 {
+                            format!("Installed {}. No matching devices found yet.", e.manifest.name)
+                        } else {
+                            format!("Installed {}", e.manifest.name)
+                        });
+                        after_change();
+                    },
+                );
             });
             let r = widgets::row(&c.name, &desc, Some(install.upcast_ref()));
             r.insert_child_after(&gtk::Image::from_icon_name(&c.icon), None::<&gtk::Widget>);
@@ -272,11 +300,16 @@ pub fn build(page: &Page) {
             }
             let sub = path.text().trim().to_string();
             let repo = repo.clone();
-            busy(b, "Installing…", move || manage::install_from(&url, &sub, &[], None), move |e| {
-                repo.set_text("");
-                window::toast(&format!("Installed {}", e.manifest.name));
-                after_change();
-            });
+            busy(
+                b,
+                "Installing…",
+                move || manage::install_from(&url, &sub, &[], None),
+                move |e| {
+                    repo.set_text("");
+                    window::toast(&format!("Installed {}", e.manifest.name));
+                    after_change();
+                },
+            );
         });
     }
     let line = widgets::hbox(8);

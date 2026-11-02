@@ -85,7 +85,12 @@ fn settings_group(page: &Page) {
         };
         g.add(&widgets::row(&format!("Settings {} is available", s.latest), &desc, Some(line.upcast_ref())));
     } else {
-        let (r, _) = widgets::button_row(&format!("Settings {current}"), &format!("Up to date. {}", checked_text(&s)), "Check now", check_now);
+        let (r, _) = widgets::button_row(
+            &format!("Settings {current}"),
+            &format!("Up to date. {}", checked_text(&s)),
+            "Check now",
+            check_now,
+        );
         g.add(&r);
     }
     widgets::keywords("update upgrade version new release settings app check");
@@ -187,14 +192,26 @@ fn changes_group(page: &Page) {
         others.push(("keybindings", format!("{} of your own, {} turned off", st.binds.len(), st.unbinds.len())));
     }
     if !st.monitors.is_empty() {
-        others.push(("displays", format!("{} display{} set up here", st.monitors.len(), if st.monitors.len() == 1 { "" } else { "s" })));
+        others.push((
+            "displays",
+            format!("{} display{} set up here", st.monitors.len(), if st.monitors.len() == 1 { "" } else { "s" }),
+        ));
     }
-    let n_startup = st.autostart.len() + crate::backend::autostart::list().into_iter().filter(|i| i.enabled && !i.is_system).count();
+    let n_startup =
+        st.autostart.len() + crate::backend::autostart::list().into_iter().filter(|i| i.enabled && !i.is_system).count();
     if !st.window_rules.is_empty() || !st.layer_rules.is_empty() || n_startup > 0 {
-        others.push(("rules", format!("{n_startup} startup program{}, {} rules", if n_startup == 1 { "" } else { "s" }, st.window_rules.len() + st.layer_rules.len())));
+        others.push((
+            "rules",
+            format!(
+                "{n_startup} startup program{}, {} rules",
+                if n_startup == 1 { "" } else { "s" },
+                st.window_rules.len() + st.layer_rules.len()
+            ),
+        ));
     }
     if !st.devices.is_empty() {
-        others.push(("mouse", format!("Settings for {} device{}", st.devices.len(), if st.devices.len() == 1 { "" } else { "s" })));
+        others
+            .push(("mouse", format!("Settings for {} device{}", st.devices.len(), if st.devices.len() == 1 { "" } else { "s" })));
     }
     if st.gestures != Default::default() {
         others.push(("trackpad", "Swipe and pinch gestures".to_string()));
@@ -206,7 +223,10 @@ fn changes_group(page: &Page) {
     g.note(&match (total, others.is_empty()) {
         (0, true) => "Nothing changed yet: everything uses your own config files and Omarchy's defaults.".to_string(),
         (0, false) => "What Settings manages for you, by page.".to_string(),
-        (n, _) => format!("{n} option{} changed here. Reset hands them back to your own config or Omarchy's defaults.", if n == 1 { "" } else { "s" }),
+        (n, _) => format!(
+            "{n} option{} changed here. Reset hands them back to your own config or Omarchy's defaults.",
+            if n == 1 { "" } else { "s" }
+        ),
     });
     for (id, desc) in others {
         let (r, _) = widgets::button_row(window::section_title(id).unwrap_or(id), &desc, "Show", move |_| window::navigate(id));
@@ -219,45 +239,55 @@ fn backup_group(page: &Page) {
     use crate::backend::backup;
     let g = page.group("Move your settings");
     g.note("Everything Settings keeps — its own preferences, Hyprland options, shortcuts, displays, sound and lighting — in one file.");
-    let (r, _) = widgets::button_row("Export", "Save a backup file to keep or to bring to another computer.", "Export…", |_| {
-        let dialog = gtk::FileDialog::builder().title("Export settings").initial_name("omarchy-settings.json").modal(true).build();
-        dialog.save(window::window().as_ref(), gtk::gio::Cancellable::NONE, |res| {
-            let Ok(file) = res else { return };
-            let Some(path) = file.path() else { return };
-            match backup::export().and_then(|text| cmd::atomic_write(&path, &text)) {
-                Ok(()) => window::toast(&format!("Saved {}", path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default())),
-                Err(e) => window::toast(&format!("Couldn't export: {e:#}")),
-            }
+    let (r, _) =
+        widgets::button_row("Export", "Save a backup file to keep or to bring to another computer.", "Export…", |_| {
+            let dialog =
+                gtk::FileDialog::builder().title("Export settings").initial_name("omarchy-settings.json").modal(true).build();
+            dialog.save(window::window().as_ref(), gtk::gio::Cancellable::NONE, |res| {
+                let Ok(file) = res else { return };
+                let Some(path) = file.path() else { return };
+                match backup::export().and_then(|text| cmd::atomic_write(&path, &text)) {
+                    Ok(()) => {
+                        window::toast(&format!("Saved {}", path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()))
+                    }
+                    Err(e) => window::toast(&format!("Couldn't export: {e:#}")),
+                }
+            });
         });
-    });
     widgets::keywords("export backup save copy transfer migrate");
     g.add(&r);
-    let (r, _) = widgets::button_row("Import", "Replace these settings with a backup's. Settings restarts to use them.", "Import…", |_| {
-        let dialog = gtk::FileDialog::builder().title("Import settings").modal(true).build();
-        dialog.open(window::window().as_ref(), gtk::gio::Cancellable::NONE, |res| {
-            let Ok(file) = res else { return };
-            let Some(path) = file.path() else { return };
-            let files = match std::fs::read_to_string(&path).map_err(anyhow::Error::from).and_then(|t| backup::read_backup(&t)) {
-                Ok(f) => f,
-                Err(e) => return window::toast(&format!("Couldn't import: {e:#}")),
-            };
-            let names: Vec<String> = files.iter().map(|(n, _)| n.clone()).collect();
-            crate::dialog::ask(
-                "Import these settings?",
-                &format!("This replaces {} here. Settings restarts afterwards.", names.join(", ")),
-                vec![],
-                "Import",
-                None,
-                move |_, _| {
-                    if let Err(e) = backup::import(&files) {
-                        return Some(format!("{e:#}"));
-                    }
-                    restored();
-                    None
-                },
-            );
-        });
-    });
+    let (r, _) = widgets::button_row(
+        "Import",
+        "Replace these settings with a backup's. Settings restarts to use them.",
+        "Import…",
+        |_| {
+            let dialog = gtk::FileDialog::builder().title("Import settings").modal(true).build();
+            dialog.open(window::window().as_ref(), gtk::gio::Cancellable::NONE, |res| {
+                let Ok(file) = res else { return };
+                let Some(path) = file.path() else { return };
+                let files =
+                    match std::fs::read_to_string(&path).map_err(anyhow::Error::from).and_then(|t| backup::read_backup(&t)) {
+                        Ok(f) => f,
+                        Err(e) => return window::toast(&format!("Couldn't import: {e:#}")),
+                    };
+                let names: Vec<String> = files.iter().map(|(n, _)| n.clone()).collect();
+                crate::dialog::ask(
+                    "Import these settings?",
+                    &format!("This replaces {} here. Settings restarts afterwards.", names.join(", ")),
+                    vec![],
+                    "Import",
+                    None,
+                    move |_, _| {
+                        if let Err(e) = backup::import(&files) {
+                            return Some(format!("{e:#}"));
+                        }
+                        restored();
+                        None
+                    },
+                );
+            });
+        },
+    );
     widgets::keywords("import restore backup load transfer migrate");
     g.add(&r);
 }

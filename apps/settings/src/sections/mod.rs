@@ -15,11 +15,13 @@ pub mod arrange;
 pub mod assistant;
 pub mod audio;
 pub mod bar;
-pub mod boot;
 pub mod barlayout;
+pub mod boot;
 pub mod capture;
 pub mod cleanup;
+pub mod cloud;
 pub mod connectivity;
+pub mod desktop;
 pub mod disks;
 pub mod displays;
 pub mod extensions;
@@ -35,7 +37,6 @@ pub mod nightlight;
 pub mod nyx;
 pub mod online_accounts;
 pub mod online_presets;
-pub mod cloud;
 pub mod plugins;
 pub mod power;
 pub mod printers;
@@ -99,9 +100,13 @@ fn intern(s: &str) -> &'static str {
 
 fn extension_group(category: &str) -> &'static str {
     match category {
-        "Connections" => "Connections", "Personalization" => "Personalization",
-        "Desktop" => "Desktop", "Input" => "Input", "Accounts" => "Accounts",
-        "System" => "System", _ => "Hardware",
+        "Connections" => "Connections",
+        "Personalization" => "Personalization",
+        "Desktop" => "Desktop",
+        "Input" => "Input",
+        "Accounts" => "Accounts",
+        "System" => "System",
+        _ => "Hardware",
     }
 }
 
@@ -336,6 +341,39 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             visible: always,
         },
         // ----- Desktop -----
+        Section {
+            id: "dock",
+            title: "Dock",
+            icon: "user-desktop-symbolic",
+            group: "Desktop",
+            description: "Nyx Dock: where it sits, hiding, previews.",
+            keywords: "dock launcher taskbar pinned apps hide previews",
+            files: || vec![gtk::glib::user_config_dir().join("nyx/dock.toml")],
+            build: Build::Native(desktop::build_dock),
+            visible: desktop::dock_installed,
+        },
+        Section {
+            id: "control-center",
+            title: "Control Center",
+            icon: "view-grid-symbolic",
+            group: "Desktop",
+            description: "Quick settings panel: its layout and its bar widgets.",
+            keywords: "control center quick settings tiles status bar widget",
+            files: || vec![gtk::glib::user_config_dir().join("nyx/control-center.toml")],
+            build: Build::Native(desktop::build_control_center),
+            visible: desktop::control_center_installed,
+        },
+        Section {
+            id: "notifications",
+            title: "Notifications",
+            icon: "preferences-system-notifications-symbolic",
+            group: "Desktop",
+            description: "Notification Center: pop-ups, Do not disturb schedule, history, apps.",
+            keywords: "notifications notification center popups toasts dnd do not disturb history pinned inbox",
+            files: Vec::new,
+            build: Build::Native(desktop::build_notifications),
+            visible: desktop::notification_center_installed,
+        },
         Section {
             id: "workspaces",
             title: "Tiling & Workspaces",

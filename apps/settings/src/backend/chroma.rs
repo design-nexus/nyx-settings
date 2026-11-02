@@ -73,12 +73,23 @@ pub struct State {
 pub fn parse_state(settings: &str, status: &str) -> State {
     let s: Value = serde_json::from_str(settings).unwrap_or(Value::Null);
     let st: Value = serde_json::from_str(status).unwrap_or(Value::Null);
-    let removed: Vec<String> =
-        s.get("removed").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+    let removed: Vec<String> = s
+        .get("removed")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        .unwrap_or_default();
     let frameworks = TARGETS
         .iter()
         .filter(|t| !removed.iter().any(|r| r == t.key))
-        .map(|t| (t.key.to_string(), s.get("frameworks").and_then(|f| f.get(t.key)).and_then(|v| v.as_bool()).unwrap_or(t.key == "gtk" || t.key == "qtKde")))
+        .map(|t| {
+            (
+                t.key.to_string(),
+                s.get("frameworks")
+                    .and_then(|f| f.get(t.key))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(t.key == "gtk" || t.key == "qtKde"),
+            )
+        })
         .collect();
     // status.json calls Pear "pearDesktop".
     let status = TARGETS
@@ -136,7 +147,9 @@ pub fn restore_stock() -> Result<String> {
 
 /// Apps still showing the previous theme.
 pub fn stale_apps() -> Vec<String> {
-    run(&["stale-apps"]).map(|t| t.lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect()).unwrap_or_default()
+    run(&["stale-apps"])
+        .map(|t| t.lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect())
+        .unwrap_or_default()
 }
 
 pub fn palette_source() -> String {
@@ -152,8 +165,7 @@ mod tests {
     use super::*;
 
     // As found on the development machine.
-    const SETTINGS: &str =
-        r#"{ "frameworks": { "gtk": true, "qtKde": true, "darkReader": false, "pear": false }, "removed": ["darkReader", "pear"] }"#;
+    const SETTINGS: &str = r#"{ "frameworks": { "gtk": true, "qtKde": true, "darkReader": false, "pear": false }, "removed": ["darkReader", "pear"] }"#;
     const STATUS: &str = r#"{ "theme": "Catppuccin", "fingerprint": "0e", "lastSync": "2026-09-29T03:38:56.870585+00:00",
         "gtk": "synchronized", "qtKde": "synchronized", "pearDesktop": "not-installed", "darkReader": "synchronized" }"#;
 

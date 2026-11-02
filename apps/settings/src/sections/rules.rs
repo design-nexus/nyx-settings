@@ -3,8 +3,8 @@
 use crate::backend::autostart;
 use crate::backend::rules::{self, Value};
 use crate::backend::state::Rule;
-use crate::dialog::{Field, ask};
 use crate::backend::{hypr, store};
+use crate::dialog::{Field, ask};
 use crate::widgets::{self, Page};
 use crate::window;
 use gtk::gio;
@@ -91,7 +91,9 @@ fn startup(page: &Page) {
     }
 
     // The night light schedule manages its own entry.
-    let entries: Vec<(String, String)> = store::read(|s| s.autostart.iter().filter(|(k, _)| k.as_str() != "hyprsunset").map(|(k, v)| (k.clone(), v.clone())).collect());
+    let entries: Vec<(String, String)> = store::read(|s| {
+        s.autostart.iter().filter(|(k, _)| k.as_str() != "hyprsunset").map(|(k, v)| (k.clone(), v.clone())).collect()
+    });
     for (process, command) in entries {
         let edit = gtk::Button::from_icon_name("document-edit-symbolic");
         edit.add_css_class("flat");
@@ -100,20 +102,27 @@ fn startup(page: &Page) {
             let (process, command) = (process.clone(), command.clone());
             edit.connect_clicked(move |_| {
                 let (process, command) = (process.clone(), command.clone());
-                ask("Edit startup program", "The command that starts it.", vec![Field::text_with("command", &command)], "Save", None, move |v, _| {
-                    let text = v[0].trim().to_string();
-                    let Some(new_process) = rules::process_of(&text) else {
-                        return Some("Couldn't tell which program that starts.".into());
-                    };
-                    let new_command = if text.starts_with("uwsm-app") { text } else { format!("uwsm-app -- {text}") };
-                    let old = process.clone();
-                    store::update(true, move |s| {
-                        s.autostart.remove(&old);
-                        s.autostart.insert(new_process, new_command);
-                    });
-                    window::rebuild("rules");
-                    None
-                });
+                ask(
+                    "Edit startup program",
+                    "The command that starts it.",
+                    vec![Field::text_with("command", &command)],
+                    "Save",
+                    None,
+                    move |v, _| {
+                        let text = v[0].trim().to_string();
+                        let Some(new_process) = rules::process_of(&text) else {
+                            return Some("Couldn't tell which program that starts.".into());
+                        };
+                        let new_command = if text.starts_with("uwsm-app") { text } else { format!("uwsm-app -- {text}") };
+                        let old = process.clone();
+                        store::update(true, move |s| {
+                            s.autostart.remove(&old);
+                            s.autostart.insert(new_process, new_command);
+                        });
+                        window::rebuild("rules");
+                        None
+                    },
+                );
             });
         }
         let key = process.clone();
@@ -166,21 +175,27 @@ fn startup(page: &Page) {
         g.add(&picker_row);
     }
 
-    let (r, _) = widgets::entry_row("Add a command", "A custom command, e.g. nm-applet or discord --start-minimized. Press Enter.", "", "command", |text| {
-        let text = text.trim().to_string();
-        if text.is_empty() {
-            return;
-        }
-        let Some(process) = rules::process_of(&text) else {
-            window::toast("Couldn't tell which program that starts");
-            return;
-        };
-        let command = if text.starts_with("uwsm-app") { text } else { format!("uwsm-app -- {text}") };
-        store::update(true, move |s| {
-            s.autostart.insert(process, command);
-        });
-        window::rebuild("rules");
-    });
+    let (r, _) = widgets::entry_row(
+        "Add a command",
+        "A custom command, e.g. nm-applet or discord --start-minimized. Press Enter.",
+        "",
+        "command",
+        |text| {
+            let text = text.trim().to_string();
+            if text.is_empty() {
+                return;
+            }
+            let Some(process) = rules::process_of(&text) else {
+                window::toast("Couldn't tell which program that starts");
+                return;
+            };
+            let command = if text.starts_with("uwsm-app") { text } else { format!("uwsm-app -- {text}") };
+            store::update(true, move |s| {
+                s.autostart.insert(process, command);
+            });
+            window::rebuild("rules");
+        },
+    );
     widgets::keywords("autostart startup login session add launch");
     g.add(&r);
 
@@ -334,7 +349,11 @@ fn rule_form(layer: bool) -> gtk::Box {
             value: if chosen.value == Value::Flag { String::new() } else { value.text().trim().to_string() },
         };
         if rules::lua_line(layer, &rule).is_none() {
-            window::toast(if layer { "Enter a namespace and, if needed, a value" } else { "Enter a class or title and, if needed, a value" });
+            window::toast(if layer {
+                "Enter a namespace and, if needed, a value"
+            } else {
+                "Enter a class or title and, if needed, a value"
+            });
             return;
         }
         store::update(true, move |s| if layer { s.layer_rules.push(rule) } else { s.window_rules.push(rule) });

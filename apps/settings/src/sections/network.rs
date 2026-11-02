@@ -39,7 +39,10 @@ fn connections(page: &Page) {
         any = true;
         let ip = cmd::output(&["nmcli", "-g", "IP4.ADDRESS", "device", "show", &f[0]]).unwrap_or_default();
         let kind = if f[1] == "wifi" { "Wi-Fi" } else { "Ethernet" };
-        let (r, _) = widgets::info_row(&format!("{kind} ({})", f[0]), &format!("{} · {}", f[3], ip.lines().next().unwrap_or("no address")));
+        let (r, _) = widgets::info_row(
+            &format!("{kind} ({})", f[0]),
+            &format!("{} · {}", f[3], ip.lines().next().unwrap_or("no address")),
+        );
         widgets::keywords("ip address ethernet wired lan");
         g.add(&r);
     }
@@ -56,50 +59,67 @@ fn dns(page: &Page) {
     }
     let g = page.group("DNS");
     let current = cmd::output(&["omarchy-dns"]).unwrap_or_default();
-    let mut options = widgets::opts(&[("Cloudflare", "Cloudflare (1.1.1.1)"), ("Google", "Google (8.8.8.8)"), ("DHCP", "From the network")]);
+    let mut options =
+        widgets::opts(&[("Cloudflare", "Cloudflare (1.1.1.1)"), ("Google", "Google (8.8.8.8)"), ("DHCP", "From the network")]);
     if current == "Custom" {
         options.push(("Custom".into(), "Custom servers".into()));
     }
-    let (r, _) = widgets::choice_row("DNS provider", "Which servers look up website names. Changing it asks for your password.", options, &current, {
-        let current = current.clone();
-        move |p| {
-            if p == current {
-                return;
-            }
-            let name = p.clone();
-            cmd::run_async(&["omarchy-dns", &p], move |r| {
-                match r {
-                    Ok(_) => window::toast(&format!("DNS set to {name}")),
-                    Err(e) => window::toast(&format!("{e}")),
+    let (r, _) = widgets::choice_row(
+        "DNS provider",
+        "Which servers look up website names. Changing it asks for your password.",
+        options,
+        &current,
+        {
+            let current = current.clone();
+            move |p| {
+                if p == current {
+                    return;
                 }
-                window::rebuild("network");
-            });
-        }
-    });
+                let name = p.clone();
+                cmd::run_async(&["omarchy-dns", &p], move |r| {
+                    match r {
+                        Ok(_) => window::toast(&format!("DNS set to {name}")),
+                        Err(e) => window::toast(&format!("{e}")),
+                    }
+                    window::rebuild("network");
+                });
+            }
+        },
+    );
     widgets::keywords("resolver nameserver cloudflare google dhcp privacy");
     g.add(&r);
     // Show the servers already in use, so they can be changed.
-    let in_use = if current == "Custom" { custom_servers(&std::fs::read_to_string("/etc/systemd/resolved.conf").unwrap_or_default()) } else { String::new() };
-    let (r, _) = widgets::entry_row("Custom DNS servers", "Addresses separated by spaces, e.g. 192.168.1.1 1.1.1.1. Press Enter to use them.", &in_use, "192.168.1.1 1.1.1.1", |servers| {
-        let servers = servers.trim().to_string();
-        if servers.is_empty() {
-            return;
-        }
-        if !servers.chars().all(|c| c.is_ascii_hexdigit() || " .:,".contains(c)) {
-            window::toast("Those don't look like IP addresses");
-            return;
-        }
-        cmd::background(
-            move || with_stdin(&["omarchy-dns", "Custom"], &format!("{servers}\n")),
-            |r| {
-                match r {
-                    Ok(()) => window::toast("Custom DNS servers set"),
-                    Err(e) => window::toast(&e),
-                }
-                window::rebuild("network");
-            },
-        );
-    });
+    let in_use = if current == "Custom" {
+        custom_servers(&std::fs::read_to_string("/etc/systemd/resolved.conf").unwrap_or_default())
+    } else {
+        String::new()
+    };
+    let (r, _) = widgets::entry_row(
+        "Custom DNS servers",
+        "Addresses separated by spaces, e.g. 192.168.1.1 1.1.1.1. Press Enter to use them.",
+        &in_use,
+        "192.168.1.1 1.1.1.1",
+        |servers| {
+            let servers = servers.trim().to_string();
+            if servers.is_empty() {
+                return;
+            }
+            if !servers.chars().all(|c| c.is_ascii_hexdigit() || " .:,".contains(c)) {
+                window::toast("Those don't look like IP addresses");
+                return;
+            }
+            cmd::background(
+                move || with_stdin(&["omarchy-dns", "Custom"], &format!("{servers}\n")),
+                |r| {
+                    match r {
+                        Ok(()) => window::toast("Custom DNS servers set"),
+                        Err(e) => window::toast(&e),
+                    }
+                    window::rebuild("network");
+                },
+            );
+        },
+    );
     widgets::keywords("resolver nameserver dns custom");
     g.add(&r);
 }
@@ -111,7 +131,13 @@ fn custom_servers(text: &str) -> String {
 
 fn with_stdin(args: &[&str], text: &str) -> Result<(), String> {
     let (program, rest) = args.split_first().ok_or("empty command")?;
-    let mut child = Command::new(program).args(rest).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())?;
+    let mut child = Command::new(program)
+        .args(rest)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
     if let Some(mut pipe) = child.stdin.take() {
         let _ = pipe.write_all(text.as_bytes());
     }
@@ -156,12 +182,18 @@ fn wifi_tools(page: &Page) {
     {
         let mut options = vec![("auto".to_string(), "Automatic".to_string())];
         options.extend(available.iter().map(|b| (b.clone(), format!("{b} GHz"))));
-        let (r, _) = widgets::choice_row("Wi-Fi band", "Stick to one band on this network. 2.4 GHz reaches further; 5 and 6 GHz are faster.", options, &band, move |b| {
-            cmd::run_async(&["omarchy-network-band", &b], |r| match r {
-                Ok(_) => window::toast("Band changed"),
-                Err(e) => window::toast(&format!("{e}")),
-            });
-        });
+        let (r, _) = widgets::choice_row(
+            "Wi-Fi band",
+            "Stick to one band on this network. 2.4 GHz reaches further; 5 and 6 GHz are faster.",
+            options,
+            &band,
+            move |b| {
+                cmd::run_async(&["omarchy-network-band", &b], |r| match r {
+                    Ok(_) => window::toast("Band changed"),
+                    Err(e) => window::toast(&format!("{e}")),
+                });
+            },
+        );
         widgets::keywords("2.4 5ghz 6ghz frequency channel");
         g.add(&r);
     }
@@ -257,7 +289,12 @@ fn firewall(page: &Page) {
     let on = cmd::output(&["systemctl", "is-active", "ufw.service"]).is_some_and(|s| s == "active");
     let (r, sw) = widgets::switch_row("Block incoming connections", "Turns the firewall (ufw) on.", on, move |now| {
         if now != on {
-            run_admin(&["firewall", if now { "enable" } else { "disable" }], None, if now { "Firewall is on" } else { "Firewall is off" }, "network");
+            run_admin(
+                &["firewall", if now { "enable" } else { "disable" }],
+                None,
+                if now { "Firewall is on" } else { "Firewall is off" },
+                "network",
+            );
         }
     });
     sw.set_sensitive(can_edit);
@@ -278,16 +315,22 @@ fn firewall(page: &Page) {
     content.append(&load);
     content.append(&list);
     g.add(&wrapper);
-    let (r, _) = widgets::entry_row("Allow a port", "A port number, optionally with /tcp or /udp, e.g. 8080/tcp. Press Enter.", "", "8080/tcp", |t| {
-        let t = t.trim().to_string();
-        if t.is_empty() {
-            return;
-        }
-        match parse_rule(&t) {
-            Some((port, proto)) => run_admin(&["firewall", "allow", &port, &proto], None, "Port allowed", "network"),
-            None => window::toast("Use a port like 8080 or 8080/tcp"),
-        }
-    });
+    let (r, _) = widgets::entry_row(
+        "Allow a port",
+        "A port number, optionally with /tcp or /udp, e.g. 8080/tcp. Press Enter.",
+        "",
+        "8080/tcp",
+        |t| {
+            let t = t.trim().to_string();
+            if t.is_empty() {
+                return;
+            }
+            match parse_rule(&t) {
+                Some((port, proto)) => run_admin(&["firewall", "allow", &port, &proto], None, "Port allowed", "network"),
+                None => window::toast("Use a port like 8080 or 8080/tcp"),
+            }
+        },
+    );
     widgets::keywords("open port allow rule");
     g.add(&r);
 }
@@ -318,7 +361,10 @@ fn show_rules(button: Option<&gtk::Button>, list: &gtk::Box) {
             widgets::begin_section("network");
             let rules = parse_ufw(&out);
             if rules.is_empty() {
-                let l = widgets::label(if out.contains("inactive") { "The firewall is off." } else { "No rules: nothing is allowed in." }, "dim");
+                let l = widgets::label(
+                    if out.contains("inactive") { "The firewall is off." } else { "No rules: nothing is allowed in." },
+                    "dim",
+                );
                 l.set_xalign(0.0);
                 list.append(&l);
                 return;
@@ -332,7 +378,9 @@ fn show_rules(button: Option<&gtk::Button>, list: &gtk::Box) {
                         b.set_sensitive(false);
                         let (n, list) = (n.clone(), list.clone());
                         cmd::background(
-                            move || crate::backend::accounts::helper(&["firewall", "delete", &n], None).map_err(|e| e.to_string()),
+                            move || {
+                                crate::backend::accounts::helper(&["firewall", "delete", &n], None).map_err(|e| e.to_string())
+                            },
                             move |r| match r {
                                 // Numbers shift after a removal: read the list again.
                                 Ok(_) => {
@@ -370,7 +418,13 @@ fn parse_tailscale(json: &str) -> Option<Tailnet> {
         .map(|m| {
             m.values()
                 .map(|p| {
-                    let ip = p.get("TailscaleIPs").and_then(Value::as_array).and_then(|a| a.first()).and_then(Value::as_str).unwrap_or("").to_string();
+                    let ip = p
+                        .get("TailscaleIPs")
+                        .and_then(Value::as_array)
+                        .and_then(|a| a.first())
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
                     (text(Some(p), "HostName"), ip, p.get("Online").and_then(Value::as_bool).unwrap_or(false))
                 })
                 .collect()
@@ -380,7 +434,13 @@ fn parse_tailscale(json: &str) -> Option<Tailnet> {
     Some(Tailnet {
         state: text(Some(&v), "BackendState"),
         host: text(me, "HostName"),
-        ip: me.and_then(|m| m.get("TailscaleIPs")).and_then(Value::as_array).and_then(|a| a.first()).and_then(Value::as_str).unwrap_or("").to_string(),
+        ip: me
+            .and_then(|m| m.get("TailscaleIPs"))
+            .and_then(Value::as_array)
+            .and_then(|a| a.first())
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
         peers,
     })
 }
@@ -395,7 +455,11 @@ fn tailscale(page: &Page) {
     let connected = t.state == "Running";
     let (r, _) = widgets::switch_row(
         "Tailscale",
-        &gtk::glib::markup_escape_text(&if connected { format!("Connected as {} ({}).", t.host, t.ip) } else { format!("Not connected ({}).", t.state) }),
+        &gtk::glib::markup_escape_text(&if connected {
+            format!("Connected as {} ({}).", t.host, t.ip)
+        } else {
+            format!("Not connected ({}).", t.state)
+        }),
         connected,
         move |now| {
             if now == connected {
@@ -404,7 +468,9 @@ fn tailscale(page: &Page) {
             cmd::run_async(&["tailscale", if now { "up" } else { "down" }], move |r| {
                 match r {
                     Ok(_) => window::toast(if now { "Tailscale connected" } else { "Tailscale disconnected" }),
-                    Err(e) => window::toast(&format!("{e}. If it asks for permission, run once: sudo tailscale set --operator=$USER")),
+                    Err(e) => {
+                        window::toast(&format!("{e}. If it asks for permission, run once: sudo tailscale set --operator=$USER"))
+                    }
                 }
                 window::rebuild("network");
             });
@@ -433,23 +499,19 @@ fn nordvpn(page: &Page) {
         .filter(|l| ["Server:", "Country:", "City:"].iter().any(|k| l.trim_start().starts_with(k)))
         .map(|l| l.trim().to_string())
         .collect();
-    let desc = if connected { gtk::glib::markup_escape_text(&detail.join(" · ")).to_string() } else { "Not connected.".to_string() };
-    let (r, _) = widgets::button_row(
-        "NordVPN",
-        &desc,
-        if connected { "Disconnect" } else { "Connect" },
-        move |b| {
-            b.set_sensitive(false);
-            b.set_label("Working…");
-            cmd::run_async(&["nordvpn", if connected { "disconnect" } else { "connect" }], |r| {
-                match r {
-                    Ok(_) => window::toast("Done"),
-                    Err(e) => window::toast(&format!("{e}")),
-                }
-                window::rebuild("network");
-            });
-        },
-    );
+    let desc =
+        if connected { gtk::glib::markup_escape_text(&detail.join(" · ")).to_string() } else { "Not connected.".to_string() };
+    let (r, _) = widgets::button_row("NordVPN", &desc, if connected { "Disconnect" } else { "Connect" }, move |b| {
+        b.set_sensitive(false);
+        b.set_label("Working…");
+        cmd::run_async(&["nordvpn", if connected { "disconnect" } else { "connect" }], |r| {
+            match r {
+                Ok(_) => window::toast("Done"),
+                Err(e) => window::toast(&format!("{e}")),
+            }
+            window::rebuild("network");
+        });
+    });
     widgets::keywords("vpn nord privacy");
     g.add(&r);
 }

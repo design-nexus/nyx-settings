@@ -1,9 +1,9 @@
 //! The boot screen, login screen, hibernation and snapshots. Omarchy's own
 //! scripts do the work (they ask for sudo themselves), so they run in a terminal.
 
-use crate::{cmd, window};
 use crate::sections::accounts::terminal;
 use crate::widgets::{self, Page};
+use crate::{cmd, window};
 
 pub fn build(page: &Page) {
     screens(page);
@@ -29,31 +29,43 @@ fn screens(page: &Page) {
         if current == "default" || !themes.contains(&current) {
             options.insert(0, ("default".into(), "Omarchy default".into()));
         }
-        let (r, _) = widgets::choice_row("Style from a theme", "Colors and logo for the boot and login screens.", options, if themes.contains(&current) { &current } else { "default" }, {
-            let (themes, current) = (themes.clone(), current.clone());
-            move |t| {
-                if t == current {
-                    return;
+        let (r, _) = widgets::choice_row(
+            "Style from a theme",
+            "Colors and logo for the boot and login screens.",
+            options,
+            if themes.contains(&current) { &current } else { "default" },
+            {
+                let (themes, current) = (themes.clone(), current.clone());
+                move |t| {
+                    if t == current {
+                        return;
+                    }
+                    if t == "default" {
+                        terminal("omarchy-plymouth-reset");
+                    } else if themes.contains(&t) {
+                        terminal(&format!("omarchy-plymouth-set-by-theme {}", cmd::shell_quote(&t)));
+                    }
+                    // Show what's really set once the terminal is likely done, even if it was cancelled.
+                    gtk::glib::timeout_add_seconds_local_once(30, || window::rebuild_if_built("boot"));
                 }
-                if t == "default" {
-                    terminal("omarchy-plymouth-reset");
-                } else if themes.contains(&t) {
-                    terminal(&format!("omarchy-plymouth-set-by-theme {}", cmd::shell_quote(&t)));
-                }
-                // Show what's really set once the terminal is likely done, even if it was cancelled.
-                gtk::glib::timeout_add_seconds_local_once(30, || window::rebuild_if_built("boot"));
-            }
-        });
+            },
+        );
         widgets::keywords("plymouth sddm splash boot screen login greeter");
         g.add(&r);
     }
     if cmd::present("omarchy-plymouth-reset") {
-        let (r, _) = widgets::button_row("Back to default", "Restore Omarchy's own boot and login screens.", "Restore…", |_| terminal("omarchy-plymouth-reset"));
+        let (r, _) =
+            widgets::button_row("Back to default", "Restore Omarchy's own boot and login screens.", "Restore…", |_| {
+                terminal("omarchy-plymouth-reset")
+            });
         widgets::keywords("plymouth sddm reset original");
         g.add(&r);
     }
     if cmd::present("omarchy-refresh-sddm") {
-        let (r, _) = widgets::button_row("Repair login screen", "Reinstall the login screen if it looks broken.", "Repair…", |_| terminal("omarchy-refresh-sddm"));
+        let (r, _) =
+            widgets::button_row("Repair login screen", "Reinstall the login screen if it looks broken.", "Repair…", |_| {
+                terminal("omarchy-refresh-sddm")
+            });
         widgets::keywords("sddm refresh fix login");
         g.add(&r);
     }
@@ -107,7 +119,9 @@ fn recovery(page: &Page) {
         g.add(&r);
     }
     if cmd::present("omarchy-refresh-limine") {
-        let (r, _) = widgets::button_row("Repair the boot menu", "Rebuild the boot menu's settings.", "Repair…", |_| terminal("omarchy-refresh-limine"));
+        let (r, _) = widgets::button_row("Repair the boot menu", "Rebuild the boot menu's settings.", "Repair…", |_| {
+            terminal("omarchy-refresh-limine")
+        });
         widgets::keywords("limine bootloader refresh fix grub");
         g.add(&r);
     }

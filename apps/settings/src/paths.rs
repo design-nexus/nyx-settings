@@ -44,4 +44,3 @@ pub fn omarchy_config() -> PathBuf {
 pub fn shell_json() -> PathBuf {
     omarchy_config().join("shell.json")
 }
-

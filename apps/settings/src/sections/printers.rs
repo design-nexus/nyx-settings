@@ -69,11 +69,21 @@ pub fn build(page: &Page) {
     let can_edit = require_helper(page, "printers", "adding and removing printers");
     let g = page.group("Printing");
     let on = cmd::output(&["systemctl", "is-active", "cups.service"]).is_some_and(|s| s == "active");
-    let (r, sw) = widgets::switch_row("Printing service", "CUPS, which sends documents to printers. Turn it on to add or use printers.", on, move |now| {
-        if now != on {
-            run_admin(&["service", if now { "enable-now" } else { "disable-now" }, "cups.service"], None, if now { "Printing is on" } else { "Printing is off" }, "printers");
-        }
-    });
+    let (r, sw) = widgets::switch_row(
+        "Printing service",
+        "CUPS, which sends documents to printers. Turn it on to add or use printers.",
+        on,
+        move |now| {
+            if now != on {
+                run_admin(
+                    &["service", if now { "enable-now" } else { "disable-now" }, "cups.service"],
+                    None,
+                    if now { "Printing is on" } else { "Printing is off" },
+                    "printers",
+                );
+            }
+        },
+    );
     sw.set_sensitive(can_edit);
     widgets::keywords("cups print spooler service");
     g.add(&r);
@@ -149,20 +159,33 @@ fn fill(g: &widgets::Group, holder: &gtk::Box, can_edit: bool, printers: Vec<Pri
             let (name, uri) = (p.name.clone(), p.uri.clone());
             edit.connect_clicked(move |_| {
                 let name = name.clone();
-                ask("Edit printer address", "Where the printer is on the network.", vec![Field::text_with("ipp://…", &uri)], "Save", None, move |v, _| {
-                    let uri = v[0].trim().to_string();
-                    if uri.is_empty() {
-                        return Some("Enter the printer's address.".into());
-                    }
-                    run_admin(&["printer-set-uri", &name, &uri], None, "Printer updated", "printers");
-                    None
-                });
+                ask(
+                    "Edit printer address",
+                    "Where the printer is on the network.",
+                    vec![Field::text_with("ipp://…", &uri)],
+                    "Save",
+                    None,
+                    move |v, _| {
+                        let uri = v[0].trim().to_string();
+                        if uri.is_empty() {
+                            return Some("Enter the printer's address.".into());
+                        }
+                        run_admin(&["printer-set-uri", &name, &uri], None, "Printer updated", "printers");
+                        None
+                    },
+                );
             });
             controls.append(&edit);
             let name = p.name.clone();
-            controls.append(&widgets::confirm_button("Remove", "Remove printer?", move |_| run_admin(&["printer-remove", &name], None, "Printer removed", "printers")));
+            controls.append(&widgets::confirm_button("Remove", "Remove printer?", move |_| {
+                run_admin(&["printer-remove", &name], None, "Printer removed", "printers")
+            }));
         }
-        let r = widgets::row(&p.name.replace('_', " "), &gtk::glib::markup_escape_text(&format!("{} · {}", p.state, p.uri)), Some(controls.upcast_ref()));
+        let r = widgets::row(
+            &p.name.replace('_', " "),
+            &gtk::glib::markup_escape_text(&format!("{} · {}", p.state, p.uri)),
+            Some(controls.upcast_ref()),
+        );
         if is_default {
             widgets::tag_row(&r, "Default");
         }
@@ -173,45 +196,46 @@ fn fill(g: &widgets::Group, holder: &gtk::Box, can_edit: bool, printers: Vec<Pri
         return;
     }
     let results = widgets::vbox(6);
-    let (r, _) = widgets::button_row("Find printers", "Looks for printers on your network that don't need a driver.", "Search", {
-        let results = results.clone();
-        move |b| {
-            b.set_sensitive(false);
-            b.set_label("Searching…");
-            let (b, results) = (b.clone(), results.clone());
-            cmd::background(
-                || {
-                    Command::new("timeout")
-                        .args(["6", "avahi-browse", "-rtp", "_ipp._tcp"])
-                        .stdin(Stdio::null())
-                        .output()
-                        .map(|o| parse_found(&String::from_utf8_lossy(&o.stdout)))
-                        .unwrap_or_default()
-                },
-                move |found| {
-                    b.set_sensitive(true);
-                    b.set_label("Search");
-                    widgets::forget_rows(&results);
-                    widgets::begin_section("printers");
-                    while let Some(c) = results.first_child() {
-                        results.remove(&c);
-                    }
-                    if found.is_empty() {
-                        results.append(&widgets::label("No printers found.", "dim"));
-                    }
-                    for (name, uri) in found {
-                        let add = gtk::Button::with_label("Add");
-                        let (queue, u) = (queue_name(&name), uri.clone());
-                        add.connect_clicked(move |b| {
-                            b.set_sensitive(false);
-                            run_admin(&["printer-add", &queue, &u], None, "Printer added", "printers");
-                        });
-                        results.append(&widgets::row(&name, &gtk::glib::markup_escape_text(&uri), Some(add.upcast_ref())));
-                    }
-                },
-            );
-        }
-    });
+    let (r, _) =
+        widgets::button_row("Find printers", "Looks for printers on your network that don't need a driver.", "Search", {
+            let results = results.clone();
+            move |b| {
+                b.set_sensitive(false);
+                b.set_label("Searching…");
+                let (b, results) = (b.clone(), results.clone());
+                cmd::background(
+                    || {
+                        Command::new("timeout")
+                            .args(["6", "avahi-browse", "-rtp", "_ipp._tcp"])
+                            .stdin(Stdio::null())
+                            .output()
+                            .map(|o| parse_found(&String::from_utf8_lossy(&o.stdout)))
+                            .unwrap_or_default()
+                    },
+                    move |found| {
+                        b.set_sensitive(true);
+                        b.set_label("Search");
+                        widgets::forget_rows(&results);
+                        widgets::begin_section("printers");
+                        while let Some(c) = results.first_child() {
+                            results.remove(&c);
+                        }
+                        if found.is_empty() {
+                            results.append(&widgets::label("No printers found.", "dim"));
+                        }
+                        for (name, uri) in found {
+                            let add = gtk::Button::with_label("Add");
+                            let (queue, u) = (queue_name(&name), uri.clone());
+                            add.connect_clicked(move |b| {
+                                b.set_sensitive(false);
+                                run_admin(&["printer-add", &queue, &u], None, "Printer added", "printers");
+                            });
+                            results.append(&widgets::row(&name, &gtk::glib::markup_escape_text(&uri), Some(add.upcast_ref())));
+                        }
+                    },
+                );
+            }
+        });
     widgets::keywords("add discover scan network ipp airprint avahi");
     if !cmd::present("avahi-browse") {
         r.set_visible(false);
@@ -237,7 +261,10 @@ mod tests {
 
     #[test]
     fn printers_and_default() {
-        let p = parse_printers("printer HP_Laser is idle.  enabled since Mon\nprinter Brother disabled since x\n", "device for HP_Laser: ipp://h/ipp/print\ndevice for Brother: usb://B\n");
+        let p = parse_printers(
+            "printer HP_Laser is idle.  enabled since Mon\nprinter Brother disabled since x\n",
+            "device for HP_Laser: ipp://h/ipp/print\ndevice for Brother: usb://B\n",
+        );
         assert_eq!(p.len(), 2);
         assert_eq!(p[0], Printer { name: "HP_Laser".into(), state: "idle".into(), uri: "ipp://h/ipp/print".into() });
         assert_eq!(p[1].uri, "usb://B");

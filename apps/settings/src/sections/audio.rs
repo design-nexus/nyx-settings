@@ -616,11 +616,14 @@ fn app_row(s: &streams::Stream, outputs: &[(String, String)]) -> gtk::Box {
         let outputs = outputs.to_vec();
         dd.connect_selected_notify(move |d| {
             let Some((name, _)) = outputs.get(d.selected() as usize).cloned() else { return };
-            cmd::background(move || streams::move_to(index, &name), |r| {
-                if let Err(e) = r {
-                    window::toast(&format!("Couldn't move the app: {e}"));
-                }
-            });
+            cmd::background(
+                move || streams::move_to(index, &name),
+                |r| {
+                    if let Err(e) = r {
+                        window::toast(&format!("Couldn't move the app: {e}"));
+                    }
+                },
+            );
         });
         r.append(&dd);
     }

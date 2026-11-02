@@ -162,8 +162,7 @@ pub fn fan_graph(points: Points, on_change: impl Fn(&Points) + 'static) -> FanGr
             // Readout for the point under the pointer.
             if let Some(i) = active {
                 let (t, p) = pts[i];
-                let text =
-                    format!("{}{} · {}%", units::from_celsius(t as f64).round() as i64, units::symbol(), p);
+                let text = format!("{}{} · {}%", units::from_celsius(t as f64).round() as i64, units::symbol(), p);
                 cr.set_font_size(12.0);
                 let tw = cr.text_extents(&text).map(|e| e.width()).unwrap_or(60.0);
                 let (x, y) = xy[i];

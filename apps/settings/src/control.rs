@@ -4,7 +4,7 @@
 
 use crate::{sections, window};
 use nyx_core::control::text;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub fn tools() -> Value {
     json!([
@@ -23,8 +23,10 @@ pub fn handle(name: &str, args: Value) -> Result<Value, String> {
     match name {
         "settings.pages" => {
             let words: Vec<String> = args["query"].as_str().unwrap_or("").split_whitespace().map(str::to_lowercase).collect();
-            let pages: Vec<Value> =
-                shown().filter(|s| matches(s, &words)).map(|s| json!({"id": s.id, "title": s.title, "group": s.group, "about": s.description})).collect();
+            let pages: Vec<Value> = shown()
+                .filter(|s| matches(s, &words))
+                .map(|s| json!({"id": s.id, "title": s.title, "group": s.group, "about": s.description}))
+                .collect();
             Ok(json!({"pages": pages}))
         }
         "settings.open" => {

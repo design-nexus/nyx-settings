@@ -6,10 +6,16 @@ use gtk::prelude::*;
 use std::rc::Rc;
 
 pub enum Field {
-    Text { placeholder: &'static str, value: String },
+    Text {
+        placeholder: &'static str,
+        value: String,
+    },
     Secret(&'static str),
     /// A drop-down of (id, label) options with the current id.
-    Choice { options: Vec<(String, String)>, current: String },
+    Choice {
+        options: Vec<(String, String)>,
+        current: String,
+    },
 }
 
 impl Field {

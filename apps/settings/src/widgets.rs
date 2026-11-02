@@ -384,7 +384,9 @@ pub fn reveal_for_search(wrapper: Option<&gtk::Widget>) {
         let mut c = c.borrow_mut();
         c.retain(|g| g.wrapper.upgrade().is_some());
         for g in c.iter() {
-            let (Some(w), Some(revealer), Some(toggle)) = (g.wrapper.upgrade(), g.revealer.upgrade(), g.toggle.upgrade()) else { continue };
+            let (Some(w), Some(revealer), Some(toggle)) = (g.wrapper.upgrade(), g.revealer.upgrade(), g.toggle.upgrade()) else {
+                continue;
+            };
             let open = match wrapper {
                 Some(target) if *target == w => true,
                 Some(_) => continue,
@@ -1110,13 +1112,15 @@ pub fn disclosure(title: &str, desc: &str) -> (gtk::Box, gtk::Box) {
 
 /// Search exposes controls inside disclosure rows as well as their enclosing section.
 pub fn reveal_disclosure_ancestors(row: &gtk::Widget) {
-    let mut ancestor=row.parent();
-    while let Some(widget)=ancestor {
-        if widget.has_css_class("disclosure-row") && let Some(wrapper)=widget.downcast_ref::<gtk::Box>() {
+    let mut ancestor = row.parent();
+    while let Some(widget) = ancestor {
+        if widget.has_css_class("disclosure-row")
+            && let Some(wrapper) = widget.downcast_ref::<gtk::Box>()
+        {
             wrapper.set_visible(true);
             open_disclosure(wrapper);
         }
-        ancestor=widget.parent();
+        ancestor = widget.parent();
     }
 }
 
@@ -1249,7 +1253,13 @@ pub fn visual_choice(
 }
 
 /// A Hyprland option as picture cards, with the usual reset button.
-pub fn hypr_visual_choice(key: &'static str, title: &str, desc: &str, options: Vec<(String, String, Sketch)>, numeric: bool) -> gtk::Box {
+pub fn hypr_visual_choice(
+    key: &'static str,
+    title: &str,
+    desc: &str,
+    options: Vec<(String, String, Sketch)>,
+    numeric: bool,
+) -> gtk::Box {
     remember_option(key, title);
     let as_id = |v: &Value| match v {
         Value::String(s) => s.clone(),

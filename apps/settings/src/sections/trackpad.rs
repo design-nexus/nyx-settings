@@ -1,7 +1,7 @@
 use crate::backend::gestures::{self, FingerSet, Gestures};
 use crate::backend::store;
-use crate::{cmd, window};
 use crate::widgets::{self, Page, hypr_choice, hypr_choice_typed, hypr_slider, hypr_switch, opts};
+use crate::{cmd, window};
 use gtk::gio;
 use gtk::prelude::*;
 use std::rc::Rc;
@@ -195,10 +195,22 @@ pub fn build(page: &Page) {
     if cmd::present("omarchy-toggle-touchpad") || cmd::present("omarchy-toggle-touchscreen") {
         let g = page.group("Devices");
         if cmd::present("omarchy-toggle-touchpad") && cmd::output(&["omarchy-hw-touchpad"]).is_some_and(|d| !d.is_empty()) {
-            device_switch(&g, "Touchpad", "Switch the touchpad off, for example while using a mouse.", "omarchy-toggle-touchpad", "disable enable touchpad trackpad off");
+            device_switch(
+                &g,
+                "Touchpad",
+                "Switch the touchpad off, for example while using a mouse.",
+                "omarchy-toggle-touchpad",
+                "disable enable touchpad trackpad off",
+            );
         }
         if cmd::present("omarchy-toggle-touchscreen") && cmd::output(&["omarchy-hw-touchscreen"]).is_some_and(|d| !d.is_empty()) {
-            device_switch(&g, "Touchscreen", "Switch touch on the screen off or on.", "omarchy-toggle-touchscreen", "touch screen tablet pen disable enable");
+            device_switch(
+                &g,
+                "Touchscreen",
+                "Switch touch on the screen off or on.",
+                "omarchy-toggle-touchscreen",
+                "touch screen tablet pen disable enable",
+            );
         }
     }
     // ----- Tapping -----

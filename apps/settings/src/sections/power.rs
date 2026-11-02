@@ -50,7 +50,10 @@ fn remember(source: &str, profile: &str, in_use: bool) -> anyhow::Result<()> {
 /// (tab-separated fields). Empty fields are left out.
 fn battery_lines(shell: &str) -> (String, String) {
     let get = |k: &str| {
-        shell.lines().find_map(|l| l.split_once('\t').filter(|(key, _)| *key == k).map(|(_, v)| v.trim().to_string())).unwrap_or_default()
+        shell
+            .lines()
+            .find_map(|l| l.split_once('\t').filter(|(key, _)| *key == k).map(|(_, v)| v.trim().to_string()))
+            .unwrap_or_default()
     };
     let (state, time, rate, size) = (get("state"), get("time"), get("rate"), get("size"));
     let word = match state.as_str() {
@@ -250,7 +253,14 @@ fn logind_files() -> Vec<String> {
     let mut paths: Vec<std::path::PathBuf> = vec!["/usr/lib/systemd/logind.conf".into(), "/etc/systemd/logind.conf".into()];
     let mut dropins: Vec<std::path::PathBuf> = Vec::new();
     for dir in ["/usr/lib/systemd/logind.conf.d", "/etc/systemd/logind.conf.d"] {
-        dropins.extend(std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "conf")));
+        dropins.extend(
+            std::fs::read_dir(dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|x| x == "conf")),
+        );
     }
     // Drop-ins are sorted by file name, whichever directory holds them.
     dropins.sort_by_key(|p| p.file_name().map(|n| n.to_os_string()));
@@ -261,7 +271,8 @@ fn logind_files() -> Vec<String> {
 fn hibernate_delay_secs() -> u32 {
     let mut secs = 7200;
     for dir in ["/usr/lib/systemd/sleep.conf.d", "/etc/systemd/sleep.conf.d"] {
-        let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).collect();
+        let mut files: Vec<std::path::PathBuf> =
+            std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).collect();
         files.sort();
         for f in files {
             let text = std::fs::read_to_string(f).unwrap_or_default();
@@ -316,12 +327,21 @@ fn buttons_group(page: &Page) {
     let mut rows: Vec<(&'static str, &str, &str, &str)> = Vec::new();
     if laptop {
         rows.push(("HandleLidSwitch", "When the lid closes", "On battery.", "suspend"));
-        rows.push(("HandleLidSwitchExternalPower", "When the lid closes on power", "Plugged in. Follows the setting above unless you change it.", "suspend"));
+        rows.push((
+            "HandleLidSwitchExternalPower",
+            "When the lid closes on power",
+            "Plugged in. Follows the setting above unless you change it.",
+            "suspend",
+        ));
         rows.push(("HandleLidSwitchDocked", "When the lid closes while docked", "With an external screen connected.", "ignore"));
     }
     rows.push(("HandlePowerKey", "When you press the power button", "", "poweroff"));
     for (key, title, desc, default) in rows {
-        let default = if key == "HandleLidSwitchExternalPower" { conf.get("HandleLidSwitch").map(String::as_str).unwrap_or(default) } else { default };
+        let default = if key == "HandleLidSwitchExternalPower" {
+            conf.get("HandleLidSwitch").map(String::as_str).unwrap_or(default)
+        } else {
+            default
+        };
         let current = conf.get(key).map(String::as_str).unwrap_or(default).to_string();
         let mut options: Vec<(String, String)> = actions.iter().map(|(v, l)| (v.to_string(), l.to_string())).collect();
         if !options.iter().any(|(v, _)| *v == current) {
@@ -342,19 +362,31 @@ fn buttons_group(page: &Page) {
 
     if hibernate {
         let secs = hibernate_delay_secs();
-        let mut options = widgets::opts(&[("1800", "30 minutes"), ("3600", "1 hour"), ("7200", "2 hours"), ("10800", "3 hours"), ("14400", "4 hours")]);
+        let mut options = widgets::opts(&[
+            ("1800", "30 minutes"),
+            ("3600", "1 hour"),
+            ("7200", "2 hours"),
+            ("10800", "3 hours"),
+            ("14400", "4 hours"),
+        ]);
         let now = secs.to_string();
         if !options.iter().any(|(v, _)| *v == now) {
             options.push((now.clone(), format!("{} minutes", secs / 60)));
         }
-        let (r, dd) = widgets::choice_row("Hibernate after suspending for", "Used by “Suspend, then hibernate”: wake-ups are quick at first, then the battery lasts longer.", options, &now, {
-            let now = now.clone();
-            move |v| {
-                if v != now {
-                    crate::sections::accounts::run_admin(&["sleep-delay", &v], None, "Saved", "power");
+        let (r, dd) = widgets::choice_row(
+            "Hibernate after suspending for",
+            "Used by “Suspend, then hibernate”: wake-ups are quick at first, then the battery lasts longer.",
+            options,
+            &now,
+            {
+                let now = now.clone();
+                move |v| {
+                    if v != now {
+                        crate::sections::accounts::run_admin(&["sleep-delay", &v], None, "Saved", "power");
+                    }
                 }
-            }
-        });
+            },
+        );
         dd.set_sensitive(can_edit);
         widgets::keywords("sleep delay hibernate timer battery");
         g.add(&r);
@@ -397,7 +429,10 @@ fn timeout_row() -> Option<gtk::Box> {
 mod tests {
     #[test]
     fn logind_later_files_win() {
-        let m = super::parse_logind(["[Login]\nHandlePowerKey=poweroff\n#HandleLidSwitch=x\n", "[Login]\nHandlePowerKey=ignore\nHandleLidSwitch = suspend\n"]);
+        let m = super::parse_logind([
+            "[Login]\nHandlePowerKey=poweroff\n#HandleLidSwitch=x\n",
+            "[Login]\nHandlePowerKey=ignore\nHandleLidSwitch = suspend\n",
+        ]);
         assert_eq!(m["HandlePowerKey"], "ignore");
         assert_eq!(m["HandleLidSwitch"], "suspend");
     }

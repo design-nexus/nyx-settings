@@ -6,8 +6,8 @@
 
 use crate::backend::accounts as acc;
 use crate::backend::passwd::{self, Group, User};
-use crate::widgets::{self, Page};
 use crate::dialog::{Field, ask};
+use crate::widgets::{self, Page};
 use crate::{cmd, paths, window};
 use gtk::prelude::*;
 use std::cell::RefCell;
@@ -26,7 +26,10 @@ fn authorized_keys() -> PathBuf {
 /// Groups worth showing even though they're system groups.
 const NOTABLE: &[(&str, &str)] = &[
     ("wheel", "Administrators: can use sudo."),
-    ("docker", "Can run Docker without sudo. This is the same as having root: any program running as a member can take over the computer."),
+    (
+        "docker",
+        "Can run Docker without sudo. This is the same as having root: any program running as a member can take over the computer.",
+    ),
     ("video", "Can use cameras and the screen directly."),
     ("audio", "Can use sound devices directly."),
     ("input", "Can read keyboards and mice directly."),
@@ -109,7 +112,11 @@ fn add_user_dialog(default_shell: String) {
             if let Some(p) = password_problem(&v[1], &v[2]) {
                 return Some(p);
             }
-            apply(args(&["add-user", name, &default_shell, if admin { "1" } else { "0" }]), Some(format!("{}\n", v[1])), "User added");
+            apply(
+                args(&["add-user", name, &default_shell, if admin { "1" } else { "0" }]),
+                Some(format!("{}\n", v[1])),
+                "User added",
+            );
             None
         },
     );
@@ -143,7 +150,10 @@ pub fn helper_notice(section: &'static str, what: &str) -> (bool, Option<gtk::Bo
             ),
         )
     } else {
-        ("Update…", "<b>Update the system helper.</b> This version of Settings has a newer one than the one installed.".to_string())
+        (
+            "Update…",
+            "<b>Update the system helper.</b> This version of Settings has a newer one than the one installed.".to_string(),
+        )
     };
     let b = widgets::banner(&text, false);
     let set_up = gtk::Button::with_label(button);
@@ -192,7 +202,11 @@ fn password_free_group(page: &Page, can_edit: bool) {
                 match r {
                     Ok(_) => {
                         crate::prefs::update(|p| p.password_free = on);
-                        window::toast(if on { "Disks, mounts and cleanup won't ask for your password." } else { "They'll ask for your password again." });
+                        window::toast(if on {
+                            "Disks, mounts and cleanup won't ask for your password."
+                        } else {
+                            "They'll ask for your password again."
+                        });
                     }
                     Err(e) => {
                         // Put the switch back as it was.
@@ -262,7 +276,8 @@ pub fn run_admin_steps(steps: Vec<Vec<String>>, done: &str, section: &'static st
 /// Change a user's full name, shell and (for other users) login name.
 fn edit_user(u: &User, is_me: bool) {
     let shells = passwd::shells();
-    let shell_options: Vec<(String, String)> = shells.iter().map(|s| (s.clone(), s.rsplit('/').next().unwrap_or(s).to_string())).collect();
+    let shell_options: Vec<(String, String)> =
+        shells.iter().map(|s| (s.clone(), s.rsplit('/').next().unwrap_or(s).to_string())).collect();
     let mut fields = vec![Field::text_with("Full name", &u.full_name)];
     if !is_me {
         fields.push(Field::text_with("User name", &u.name));
@@ -274,7 +289,11 @@ fn edit_user(u: &User, is_me: bool) {
     let (old, user) = (u.name.clone(), u.clone());
     ask(
         &format!("Edit {}", u.name),
-        if is_me { "You can't rename the account you're signed in with." } else { "Renaming only works while the user is signed out." },
+        if is_me {
+            "You can't rename the account you're signed in with."
+        } else {
+            "Renaming only works while the user is signed out."
+        },
         fields,
         "Save",
         if is_me { None } else { Some(("Also rename the home folder", true)) },
@@ -350,11 +369,16 @@ pub fn build(page: &Page) {
         g.add(&user_row(mine, &me, &groups, can_edit, &member_of));
         widgets::keywords("passwd login signed in groups");
         if can_edit && !shells.is_empty() {
-            let opts: Vec<(String, String)> = shells.iter().map(|s| (s.clone(), s.rsplit('/').next().unwrap_or(s).to_string())).collect();
+            let opts: Vec<(String, String)> =
+                shells.iter().map(|s| (s.clone(), s.rsplit('/').next().unwrap_or(s).to_string())).collect();
             let name = me.clone();
-            let (r, _) = widgets::choice_row("Login shell", "The shell new terminals start with. Applies to new terminals.", opts, &mine.shell, move |sh| {
-                apply(args(&["set-shell", &name, &sh]), None, "Shell changed")
-            });
+            let (r, _) = widgets::choice_row(
+                "Login shell",
+                "The shell new terminals start with. Applies to new terminals.",
+                opts,
+                &mine.shell,
+                move |sh| apply(args(&["set-shell", &name, &sh]), None, "Shell changed"),
+            );
             widgets::keywords("bash zsh fish chsh");
             g.add(&r);
         }
@@ -374,8 +398,15 @@ pub fn build(page: &Page) {
         g.add(&user_row(u, &me, &groups, can_edit, &[]));
     }
     if can_edit {
-        let shell = users.iter().find(|u| u.name == me).map(|u| u.shell.clone()).filter(|s| shells.contains(s)).unwrap_or_else(|| "/bin/bash".into());
-        let (r, _) = widgets::button_row("Add a user", "Create another account on this computer.", "Add user…", move |_| add_user_dialog(shell.clone()));
+        let shell = users
+            .iter()
+            .find(|u| u.name == me)
+            .map(|u| u.shell.clone())
+            .filter(|s| shells.contains(s))
+            .unwrap_or_else(|| "/bin/bash".into());
+        let (r, _) = widgets::button_row("Add a user", "Create another account on this computer.", "Add user…", move |_| {
+            add_user_dialog(shell.clone())
+        });
         widgets::keywords("new account create");
         g.add(&r);
     }
@@ -425,7 +456,11 @@ fn user_row(u: &User, me: &str, groups: &[Group], can_edit: bool, member_of: &[S
             sw.connect_state_set(move |s, on| {
                 if on != admin {
                     s.set_sensitive(false);
-                    apply(args(&[if on { "add-member" } else { "remove-member" }, &name, "wheel"]), None, if on { "Now an administrator" } else { "No longer an administrator" });
+                    apply(
+                        args(&[if on { "add-member" } else { "remove-member" }, &name, "wheel"]),
+                        None,
+                        if on { "Now an administrator" } else { "No longer an administrator" },
+                    );
                 }
                 gtk::glib::Propagation::Proceed
             });
@@ -444,7 +479,11 @@ fn user_row(u: &User, me: &str, groups: &[Group], can_edit: bool, member_of: &[S
                 b.set_tooltip_text(Some(if lock_it { "Stop this user from signing in" } else { "Let this user sign in again" }));
                 b.connect_clicked(move |b| {
                     b.set_sensitive(false);
-                    apply(args(&[if lock_it { "lock-user" } else { "unlock-user" }, &name]), None, if lock_it { "Account locked" } else { "Account unlocked" });
+                    apply(
+                        args(&[if lock_it { "lock-user" } else { "unlock-user" }, &name]),
+                        None,
+                        if lock_it { "Account locked" } else { "Account unlocked" },
+                    );
                 });
                 controls.append(&b);
             }
@@ -457,7 +496,11 @@ fn user_row(u: &User, me: &str, groups: &[Group], can_edit: bool, member_of: &[S
         controls.append(&edit);
         let name = u.name.clone();
         let pw = gtk::Button::with_label(if is_me { "Change password" } else { "Password" });
-        pw.set_tooltip_text(Some(if is_me { "The password you sign in and use sudo with" } else { "Set a new password for this user" }));
+        pw.set_tooltip_text(Some(if is_me {
+            "The password you sign in and use sudo with"
+        } else {
+            "Set a new password for this user"
+        }));
         pw.connect_clicked(move |_| change_password(&name));
         controls.append(&pw);
         if !is_me {
@@ -492,15 +535,21 @@ fn groups_section(page: &Page, users: &[User], groups: &[Group], can_edit: bool)
         }
     }
     // Groups someone made: not a system group and not a user's own group.
-    for gr in groups.iter().filter(|g| !g.is_system() && !user_names.contains(&g.name) && !NOTABLE.iter().any(|(n, _)| *n == g.name)) {
+    for gr in
+        groups.iter().filter(|g| !g.is_system() && !user_names.contains(&g.name) && !NOTABLE.iter().any(|(n, _)| *n == g.name))
+    {
         shown.push((gr, "A group you made.".into(), true));
     }
     for (gr, desc, custom) in shown {
-        let members = if gr.members.is_empty() { "No members.".to_string() } else { format!("Members: {}.", gr.members.join(", ")) };
+        let members =
+            if gr.members.is_empty() { "No members.".to_string() } else { format!("Members: {}.", gr.members.join(", ")) };
         let (wrapper, content) = widgets::disclosure(&gr.name, &format!("{desc} {members}"));
         widgets::keywords(&format!("group {}", gr.name));
         if gr.name == "docker" {
-            content.append(&widgets::banner("Docker access is the same as root. Only add users you'd give the administrator password to.", true));
+            content.append(&widgets::banner(
+                "Docker access is the same as root. Only add users you'd give the administrator password to.",
+                true,
+            ));
         }
         if can_edit {
             let states: Vec<bool> = users.iter().map(|u| gr.members.contains(&u.name) || (u.gid == gr.gid)).collect();
@@ -552,17 +601,23 @@ fn groups_section(page: &Page, users: &[User], groups: &[Group], can_edit: bool)
         g.add(&wrapper);
     }
     if can_edit {
-        let (r, _) = widgets::entry_row("New group", "Make a group, then add users to it above. Press Enter to create.", "", "group name", |name| {
-            let name = name.trim().to_string();
-            if name.is_empty() {
-                return;
-            }
-            if !passwd::valid_name(&name) {
-                window::toast("Use lower-case letters, digits, - and _, starting with a letter");
-                return;
-            }
-            apply(args(&["add-group", &name]), None, "Group created");
-        });
+        let (r, _) = widgets::entry_row(
+            "New group",
+            "Make a group, then add users to it above. Press Enter to create.",
+            "",
+            "group name",
+            |name| {
+                let name = name.trim().to_string();
+                if name.is_empty() {
+                    return;
+                }
+                if !passwd::valid_name(&name) {
+                    window::toast("Use lower-case letters, digits, - and _, starting with a letter");
+                    return;
+                }
+                apply(args(&["add-group", &name]), None, "Group created");
+            },
+        );
         widgets::keywords("create add group");
         g.add(&r);
     }
@@ -615,60 +670,83 @@ fn ssh_section(page: &Page) {
             let (path, line) = (path.clone(), line.clone());
             edit.connect_clicked(move |_| {
                 let (path, old) = (path.clone(), line.clone());
-                ask("Edit key", "The whole public key line, including its comment.", vec![Field::text_with("ssh-ed25519 AAAA…", &old)], "Save", None, move |v, _| {
-                    let new = v[0].trim().to_string();
-                    if acc::parse_keys(&new).len() != 1 || new.contains('\n') {
-                        return Some("That doesn't look like one public key.".into());
-                    }
-                    match replace_key(&path, &old, &new) {
-                        Ok(()) => window::toast("Key updated"),
-                        Err(e) => return Some(format!("Couldn't save the key: {e}")),
-                    }
-                    window::rebuild("accounts");
-                    None
-                });
+                ask(
+                    "Edit key",
+                    "The whole public key line, including its comment.",
+                    vec![Field::text_with("ssh-ed25519 AAAA…", &old)],
+                    "Save",
+                    None,
+                    move |v, _| {
+                        let new = v[0].trim().to_string();
+                        if acc::parse_keys(&new).len() != 1 || new.contains('\n') {
+                            return Some("That doesn't look like one public key.".into());
+                        }
+                        match replace_key(&path, &old, &new) {
+                            Ok(()) => window::toast("Key updated"),
+                            Err(e) => return Some(format!("Couldn't save the key: {e}")),
+                        }
+                        window::rebuild("accounts");
+                        None
+                    },
+                );
             });
         }
         let controls = widgets::hbox(6);
         controls.append(&edit);
         controls.append(&remove);
-        let r = widgets::row(&title, &gtk::glib::markup_escape_text(&format!("Allowed to sign in · {kind}")), Some(controls.upcast_ref()));
+        let r = widgets::row(
+            &title,
+            &gtk::glib::markup_escape_text(&format!("Allowed to sign in · {kind}")),
+            Some(controls.upcast_ref()),
+        );
         widgets::keywords("authorized key public ssh");
         g.add(&r);
     }
     if keys.is_empty() {
         g.note("No keys are allowed to sign in yet.");
     }
-    let (r, _) = widgets::entry_row("Allow a key", "Paste a public key (starts with ssh-ed25519 or ssh-rsa) and press Enter.", "", "ssh-ed25519 AAAA…", |text| {
-        let text = text.trim().to_string();
-        if text.is_empty() {
-            return;
-        }
-        if acc::parse_keys(&text).len() != 1 || text.contains('\n') {
-            window::toast("That doesn't look like one public key");
-            return;
-        }
-        match add_key(&authorized_keys(), &text) {
-            Ok(()) => window::toast("Key added"),
-            Err(e) => window::toast(&format!("Couldn't add the key: {e}")),
-        }
-        window::rebuild("accounts");
-    });
+    let (r, _) = widgets::entry_row(
+        "Allow a key",
+        "Paste a public key (starts with ssh-ed25519 or ssh-rsa) and press Enter.",
+        "",
+        "ssh-ed25519 AAAA…",
+        |text| {
+            let text = text.trim().to_string();
+            if text.is_empty() {
+                return;
+            }
+            if acc::parse_keys(&text).len() != 1 || text.contains('\n') {
+                window::toast("That doesn't look like one public key");
+                return;
+            }
+            match add_key(&authorized_keys(), &text) {
+                Ok(()) => window::toast("Key added"),
+                Err(e) => window::toast(&format!("Couldn't add the key: {e}")),
+            }
+            window::rebuild("accounts");
+        },
+    );
     widgets::keywords("authorized key public ssh paste");
     g.add(&r);
     if cmd::present("omarchy-setup-security-sshd") {
-        let (r, _) = widgets::entry_row("Allow a GitHub user's keys", "Fetch the public keys of a GitHub account, then press Enter.", "", "github username", |user| {
-            let user = user.trim().to_string();
-            if user.is_empty() {
-                return;
-            }
-            if !user.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') || user.starts_with('-') {
-                window::toast("That isn't a GitHub user name");
-                return;
-            }
-            terminal(&format!("omarchy-setup-security-sshd --gh-keys {user}"));
-            gtk::glib::timeout_add_seconds_local_once(30, || window::rebuild_if_built("accounts"));
-        });
+        let (r, _) = widgets::entry_row(
+            "Allow a GitHub user's keys",
+            "Fetch the public keys of a GitHub account, then press Enter.",
+            "",
+            "github username",
+            |user| {
+                let user = user.trim().to_string();
+                if user.is_empty() {
+                    return;
+                }
+                if !user.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') || user.starts_with('-') {
+                    window::toast("That isn't a GitHub user name");
+                    return;
+                }
+                terminal(&format!("omarchy-setup-security-sshd --gh-keys {user}"));
+                gtk::glib::timeout_add_seconds_local_once(30, || window::rebuild_if_built("accounts"));
+            },
+        );
         widgets::keywords("github gh keys import");
         g.add(&r);
     }

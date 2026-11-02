@@ -142,7 +142,16 @@ fn show_networks(list: &gtk::Box, (networks, saved, details): NetData) {
         } else if saved_as.is_some() {
             parts.push("Saved".to_string());
         }
-        parts.push(if n.enterprise { "Enterprise" } else if n.secure { "Secured" } else { "Open" }.to_string());
+        parts.push(
+            if n.enterprise {
+                "Enterprise"
+            } else if n.secure {
+                "Secured"
+            } else {
+                "Open"
+            }
+            .to_string(),
+        );
         parts.push(format!("Signal {}%", n.signal));
         let controls = widgets::hbox(8);
         let row = widgets::row(&n.ssid, &glib::markup_escape_text(&parts.join(" · ")), Some(controls.upcast_ref()));
@@ -173,7 +182,12 @@ fn show_networks(list: &gtk::Box, (networks, saved, details): NetData) {
                 controls.append(&join);
             }
             (None, _) => {
-                controls.append(&action_button("Connect", "Connecting…", move || net::connect(&ssid, None, None), refill.clone()));
+                controls.append(&action_button(
+                    "Connect",
+                    "Connecting…",
+                    move || net::connect(&ssid, None, None),
+                    refill.clone(),
+                ));
             }
         }
         list.append(&row);
@@ -193,12 +207,15 @@ fn forget_button(name: &str, refill: &Rc<dyn Fn()>) -> gtk::Button {
     widgets::confirm_button("Forget", "Click again to forget", move |b| {
         b.set_sensitive(false);
         let (name, refill) = (name.clone(), refill.clone());
-        cmd::background(move || net::forget(&name), move |r| {
-            if let Err(e) = r {
-                window::toast(&format!("{e}"));
-            }
-            refill();
-        });
+        cmd::background(
+            move || net::forget(&name),
+            move |r| {
+                if let Err(e) = r {
+                    window::toast(&format!("{e}"));
+                }
+                refill();
+            },
+        );
     })
 }
 
@@ -223,13 +240,16 @@ fn ask_password(controls: &gtk::Box, ssid: &str, refill: Rc<dyn Fn()>) {
             join.set_sensitive(false);
             join.set_label("Joining…");
             let (ssid, refill) = (ssid.clone(), refill.clone());
-            cmd::background(move || net::connect(&ssid, None, Some(&pw)), move |r| {
-                match r {
-                    Ok(_) => window::toast("Connected"),
-                    Err(e) => window::toast(&format!("Couldn't join: {e}")),
-                }
-                refill();
-            });
+            cmd::background(
+                move || net::connect(&ssid, None, Some(&pw)),
+                move |r| {
+                    match r {
+                        Ok(_) => window::toast("Connected"),
+                        Err(e) => window::toast(&format!("Couldn't join: {e}")),
+                    }
+                    refill();
+                },
+            );
         }
     };
     let s = submit.clone();
@@ -253,12 +273,15 @@ fn bluetooth(page: &Page) {
         let refill = refill.clone();
         move |on| {
             let refill = refill.clone();
-            cmd::background(move || bt::set_power(on), move |r| {
-                if let Err(e) = r {
-                    window::toast(&format!("{e}"));
-                }
-                refill();
-            });
+            cmd::background(
+                move || bt::set_power(on),
+                move |r| {
+                    if let Err(e) = r {
+                        window::toast(&format!("{e}"));
+                    }
+                    refill();
+                },
+            );
         }
     });
     g.add(&r);
@@ -318,7 +341,12 @@ fn fill_devices(list: &gtk::Box) {
             let row = widgets::row(&d.name, status, Some(controls.upcast_ref()));
             let a = d.address.clone();
             if d.connected {
-                controls.append(&action_button("Disconnect", "Disconnecting…", move || bt::device("disconnect", &a), refill.clone()));
+                controls.append(&action_button(
+                    "Disconnect",
+                    "Disconnecting…",
+                    move || bt::device("disconnect", &a),
+                    refill.clone(),
+                ));
             } else if d.paired {
                 controls.append(&action_button("Connect", "Connecting…", move || bt::device("connect", &a), refill.clone()));
             } else {
@@ -329,12 +357,15 @@ fn fill_devices(list: &gtk::Box) {
                 let forget = widgets::confirm_button("Forget", "Click again to forget", move |b| {
                     b.set_sensitive(false);
                     let (a, refill) = (a.clone(), refill.clone());
-                    cmd::background(move || bt::device("forget", &a), move |r| {
-                        if let Err(e) = r {
-                            window::toast(&format!("{e}"));
-                        }
-                        refill();
-                    });
+                    cmd::background(
+                        move || bt::device("forget", &a),
+                        move |r| {
+                            if let Err(e) = r {
+                                window::toast(&format!("{e}"));
+                            }
+                            refill();
+                        },
+                    );
                 });
                 controls.append(&forget);
             }

@@ -76,22 +76,30 @@ fn presets(page: &Page) {
         options.insert(0, ("custom".into(), "Custom".into()));
     }
     let why = p["why"].as_str().unwrap_or("");
-    let (r, _) = widgets::choice_row("Preset", &format!("Recommended here: {} ({why}). Changing a setting afterwards makes it Custom.", title(recommended)), options, &current, move |id| {
-        if id == "custom" {
-            return;
-        }
-        cmd::background(
-            move || client::run(&["preset", &id]),
-            |r| {
-                match r {
-                    Ok(out) if out.contains("isn't downloaded") => window::toast("Applied; the preset's model isn't downloaded yet (see Models)"),
-                    Ok(_) => window::toast("Preset applied; the assistant restarts if it needs to"),
-                    Err(e) => window::toast(&format!("Couldn't apply the preset: {e}")),
-                }
-                window::rebuild("assistant-performance");
-            },
-        );
-    });
+    let (r, _) = widgets::choice_row(
+        "Preset",
+        &format!("Recommended here: {} ({why}). Changing a setting afterwards makes it Custom.", title(recommended)),
+        options,
+        &current,
+        move |id| {
+            if id == "custom" {
+                return;
+            }
+            cmd::background(
+                move || client::run(&["preset", &id]),
+                |r| {
+                    match r {
+                        Ok(out) if out.contains("isn't downloaded") => {
+                            window::toast("Applied; the preset's model isn't downloaded yet (see Models)")
+                        }
+                        Ok(_) => window::toast("Preset applied; the assistant restarts if it needs to"),
+                        Err(e) => window::toast(&format!("Couldn't apply the preset: {e}")),
+                    }
+                    window::rebuild("assistant-performance");
+                },
+            );
+        },
+    );
     g.add(&r);
     if let Some(x) = p["presets"].as_array().into_iter().flatten().find(|x| x["name"] == current.as_str()) {
         g.note(x["description"].as_str().unwrap_or(""));
@@ -107,9 +115,12 @@ fn file_name(v: &Value) -> String {
 }
 
 pub fn build(page: &Page) {
-    if let Some(failure)=client::json(&["privacy","failure"]).filter(|v|v.get("turn_id").is_some()) {
-        let g=page.group("Last failure");
-        g.note(&format!("Turn {} · stage {} · {} registered tools",failure["turn_id"],failure["stage"],failure["registered_tools"]));
+    if let Some(failure) = client::json(&["privacy", "failure"]).filter(|v| v.get("turn_id").is_some()) {
+        let g = page.group("Last failure");
+        g.note(&format!(
+            "Turn {} · stage {} · {} registered tools",
+            failure["turn_id"], failure["stage"], failure["registered_tools"]
+        ));
         g.note("This record contains timing and status only. Utterances, prompts and tool arguments are excluded.");
     }
 
@@ -164,7 +175,11 @@ pub fn build(page: &Page) {
     let projector = if vision["projector"].is_null() {
         "This model can't see the screen".to_string()
     } else {
-        format!("{} · {}", file_name(&vision["projector"]), if yes(&vision["loaded"]) { "in memory" } else { "loads when needed" })
+        format!(
+            "{} · {}",
+            file_name(&vision["projector"]),
+            if yes(&vision["loaded"]) { "in memory" } else { "loads when needed" }
+        )
     };
     g.add(&widgets::info_row("Vision", &projector).0);
     let stt = &perf["stt"];
@@ -179,7 +194,13 @@ pub fn build(page: &Page) {
     let gpu = &perf["gpu"];
     if let (Some(used), Some(total)) = (gpu["used_mib"].as_u64(), gpu["total_mib"].as_u64()) {
         let mine = gpu["assistant_mib"].as_u64().map(|m| format!(", the assistant {}", size(m * 1_048_576))).unwrap_or_default();
-        g.add(&widgets::info_row("Graphics memory", &format!("{} of {} used{mine}", size(used * 1_048_576), size(total * 1_048_576))).0);
+        g.add(
+            &widgets::info_row(
+                "Graphics memory",
+                &format!("{} of {} used{mine}", size(used * 1_048_576), size(total * 1_048_576)),
+            )
+            .0,
+        );
     }
 
     let g = page.group("Machine");
@@ -197,5 +218,7 @@ pub fn build(page: &Page) {
         g.add(&widgets::info_row("Power", if battery { "Battery" } else { "Plugged in" }).0);
     }
     g.note("For repeatable numbers run <tt>nyx-assistant bench load</tt>, <tt>bench duplex</tt>, <tt>bench vision</tt> or <tt>bench computer</tt> in a terminal.");
-    widgets::keywords("preset lite balanced advanced hardware performance latency speed timing vram gpu memory benchmark temperature power battery gaps");
+    widgets::keywords(
+        "preset lite balanced advanced hardware performance latency speed timing vram gpu memory benchmark temperature power battery gaps",
+    );
 }

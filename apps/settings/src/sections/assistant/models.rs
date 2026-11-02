@@ -57,13 +57,19 @@ fn download(urls: Vec<String>, name: String) {
                     if let Some(e) = v["error"].as_str() {
                         failed = Some(e.to_string());
                     }
-                    let p = Progress { bytes: v["bytes"].as_u64().unwrap_or(0), total: v["total"].as_u64().unwrap_or(0), speed: v["speed"].as_f64().unwrap_or(0.0) };
+                    let p = Progress {
+                        bytes: v["bytes"].as_u64().unwrap_or(0),
+                        total: v["total"].as_u64().unwrap_or(0),
+                        speed: v["speed"].as_f64().unwrap_or(0.0),
+                    };
                     let _ = tx.send(Update::Progress(url.clone(), p));
                 }
                 let out = child.wait_with_output().map_err(|e| e.to_string())?;
                 match failed {
                     Some(e) => Err(e),
-                    None if !out.status.success() => Err(String::from_utf8_lossy(&out.stderr).rsplit("Error: ").next().unwrap_or("").trim().to_string()),
+                    None if !out.status.success() => {
+                        Err(String::from_utf8_lossy(&out.stderr).rsplit("Error: ").next().unwrap_or("").trim().to_string())
+                    }
                     None => Ok(()),
                 }
             })();
@@ -142,13 +148,16 @@ fn download_control(urls: Vec<String>, name: &str) -> gtk::Widget {
 }
 
 fn use_model(path: String) {
-    cmd::background(move || client::run(&["models", "use", &path]), |r| {
-        match r {
-            Ok(_) => window::toast("Switched models. The assistant restarted to load it."),
-            Err(e) => window::toast(&format!("Couldn't switch: {}", e.to_string().rsplit("Error: ").next().unwrap_or(""))),
-        }
-        window::rebuild("assistant-models");
-    });
+    cmd::background(
+        move || client::run(&["models", "use", &path]),
+        |r| {
+            match r {
+                Ok(_) => window::toast("Switched models. The assistant restarted to load it."),
+                Err(e) => window::toast(&format!("Couldn't switch: {}", e.to_string().rsplit("Error: ").next().unwrap_or(""))),
+            }
+            window::rebuild("assistant-models");
+        },
+    );
 }
 
 fn use_button(path: &str) -> gtk::Button {
@@ -179,18 +188,18 @@ fn details(into: &gtk::Box, m: &Value, current: &str) {
             download_control(urls, name)
         }
     };
-    let mut facts = format!("{} download · about {:.1} GB of graphics memory", m["size_str"].as_str().unwrap_or(""), m["vram_gb"].as_f64().unwrap_or(0.0));
+    let mut facts = format!(
+        "{} download · about {:.1} GB of graphics memory",
+        m["size_str"].as_str().unwrap_or(""),
+        m["vram_gb"].as_f64().unwrap_or(0.0)
+    );
     if m["mmproj"].is_string() {
         facts.push_str(" · can look at the screen");
     }
     if path.is_some_and(|p| p != current) {
         facts.push_str(" · downloaded");
     }
-    into.append(&widgets::row(
-        &gtk::glib::markup_escape_text(m["description"].as_str().unwrap_or("")),
-        &facts,
-        Some(&control),
-    ));
+    into.append(&widgets::row(&gtk::glib::markup_escape_text(m["description"].as_str().unwrap_or("")), &facts, Some(&control)));
 }
 
 pub fn build(page: &Page) {
@@ -208,37 +217,63 @@ pub fn build(page: &Page) {
             &format!("{} {vision}", gtk::glib::markup_escape_text(m["description"].as_str().unwrap_or(""))),
             None,
         )),
-        None => g.add(&widgets::row(current.rsplit('/').next().unwrap_or("none"), &format!("Not one of the recommended models. {vision}"), None)),
+        None => g.add(&widgets::row(
+            current.rsplit('/').next().unwrap_or("none"),
+            &format!("Not one of the recommended models. {vision}"),
+            None,
+        )),
     }
 
     let g = page.group("Installed models");
-    let installed: Vec<Value> = list["installed"].as_array().into_iter().flatten().filter(|m| {
-        let name=m["name"].as_str().unwrap_or("").to_ascii_lowercase();
-        m["path"].is_string() && name.ends_with(".gguf")
-            && !["mmproj", "drafter", "dflash", "codec", ".encoder.", ".decoder."].iter().any(|part|name.contains(part))
-    }).cloned().collect();
+    let installed: Vec<Value> = list["installed"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|m| {
+            let name = m["name"].as_str().unwrap_or("").to_ascii_lowercase();
+            m["path"].is_string()
+                && name.ends_with(".gguf")
+                && !["mmproj", "drafter", "dflash", "codec", ".encoder.", ".decoder."].iter().any(|part| name.contains(part))
+        })
+        .cloned()
+        .collect();
     if installed.is_empty() {
         g.note("No local language models found.");
     } else {
-        let options: Vec<(String,String)> = installed.iter().map(|m| {
-            let path=m["path"].as_str().unwrap_or("");
-            let name=m["name"].as_str().unwrap_or("Model").trim_end_matches(".gguf");
-            (path.to_string(),if path==current{format!("{name} (in use)")}else{name.to_string()})
-        }).collect();
-        let selected=options.iter().find(|(path,_)|path==current).map(|(path,_)|path.as_str()).unwrap_or(&options[0].0);
-        let picker=widgets::dropdown(&options,selected);
+        let options: Vec<(String, String)> = installed
+            .iter()
+            .map(|m| {
+                let path = m["path"].as_str().unwrap_or("");
+                let name = m["name"].as_str().unwrap_or("Model").trim_end_matches(".gguf");
+                (path.to_string(), if path == current { format!("{name} (in use)") } else { name.to_string() })
+            })
+            .collect();
+        let selected = options.iter().find(|(path, _)| path == current).map(|(path, _)| path.as_str()).unwrap_or(&options[0].0);
+        let picker = widgets::dropdown(&options, selected);
         picker.set_enable_search(true);
         picker.set_hexpand(true);
-        let actions=gtk::Box::new(gtk::Orientation::Horizontal,8);
-        let update={let actions=actions.clone();let installed=installed.clone();let current=current.to_string();move |index:usize| {
-            while let Some(child)=actions.first_child(){actions.remove(&child);}
-            let Some(model)=installed.get(index) else{return};let path=model["path"].as_str().unwrap_or("");
-            if path==current {actions.append(&widgets::tag("In use"));}else{actions.append(&use_button(path));}
-            actions.set_tooltip_text(Some(path));
-        }};
+        let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let update = {
+            let actions = actions.clone();
+            let installed = installed.clone();
+            let current = current.to_string();
+            move |index: usize| {
+                while let Some(child) = actions.first_child() {
+                    actions.remove(&child);
+                }
+                let Some(model) = installed.get(index) else { return };
+                let path = model["path"].as_str().unwrap_or("");
+                if path == current {
+                    actions.append(&widgets::tag("In use"));
+                } else {
+                    actions.append(&use_button(path));
+                }
+                actions.set_tooltip_text(Some(path));
+            }
+        };
         update(picker.selected() as usize);
-        picker.connect_selected_notify(move |picker|update(picker.selected() as usize));
-        g.add(&widgets::row("Model","Includes downloaded models outside the recommended list.",Some(picker.upcast_ref())));
+        picker.connect_selected_notify(move |picker| update(picker.selected() as usize));
+        g.add(&widgets::row("Model", "Includes downloaded models outside the recommended list.", Some(picker.upcast_ref())));
         g.add(&actions);
         g.note("Selecting a model does not change the default. Use switches the assistant and restarts it.");
     }
@@ -265,7 +300,9 @@ pub fn build(page: &Page) {
     let chosen = SELECTED
         .with(|s| s.borrow().clone())
         .filter(|f| options.iter().any(|(id, _)| id == f))
-        .or_else(|| models.iter().find(|m| m["path"].as_str() == Some(current)).and_then(|m| m["filename"].as_str().map(String::from)))
+        .or_else(|| {
+            models.iter().find(|m| m["path"].as_str() == Some(current)).and_then(|m| m["filename"].as_str().map(String::from))
+        })
         .unwrap_or_else(|| options[0].0.clone());
     let dd = widgets::dropdown(&options, &chosen);
     g.add(&widgets::row("Model", "Pick one to see what it is.", Some(dd.upcast_ref())));

@@ -135,7 +135,8 @@ fn renamed_command(command: &str) -> Option<String> {
 
 /// A window class of the suite from before the rename, with the new one.
 fn renamed_class(class: &str) -> String {
-    let class = class.replace("design_nexus.nixe.", "design_nexus.nyx.").replace("design_nexus\\.nixe\\.", "design_nexus\\.nyx\\.");
+    let class =
+        class.replace("design_nexus.nixe.", "design_nexus.nyx.").replace("design_nexus\\.nixe\\.", "design_nexus\\.nyx\\.");
     let class = class.replace("io.github.nexus.photos.viewer", "io.github.design_nexus.nyx.PhotoViewer");
     let class = class.replace("io.github.nexus.photos", "io.github.design_nexus.nyx.Photos");
     let class = class.replace("io\\.github\\.nexus\\.photos", "io\\.github\\.design_nexus\\.nyx\\.Photos");
@@ -144,13 +145,14 @@ fn renamed_class(class: &str) -> String {
     } else {
         class.replace("design_nexus.", "design_nexus.nyx.").replace("design_nexus\\.", "design_nexus\\.nyx\\.")
     };
-    class.replace("design_nexus.nyx.Tasks", "design_nexus.nyx.Activity").replace("design_nexus\\.nyx\\.Tasks", "design_nexus\\.nyx\\.Activity")
+    class
+        .replace("design_nexus.nyx.Tasks", "design_nexus.nyx.Activity")
+        .replace("design_nexus\\.nyx\\.Tasks", "design_nexus\\.nyx\\.Activity")
 }
 
 impl State {
     pub fn load(path: &std::path::Path) -> Self {
-        let mut state: Self =
-            std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        let mut state: Self = std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
         state.rename_old_programs();
         state
     }
@@ -183,13 +185,19 @@ mod rename_tests {
         assert_eq!(renamed_command("tasks").as_deref(), Some("nyx-activity"));
         assert_eq!(renamed_command("nyx-tasks --toggle").as_deref(), Some("nyx-activity --toggle"));
         assert_eq!(renamed_command("settings --section audio").as_deref(), Some("nyx-settings --section audio"));
-        assert_eq!(renamed_command("/home/u/.local/bin/notepad --toggle").as_deref(), Some("/home/u/.local/bin/nyx-notepad --toggle"));
+        assert_eq!(
+            renamed_command("/home/u/.local/bin/notepad --toggle").as_deref(),
+            Some("/home/u/.local/bin/nyx-notepad --toggle")
+        );
         assert_eq!(renamed_command("/usr/bin/music"), None);
         assert_eq!(renamed_command("taskset -c 1 foo"), None);
         assert_eq!(renamed_command("nyx-notepad"), None);
         assert_eq!(renamed_command("nixe-tasks").as_deref(), Some("nyx-activity"));
         assert_eq!(renamed_command("/home/u/.local/bin/nixe-files /tmp").as_deref(), Some("/home/u/.local/bin/nyx-files /tmp"));
-        assert_eq!(renamed_class("^io\\.github\\.design_nexus\\.nixe\\.Notepad$"), "^io\\.github\\.design_nexus\\.nyx\\.Notepad$");
+        assert_eq!(
+            renamed_class("^io\\.github\\.design_nexus\\.nixe\\.Notepad$"),
+            "^io\\.github\\.design_nexus\\.nyx\\.Notepad$"
+        );
         assert_eq!(renamed_class("io.github.design_nexus.nixe.Music"), "io.github.design_nexus.nyx.Music");
         assert_eq!(renamed_class("^io\\.github\\.design_nexus\\.Notepad$"), "^io\\.github\\.design_nexus\\.nyx\\.Notepad$");
         assert_eq!(renamed_class("io.github.design_nexus.nyx.Music"), "io.github.design_nexus.nyx.Music");

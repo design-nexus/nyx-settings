@@ -36,7 +36,10 @@ impl<T> Drop for Running<T> {
 }
 
 /// Spawn `argv`; `pump` reads its stdout on a thread and stores results in the feed.
-fn start<T: Send + 'static>(argv: &[String], pump: impl FnOnce(std::process::ChildStdout, &Arc<Mutex<Feed<T>>>) + Send + 'static) -> Result<Running<T>, String> {
+fn start<T: Send + 'static>(
+    argv: &[String],
+    pump: impl FnOnce(std::process::ChildStdout, &Arc<Mutex<Feed<T>>>) + Send + 'static,
+) -> Result<Running<T>, String> {
     let mut child = Command::new(&argv[0])
         .args(&argv[1..])
         .stdin(Stdio::null())
@@ -86,10 +89,28 @@ pub fn split_frames(buf: &mut Vec<u8>) -> Vec<Vec<u8>> {
 }
 
 fn camera_command(device: &str) -> Vec<String> {
-    ["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "v4l2", "-i", device, "-vf", "fps=15,scale=640:-2", "-c:v", "mjpeg", "-q:v", "5", "-f", "image2pipe", "-"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect()
+    [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "v4l2",
+        "-i",
+        device,
+        "-vf",
+        "fps=15,scale=640:-2",
+        "-c:v",
+        "mjpeg",
+        "-q:v",
+        "5",
+        "-f",
+        "image2pipe",
+        "-",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
 }
 
 /// A preview of a video device, started and stopped with a button.
@@ -344,7 +365,8 @@ pub fn meter(title: &str, desc: &str, source: &str) -> gtk::Box {
         };
         if ended {
             running.borrow_mut().take();
-            *note.borrow_mut() = if error.is_empty() { "The microphone stopped.".into() } else { format!("Couldn't listen: {error}") };
+            *note.borrow_mut() =
+                if error.is_empty() { "The microphone stopped.".into() } else { format!("Couldn't listen: {error}") };
             area.queue_draw();
             return glib::ControlFlow::Continue;
         }
