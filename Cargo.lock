@@ -1505,6 +1505,29 @@ dependencies = [
 [[package]]
 name = "nyx-accounts-service"
 version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-accounts.git?rev=afdc1482cb910746f942556090870d3ec083dd34#afdc1482cb910746f942556090870d3ec083dd34"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "gio",
+ "glib",
+ "oauth2",
+ "reqwest",
+ "roxmltree",
+ "rusqlite",
+ "secret-service",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+ "uuid",
+ "zbus",
+ "zeroize",
+]
+
+[[package]]
+name = "nyx-accounts-service"
+version = "0.1.0"
 source = "git+https://github.com/design-nexus/nyx-accounts.git?rev=ecbe31cbfe6688dd5b3d7803c58e433715427c57#ecbe31cbfe6688dd5b3d7803c58e433715427c57"
 dependencies = [
  "anyhow",
@@ -1533,7 +1556,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "libc",
- "nyx-accounts-service",
+ "nyx-accounts-service 0.1.0 (git+https://github.com/design-nexus/nyx-accounts.git?rev=ecbe31cbfe6688dd5b3d7803c58e433715427c57)",
  "reqwest",
  "serde",
  "serde_json",
@@ -1556,9 +1579,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "nyx-core"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=9dc196245bbf0ccc93b8bf04ac61bb476b85e4d5#9dc196245bbf0ccc93b8bf04ac61bb476b85e4d5"
+dependencies = [
+ "anyhow",
+ "gtk4",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
 name = "nyx-icalglib-sys"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-core.git?rev=1fa444e8c427f8d2f4b6fd6d1ace1c5298e4d623#1fa444e8c427f8d2f4b6fd6d1ace1c5298e4d623"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=9dc196245bbf0ccc93b8bf04ac61bb476b85e4d5#9dc196245bbf0ccc93b8bf04ac61bb476b85e4d5"
 dependencies = [
  "gio-sys",
  "glib-sys",
@@ -1570,7 +1605,7 @@ dependencies = [
 [[package]]
 name = "nyx-pim"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-core.git?rev=1fa444e8c427f8d2f4b6fd6d1ace1c5298e4d623#1fa444e8c427f8d2f4b6fd6d1ace1c5298e4d623"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=9dc196245bbf0ccc93b8bf04ac61bb476b85e4d5#9dc196245bbf0ccc93b8bf04ac61bb476b85e4d5"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -1580,7 +1615,7 @@ dependencies = [
  "html2text",
  "ical",
  "libc",
- "nyx-accounts-service",
+ "nyx-accounts-service 0.1.0 (git+https://github.com/design-nexus/nyx-accounts.git?rev=afdc1482cb910746f942556090870d3ec083dd34)",
  "nyx-icalglib-sys",
  "reqwest",
  "roxmltree",
@@ -1598,9 +1633,9 @@ version = "0.1.1"
 dependencies = [
  "anyhow",
  "gtk4",
- "nyx-accounts-service",
+ "nyx-accounts-service 0.1.0 (git+https://github.com/design-nexus/nyx-accounts.git?rev=afdc1482cb910746f942556090870d3ec083dd34)",
  "nyx-cloud",
- "nyx-core",
+ "nyx-core 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=9dc196245bbf0ccc93b8bf04ac61bb476b85e4d5)",
  "nyx-pim",
  "nyx-share-client",
  "nyx-theme",
@@ -1649,7 +1684,7 @@ version = "0.1.0"
 source = "git+https://github.com/design-nexus/nyx-design.git?rev=34e9acee71ea9af4e87a43a678f98048dccdbfdb#34e9acee71ea9af4e87a43a678f98048dccdbfdb"
 dependencies = [
  "gtk4",
- "nyx-core",
+ "nyx-core 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=52cba5e27a3dd5f00c780f53e423302b4b5f9c9c)",
  "serde",
  "toml",
 ]
@@ -1660,7 +1695,7 @@ version = "0.1.0"
 source = "git+https://github.com/design-nexus/nyx-design.git?rev=34e9acee71ea9af4e87a43a678f98048dccdbfdb#34e9acee71ea9af4e87a43a678f98048dccdbfdb"
 dependencies = [
  "gtk4",
- "nyx-core",
+ "nyx-core 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=52cba5e27a3dd5f00c780f53e423302b4b5f9c9c)",
  "nyx-theme",
 ]
 
