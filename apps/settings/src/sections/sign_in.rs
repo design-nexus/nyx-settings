@@ -422,6 +422,24 @@ fn look_group(page: &Page) {
     widgets::keywords("overlay style polkit administrator prompt");
     g.add(&r);
 
+    let sudo_style = current["sudo"]["style"].as_str().unwrap_or("halo").to_string();
+    let options = vec![
+        ("halo".to_string(), "Halo".to_string()),
+        ("circular".to_string(), "Circular face scan".to_string()),
+        ("cyberpunk".to_string(), "Cyberpunk scanner".to_string()),
+        ("minimal".to_string(), "Minimal".to_string()),
+        ("edge".to_string(), "Edge glow".to_string()),
+    ];
+    let (r, _) = widgets::choice_row(
+        "Terminal (sudo) style",
+        "Shown on screen while sudo checks your face in a terminal.",
+        options,
+        &sudo_style,
+        |id| set_overlay("sudo", "style", Value::from(id)),
+    );
+    widgets::keywords("overlay style sudo terminal");
+    g.add(&r);
+
     let strength = match lock["intensity"].as_f64() {
         Some(v) if v < 0.55 => "subtle",
         Some(v) if v > 0.85 => "strong",
@@ -440,6 +458,7 @@ fn look_group(page: &Page) {
         };
         set_overlay("lock-screen", "intensity", Value::from(v));
         set_overlay("polkit", "intensity", Value::from(v));
+        set_overlay("sudo", "intensity", Value::from(v));
     });
     widgets::keywords("overlay intensity glow brightness");
     g.add(&r);
@@ -447,6 +466,7 @@ fn look_group(page: &Page) {
     let (r, _) = widgets::switch_row("Animations", "Sweeps, scan lines and pulses while scanning.", lock["animate"].as_bool().unwrap_or(true), |on| {
         set_overlay("lock-screen", "animate", Value::from(on));
         set_overlay("polkit", "animate", Value::from(on));
+        set_overlay("sudo", "animate", Value::from(on));
     });
     widgets::keywords("overlay animation motion");
     g.add(&r);
