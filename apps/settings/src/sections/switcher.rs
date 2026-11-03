@@ -94,6 +94,25 @@ pub fn build(page: &Page) {
         },
     );
     g.add(&r);
+    let (r, _) = widgets::choice_row(
+        "Thumbnail size",
+        "",
+        opts(&[("small", "Small"), ("medium", "Medium"), ("large", "Large")]),
+        &s("thumbnail_size", "medium"),
+        |v| {
+            set(None, "thumbnail_size", toml::Value::String(v));
+        },
+    );
+    g.add(&r);
+    let (r, _) = widgets::switch_row(
+        "One entry per group",
+        "Show each group of tabbed windows once when switching windows; ↓ lists its tabs. The overview shows every tab.",
+        b("collapse_groups", true),
+        |on| {
+            set(None, "collapse_groups", toml::Value::Boolean(on));
+        },
+    );
+    g.add(&r);
     let delay = t.get("show_delay_ms").and_then(|v| v.as_integer()).unwrap_or(80) as f64;
     let (r, _) = widgets::slider_row(
         "Show after",
@@ -120,7 +139,35 @@ pub fn build(page: &Page) {
         },
     );
     g.add(&r);
-    widgets::keywords("switcher alt tab window app scope workspace monitor thumbnails previews delay animation agent");
+    widgets::keywords("switcher alt tab window app scope workspace monitor thumbnails previews size delay animation agent group tabs");
+
+    let g = page.group("Touchpad");
+    let current = s("gesture", "");
+    let prev = Rc::new(RefCell::new(current.clone()));
+    let (r, _) = widgets::choice_row(
+        "Show all windows",
+        "A touchpad gesture that opens the overview. One another setting already uses isn't taken.",
+        opts(&[
+            ("", "No gesture"),
+            ("4 pinchout", "Spread four fingers"),
+            ("5 up", "Five fingers up"),
+            ("5 down", "Five fingers down"),
+        ]),
+        &current,
+        move |v| {
+            let old = prev.replace(v.clone());
+            if set(None, "gesture", toml::Value::String(v)) {
+                let prev = prev.clone();
+                bind(move || {
+                    set(None, "gesture", toml::Value::String(old.clone()));
+                    prev.replace(old.clone());
+                    window::rebuild("switcher");
+                });
+            }
+        },
+    );
+    g.add(&r);
+    widgets::keywords("gesture swipe touchpad trackpad fingers overview");
 
     let g = page.group("Keys");
     let keys = t.get("keys").and_then(|v| v.as_table()).cloned().unwrap_or_default();
