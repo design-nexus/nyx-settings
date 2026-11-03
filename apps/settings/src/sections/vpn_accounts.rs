@@ -206,16 +206,51 @@ fn nm_vpns() -> Vec<(String, String, String)> {
             }
             f.push(cur);
             let (name, uuid, kind) = (f.first()?, f.get(1)?, f.get(2)?);
-            ((kind == "wireguard" || kind == "vpn") && !name.to_lowercase().contains("tailscale"))
+            // Tailscale's and NordVPN's own tunnels aren't services of their own.
+            ((kind == "wireguard" || kind == "vpn") && !name.to_lowercase().contains("tailscale") && name != "nordlynx")
                 .then(|| (name.clone(), uuid.clone(), if kind == "wireguard" { "WireGuard".into() } else { "OpenVPN".into() }))
         })
         .collect()
 }
 
+/// `~/.config/nyx/vpn.toml`: which VPN the Control Center shows.
+fn config_path() -> std::path::PathBuf {
+    gtk::glib::user_config_dir().join("nyx/vpn.toml")
+}
+
+fn chosen() -> Option<String> {
+    let text = std::fs::read_to_string(config_path()).ok()?;
+    text.lines().find_map(|l| {
+        let (k, v) = l.split_once('=')?;
+        (k.trim() == "default").then(|| v.trim().trim_matches('"').to_string())
+    })
+}
+
+fn set_chosen(id: &str) {
+    let text = format!("# The VPN the Control Center shows. Set in Settings › Online Accounts › VPN.\ndefault = \"{id}\"\n");
+    if let Err(e) = cmd::atomic_write(&config_path(), text) {
+        window::toast(&format!("Couldn't save: {e}"));
+    }
+}
+
 /// The VPN group on the Online Accounts page.
 pub fn build(page: &Page) {
     let g = page.group("VPN");
-    g.note("The Control Center's VPN tile connects whichever of these you pick, one at a time.");
+    g.note("The Control Center's VPN tile shows the one chosen here.");
+    // Every service set up, as (id, name), the way the Control Center names them.
+    let mut services: Vec<(String, String)> = PROVIDERS
+        .iter()
+        .filter(|p| p.tool.is_some_and(cmd::present))
+        .map(|p| (p.id.to_string(), if p.id == "pia" { "Private Internet Access".to_string() } else { p.name.to_string() }))
+        .collect();
+    services.extend(nm_vpns().into_iter().map(|(name, uuid, _)| (format!("nm:{uuid}"), name)));
+    if services.len() > 1 {
+        let current = chosen().filter(|c| services.iter().any(|(id, _)| id == c)).unwrap_or_else(|| services[0].0.clone());
+        let (r, _) = widgets::choice_row("Show in the Control Center", "The VPN its tile connects.", services.clone(), &current, |id| {
+            set_chosen(&id)
+        });
+        g.add(&r);
+    }
     let mut any = false;
     for p in PROVIDERS.iter().filter(|p| p.tool.is_some_and(cmd::present)) {
         any = true;
