@@ -62,6 +62,11 @@ enum Screen {
     Add,
 }
 thread_local! { static SCREEN: std::cell::Cell<Screen> = const { std::cell::Cell::new(Screen::List) }; }
+/// The accounts list is showing (not the Add screen).
+pub fn on_list() -> bool {
+    SCREEN.with(|s| matches!(s.get(), Screen::List))
+}
+
 fn show(screen: Screen) {
     SCREEN.with(|s| s.set(screen));
     window::rebuild("online-accounts");

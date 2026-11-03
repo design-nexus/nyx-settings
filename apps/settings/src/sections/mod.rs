@@ -49,6 +49,7 @@ pub mod software;
 pub mod theme;
 pub mod trackpad;
 pub mod workspace_rules;
+pub mod vpn_accounts;
 pub mod workspaces;
 
 /// How a page is filled in.
@@ -481,8 +482,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             title: "Online Accounts",
             icon: "network-workgroup-symbolic",
             group: "Accounts",
-            description: "Google, Microsoft, Nextcloud and other accounts used by Nyx apps.",
-            keywords: "online accounts google microsoft nextcloud webdav imap oauth email calendar contacts notes storage cloud rclone drive dropbox onedrive sftp files goa",
+            description: "Google, Microsoft, Nextcloud and other accounts used by Nyx apps, and VPN services.",
+            keywords: "online accounts google microsoft nextcloud webdav imap oauth email calendar contacts notes storage cloud rclone drive dropbox onedrive sftp files goa vpn nordvpn expressvpn proton pia mullvad surfshark windscribe wireguard openvpn",
             files: Vec::new,
             build: Build::Native(online_accounts::build),
             visible: always,
