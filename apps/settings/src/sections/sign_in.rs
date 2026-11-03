@@ -470,4 +470,24 @@ fn look_group(page: &Page) {
     });
     widgets::keywords("overlay animation motion");
     g.add(&r);
+
+    // The login screen is a system file, so the switch goes through the helper (an
+    // administrator prompt) and shows what SDDM will actually use.
+    if std::path::Path::new(LOGIN_THEME_DIR).is_dir() {
+        let (r, _) = widgets::switch_row(
+            "Login screen with face",
+            "After logging out: Omarchy's login screen with Halo. Leave the password empty and press Enter to use your face. Off: Omarchy's own.",
+            login_theme_on(),
+            |on| ctl(vec!["login-theme".into(), if on { "on" } else { "off" }.into()], if on { "The login screen shows Halo now." } else { "Omarchy's login screen is back." }),
+        );
+        widgets::keywords("login screen sddm greeter theme face halo");
+        g.add(&r);
+    }
+}
+
+const LOGIN_THEME_DIR: &str = "/usr/share/sddm/themes/nyx-biometrics";
+const LOGIN_THEME_CONF: &str = "/etc/sddm.conf.d/zz-nyx-biometrics.conf";
+
+fn login_theme_on() -> bool {
+    std::fs::read_to_string(LOGIN_THEME_CONF).is_ok_and(|t| t.lines().any(|l| l.trim() == "Current=nyx-biometrics"))
 }
