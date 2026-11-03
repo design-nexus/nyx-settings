@@ -2,9 +2,9 @@
 //! floating workspace Omarchy adds a titlebar to every window; these apps keep only
 //! their own, and the Nyx Dock's hover buttons can stand in for it everywhere.
 
-use crate::backend::{appearance, store, titlebars};
+use crate::backend::{store, titlebars};
 use crate::widgets::{self, Page};
-use crate::{cmd, window};
+use crate::window;
 use gtk::gio;
 use gtk::prelude::*;
 
@@ -41,24 +41,8 @@ fn set_hover(on: bool) {
 }
 
 pub fn build(page: &Page) {
-    let g = page.group("Window controls");
-    let (r, _) = widgets::switch_row(
-        "Window buttons in GTK apps",
-        "Apps that draw their own header (Files, Text Editor, most GNOME apps) show maximize beside close, and minimize where it works. Those apps show them when tiled too.",
-        appearance::gtk_window_buttons(),
-        |on| {
-            cmd::background(
-                move || appearance::set_gtk_window_buttons(on),
-                |r: anyhow::Result<()>| {
-                    if let Err(e) = r {
-                        window::toast(&format!("Couldn't change the buttons: {e}"));
-                    }
-                },
-            );
-        },
-    );
-    g.add(&r);
     if super::desktop::dock_installed() {
+        let g = page.group("Window controls");
         let hover = store::read(|s| s.hover_window_controls);
         let (r, _) = widgets::choice_row(
             "On floating windows",
@@ -109,6 +93,6 @@ pub fn build(page: &Page) {
         g.add(&widgets::row("Add an app", "", Some(content.upcast_ref())));
     }
     widgets::keywords(
-        "titlebar title bar double two floating window controls decorations hyprbars minimize maximize close buttons hover gtk",
+        "titlebar title bar double two floating window controls decorations hyprbars minimize maximize close buttons hover",
     );
 }

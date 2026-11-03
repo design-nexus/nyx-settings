@@ -93,25 +93,6 @@ pub fn set_interface_font(desc: &str) -> anyhow::Result<()> {
     gsettings_set("font-name", desc)
 }
 
-/// Where GTK apps that draw their own header read their window buttons from.
-const WM: &str = "org.gnome.desktop.wm.preferences";
-const ALL_BUTTONS: &str = "appmenu:minimize,maximize,close";
-
-/// Whether GTK apps show maximize (and minimize, where it works) beside close.
-pub fn gtk_window_buttons() -> bool {
-    cmd::output(&["gsettings", "get", WM, "button-layout"]).is_some_and(|s| s.contains("maximize"))
-}
-
-/// All three buttons, or GNOME's default of close alone (what Omarchy leaves).
-pub fn set_gtk_window_buttons(on: bool) -> anyhow::Result<()> {
-    if on {
-        cmd::run(&["gsettings", "set", WM, "button-layout", ALL_BUTTONS])?;
-    } else {
-        cmd::run(&["gsettings", "reset", WM, "button-layout"])?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
