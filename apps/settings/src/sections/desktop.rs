@@ -142,8 +142,18 @@ pub fn build_dock(page: &Page) {
         set_dock("trash", toml::Value::Boolean(on))
     });
     g.add(&r);
-    widgets::keywords("position size hide autohide previews thumbnails trash running monitor screen");
-    g.note("Pin apps and add folders from the dock itself: right-click an app or a folder.");
+    let (r, _) = widgets::switch_row(
+        "Apps button",
+        "First in the dock: every app in a grid, with search.",
+        b("apps", true),
+        |on| set_dock("apps", toml::Value::Boolean(on)),
+    );
+    g.add(&r);
+    widgets::keywords("position size hide autohide previews thumbnails trash apps launcher running monitor screen");
+    g.note(
+        "Right-click the dock for these settings and to add a folder (or drag a folder onto it). \
+         Right-click a folder for how it looks and opens: stack, fan, grid or list.",
+    );
 }
 
 // ---------------------------------------------------------------- Control Center
