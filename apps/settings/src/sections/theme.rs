@@ -481,19 +481,51 @@ fn icons_row(g: &widgets::Group) {
     };
     let mut options = vec![(FOLLOW.to_string(), follow_label)];
     options.extend(appearance::icon_themes().into_iter().map(|t| (t.clone(), t)));
-    let current = cfg.icon_theme.clone().unwrap_or_default();
+    let current = appearance::chosen(&cfg).unwrap_or_default();
+
+    // Umbra's look, shown while Umbra is the icon theme.
+    let look = appearance::umbra_look().unwrap_or_else(|| "tile".into());
+    let looks: Vec<(String, String)> =
+        appearance::UMBRA_LOOKS.iter().map(|(id, label, _)| (id.to_string(), label.to_string())).collect();
+    let (look_row, _) = widgets::choice_row(
+        "Look",
+        "Umbra's folders and files: satin tiles, solid folders and pages, or coloured lines.",
+        looks,
+        &look,
+        |id| {
+            cmd::background(
+                move || appearance::use_umbra(&id),
+                |r: anyhow::Result<()>| {
+                    if let Err(e) = r {
+                        crate::window::toast(&format!("Couldn't change the look: {e}"));
+                    }
+                },
+            );
+        },
+    );
+    look_row.set_visible(current == appearance::UMBRA);
+
+    let lr = look_row.clone();
     let (r, _) = widgets::choice_row(
         "Icons",
         "Icon theme for apps and file choosers. Omarchy themes pick one; choose here to keep your own.",
         options,
         &current,
-        |id| {
+        move |id| {
+            let umbra = id == appearance::UMBRA;
+            lr.set_visible(umbra);
             let c = appearance::Config { icon_theme: (id != FOLLOW).then_some(id) };
             cmd::background(
                 move || {
                     appearance::save(&c)?;
                     crate::backend::themehook::ensure();
-                    appearance::apply_icons(&c)
+                    if umbra {
+                        let look = appearance::umbra_look().unwrap_or_else(|| "tile".into());
+                        appearance::use_umbra(&look)
+                    } else {
+                        appearance::leave_umbra();
+                        appearance::apply_icons(&c)
+                    }
                 },
                 |r: anyhow::Result<()>| {
                     if let Err(e) = r {
@@ -503,8 +535,12 @@ fn icons_row(g: &widgets::Group) {
             );
         },
     );
-    widgets::keywords("icon theme icons yaru papirus adwaita");
+    widgets::keywords("icon theme icons yaru papirus adwaita umbra look tile solid line");
     g.add(&r);
+    if appearance::umbra_installed() || current == appearance::UMBRA {
+        widgets::keywords("umbra icon look tile solid line");
+        g.add(&look_row);
+    }
 }
 
 fn interface_font_row() -> gtk::Box {

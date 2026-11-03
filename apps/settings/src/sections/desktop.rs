@@ -142,12 +142,10 @@ pub fn build_dock(page: &Page) {
         set_dock("trash", toml::Value::Boolean(on))
     });
     g.add(&r);
-    let (r, _) = widgets::switch_row(
-        "Apps button",
-        "First in the dock: every app in a grid, with search.",
-        b("apps", true),
-        |on| set_dock("apps", toml::Value::Boolean(on)),
-    );
+    let (r, _) =
+        widgets::switch_row("Apps button", "First in the dock: every app in a grid, with search.", b("apps", true), |on| {
+            set_dock("apps", toml::Value::Boolean(on))
+        });
     g.add(&r);
     widgets::keywords("position size hide autohide previews thumbnails trash apps launcher running monitor screen");
     g.note(

@@ -35,9 +35,9 @@ pub mod mouse;
 pub mod network;
 pub mod nightlight;
 pub mod nyx;
-pub mod own_titlebars;
 pub mod online_accounts;
 pub mod online_presets;
+pub mod own_titlebars;
 pub mod plugins;
 pub mod power;
 pub mod printers;
@@ -46,13 +46,13 @@ pub mod rules;
 pub mod services;
 pub mod sharing;
 pub mod sign_in;
-pub mod switcher;
 pub mod software;
+pub mod switcher;
 pub mod theme;
 pub mod trackpad;
+pub mod vpn_accounts;
 pub mod workspace_profiles;
 pub mod workspace_rules;
-pub mod vpn_accounts;
 pub mod workspaces;
 
 /// How a page is filled in.

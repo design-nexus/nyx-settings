@@ -197,7 +197,10 @@ mod tests {
         let mut p = Profile::new("work", "Work");
         let mut wall = toml::Table::new();
         wall.insert("wallpaper".into(), toml::Value::String("w.jpg".into()));
-        p.workspace_list = vec![Workspace { id: 2, extra: wall.clone(), ..Default::default() }, Workspace { id: 7, extra: wall, ..Default::default() }];
+        p.workspace_list = vec![
+            Workspace { id: 2, extra: wall.clone(), ..Default::default() },
+            Workspace { id: 7, extra: wall, ..Default::default() },
+        ];
         from_state(&state, &mut p);
         assert_eq!(p.workspaces, 4);
         assert_eq!(p.workspace(2).unwrap().name.as_deref(), Some("Mail"));
@@ -225,6 +228,9 @@ mod tests {
         assert_eq!((rules[0].effect.as_str(), rules[0].value.as_str()), ("workspace", "3 silent"));
         assert_eq!(rules[1].class, "(?i)^(kitty)$");
         let line = super::super::rules::lua_line(false, &rules[0]).unwrap();
-        assert_eq!(line, "hl.window_rule({ match = { class = \"(?i)^(firefox|org.mozilla.firefox)$\" }, workspace = \"3 silent\" })");
+        assert_eq!(
+            line,
+            "hl.window_rule({ match = { class = \"(?i)^(firefox|org.mozilla.firefox)$\" }, workspace = \"3 silent\" })"
+        );
     }
 }

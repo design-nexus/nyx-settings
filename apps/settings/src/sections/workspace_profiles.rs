@@ -9,8 +9,8 @@ use crate::backend::store;
 use crate::dialog::{Field, ask};
 use crate::widgets::{self, Page};
 use crate::{cmd, window};
-use gtk::prelude::*;
 use gtk::gio;
+use gtk::prelude::*;
 use nyx_desktop::profiles::{App, Profile};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -291,7 +291,8 @@ pub fn build(page: &Page) {
 
     // ----- Switching -----
     let g = page.group("Switching");
-    let current_key = store::read(|s| s.binds.iter().find(|b| b.description == NEXT_KEY).map(|b| b.keys.clone())).unwrap_or_default();
+    let current_key =
+        store::read(|s| s.binds.iter().find(|b| b.description == NEXT_KEY).map(|b| b.keys.clone())).unwrap_or_default();
     let (r, _) = widgets::entry_row(
         "Key for the next profile",
         "Keys as Hyprland writes them, like SUPER + CTRL + P. Empty: no key.",
@@ -330,7 +331,8 @@ fn copy_workspace(g: &widgets::Group) {
     let f2 = from.clone();
     go.connect_clicked(move |_| {
         let src = f2.selected() + 1;
-        let to: Vec<u32> = targets.borrow().iter().enumerate().filter(|(_, on)| **on).map(|(i, _)| i as u32 + 1).filter(|n| *n != src).collect();
+        let to: Vec<u32> =
+            targets.borrow().iter().enumerate().filter(|(_, on)| **on).map(|(i, _)| i as u32 + 1).filter(|n| *n != src).collect();
         if to.is_empty() {
             window::toast("Choose the workspaces to copy to");
             return;

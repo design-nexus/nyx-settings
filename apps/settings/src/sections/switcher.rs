@@ -139,7 +139,9 @@ pub fn build(page: &Page) {
         },
     );
     g.add(&r);
-    widgets::keywords("switcher alt tab window app scope workspace monitor thumbnails previews size delay animation agent group tabs");
+    widgets::keywords(
+        "switcher alt tab window app scope workspace monitor thumbnails previews size delay animation agent group tabs",
+    );
 
     let g = page.group("Touchpad");
     let current = s("gesture", "");

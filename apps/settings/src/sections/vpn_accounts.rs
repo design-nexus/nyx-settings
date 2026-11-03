@@ -253,9 +253,10 @@ pub fn build(page: &Page) {
     services.extend(nm_vpns().into_iter().map(|(name, uuid, _)| (format!("nm:{uuid}"), name)));
     if services.len() > 1 {
         let current = chosen().filter(|c| services.iter().any(|(id, _)| id == c)).unwrap_or_else(|| services[0].0.clone());
-        let (r, _) = widgets::choice_row("Show in the Control Center", "The VPN its tile connects.", services.clone(), &current, |id| {
-            set_chosen(&id)
-        });
+        let (r, _) =
+            widgets::choice_row("Show in the Control Center", "The VPN its tile connects.", services.clone(), &current, |id| {
+                set_chosen(&id)
+            });
         g.add(&r);
     }
     let mut any = false;
@@ -297,9 +298,10 @@ pub fn build(page: &Page) {
     if !any {
         g.add(&widgets::row("No VPN set up", "Add NordVPN, ExpressVPN, Proton, PIA, Mullvad or a WireGuard/OpenVPN file.", None));
     }
-    let (r, _) = widgets::button_row("Add a VPN", "Choose a service, then install and sign in, or import its file.", "Add…", |_| {
-        show_add(true)
-    });
+    let (r, _) =
+        widgets::button_row("Add a VPN", "Choose a service, then install and sign in, or import its file.", "Add…", |_| {
+            show_add(true)
+        });
     g.add(&r);
     widgets::keywords("vpn nordvpn expressvpn proton pia private internet access mullvad surfshark windscribe wireguard openvpn");
 }
@@ -338,7 +340,8 @@ fn set_up(p: Provider) {
         (_, true) => sign_in(p),
         (Install::Aur(pkg, then), false) => {
             // In a terminal: the AUR build and sudo need one. Sign in afterwards.
-            let command = format!("omarchy-pkg-aur-add {pkg} && {then} && echo && echo 'Installed. Back in Settings, choose Sign in.'");
+            let command =
+                format!("omarchy-pkg-aur-add {pkg} && {then} && echo && echo 'Installed. Back in Settings, choose Sign in.'");
             super::accounts::terminal(&command);
             window::toast(&format!("Installing {} in a terminal; sign in when it's done", p.name));
         }
@@ -409,7 +412,9 @@ fn import_file(provider: &'static str, page: Option<&'static str>) {
         let Some(path) = file.path() else { return };
         let openvpn = path.extension().is_some_and(|e| e == "ovpn");
         if openvpn && !std::path::Path::new("/usr/lib/NetworkManager/VPN/nm-openvpn-service.name").exists() {
-            super::accounts::terminal("omarchy-pkg-add networkmanager-openvpn && echo && echo 'Done. Import the file again in Settings.'");
+            super::accounts::terminal(
+                "omarchy-pkg-add networkmanager-openvpn && echo && echo 'Done. Import the file again in Settings.'",
+            );
             window::toast("OpenVPN files need NetworkManager's OpenVPN plugin: installing it in a terminal");
             return;
         }
@@ -421,7 +426,8 @@ fn import_file(provider: &'static str, page: Option<&'static str>) {
                 if provider != "Other"
                     && let Some(uuid) = out.split(['(', ')']).nth(1)
                 {
-                    let name = format!("{provider} · {}", path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default());
+                    let name =
+                        format!("{provider} · {}", path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default());
                     cmd::spawn(&["nmcli", "connection", "modify", "uuid", uuid, "connection.id", &name]);
                     // Not on by itself: the Control Center connects it.
                     cmd::spawn(&["nmcli", "connection", "modify", "uuid", uuid, "connection.autoconnect", "no"]);

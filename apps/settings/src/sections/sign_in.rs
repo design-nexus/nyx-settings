@@ -83,7 +83,9 @@ pub fn build(page: &Page) {
     uses.note("Changes to sign-in open a terminal that shows exactly what changes and tests it before keeping it.");
     let uses_h = holder(&uses, "");
     let ssh = page.group("SSH keys on a security key");
-    ssh.note("The private key stays on the security key; each use needs a touch. Keys kept in the vault are Nyx Passwords' to serve.");
+    ssh.note(
+        "The private key stays on the security key; each use needs a touch. Keys kept in the vault are Nyx Passwords' to serve.",
+    );
     let ssh_h = holder(&ssh, "");
     let hw = page.collapsible("This computer", false);
     let hw_h = holder(&hw, "");
@@ -413,7 +415,10 @@ fn overlay_path() -> std::path::PathBuf {
 }
 
 fn overlay() -> Value {
-    std::fs::read_to_string(overlay_path()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}))
+    std::fs::read_to_string(overlay_path())
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_else(|| serde_json::json!({}))
 }
 
 /// Change one setting for one surface, keeping everything else in the file.
@@ -515,11 +520,16 @@ fn look_group(page: &Page) {
     widgets::keywords("overlay intensity glow brightness");
     g.add(&r);
 
-    let (r, _) = widgets::switch_row("Animations", "Sweeps, scan lines and pulses while scanning.", lock["animate"].as_bool().unwrap_or(true), |on| {
-        set_overlay("lock-screen", "animate", Value::from(on));
-        set_overlay("polkit", "animate", Value::from(on));
-        set_overlay("sudo", "animate", Value::from(on));
-    });
+    let (r, _) = widgets::switch_row(
+        "Animations",
+        "Sweeps, scan lines and pulses while scanning.",
+        lock["animate"].as_bool().unwrap_or(true),
+        |on| {
+            set_overlay("lock-screen", "animate", Value::from(on));
+            set_overlay("polkit", "animate", Value::from(on));
+            set_overlay("sudo", "animate", Value::from(on));
+        },
+    );
     widgets::keywords("overlay animation motion");
     g.add(&r);
 
@@ -530,7 +540,12 @@ fn look_group(page: &Page) {
             "Login screen with face",
             "After logging out: Omarchy's login screen with Halo. Leave the password empty and press Enter to use your face. Off: Omarchy's own.",
             login_theme_on(),
-            |on| ctl(vec!["login-theme".into(), if on { "on" } else { "off" }.into()], if on { "The login screen shows Halo now." } else { "Omarchy's login screen is back." }),
+            |on| {
+                ctl(
+                    vec!["login-theme".into(), if on { "on" } else { "off" }.into()],
+                    if on { "The login screen shows Halo now." } else { "Omarchy's login screen is back." },
+                )
+            },
         );
         widgets::keywords("login screen sddm greeter theme face halo");
         g.add(&r);

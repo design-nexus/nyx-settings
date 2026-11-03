@@ -48,9 +48,69 @@ pub fn omarchy_icon_theme() -> Option<String> {
         .filter(|t| !t.is_empty())
 }
 
+// ----- Umbra -----
+//
+// Umbra comes as three icon themes, one per look (Umbra, Umbra-Solid, Umbra-Line), drawn
+// in the theme's colours by `umbra-icons`. Settings shows it as one choice with a Look.
+
+/// The id Settings stores for Umbra, whichever look.
+pub const UMBRA: &str = "Umbra";
+/// (look, label, icon theme directory)
+pub const UMBRA_LOOKS: [(&str, &str, &str); 3] =
+    [("tile", "Tile", "Umbra"), ("solid", "Solid", "Umbra-Solid"), ("line", "Line", "Umbra-Line")];
+
+pub fn umbra_installed() -> bool {
+    cmd::present("umbra-icons")
+}
+
+/// The Umbra look in use, if Umbra is.
+pub fn umbra_look() -> Option<String> {
+    let text = std::fs::read_to_string(paths::config_home().join("umbra/settings.json")).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    v.get("look")?.as_str().filter(|l| UMBRA_LOOKS.iter().any(|(id, _, _)| id == l)).map(str::to_string)
+}
+
+/// Whether an icon theme directory is one of Umbra's looks.
+pub fn is_umbra(theme: &str) -> bool {
+    UMBRA_LOOKS.iter().any(|(_, _, dir)| *dir == theme)
+}
+
+fn umbra_dir(look: &str) -> &'static str {
+    UMBRA_LOOKS.iter().find(|(id, _, _)| *id == look).map_or("Umbra", |(_, _, dir)| dir)
+}
+
+/// The icon theme Settings shows as chosen: the override (any Umbra look as Umbra), or
+/// Umbra when it's in use, or None to follow the Omarchy theme.
+pub fn chosen(c: &Config) -> Option<String> {
+    match &c.icon_theme {
+        Some(t) if is_umbra(t) => Some(UMBRA.into()),
+        Some(t) => Some(t.clone()),
+        None => umbra_look().map(|_| UMBRA.into()),
+    }
+}
+
+/// Use an Umbra look: `umbra-icons` builds it if needed and switches to it.
+pub fn use_umbra(look: &str) -> anyhow::Result<()> {
+    cmd::run(&["umbra-icons", "look", look])?;
+    Ok(())
+}
+
+/// Another icon theme was chosen: Umbra stops putting itself back after theme changes.
+pub fn leave_umbra() {
+    if umbra_look().is_some() {
+        let _ = cmd::run(&["umbra-icons", "look", "off"]);
+    }
+}
+
 /// Apply what the config says: the override, or the Omarchy theme's icons.
 pub fn apply_icons(c: &Config) -> anyhow::Result<()> {
-    let want = c.icon_theme.clone().or_else(omarchy_icon_theme);
+    let umbra = umbra_look().map(|l| umbra_dir(&l).to_string());
+    let want = match &c.icon_theme {
+        // Umbra's look lives with Umbra.
+        Some(t) if is_umbra(t) => umbra.or_else(|| Some(t.clone())),
+        Some(t) => Some(t.clone()),
+        None => umbra.or_else(omarchy_icon_theme),
+    };
     if let Some(t) = want
         && current_icon_theme() != t
     {
@@ -69,8 +129,17 @@ pub fn is_icon_theme(dir: &Path) -> bool {
     has_dirs && !hidden
 }
 
-/// Installed icon themes, sorted, without duplicates.
+/// Installed icon themes, sorted, without duplicates. Umbra's looks are one entry.
 pub fn icon_themes() -> Vec<String> {
+    let mut out: Vec<String> = all_icon_themes().into_iter().filter(|t| !is_umbra(t) || t == UMBRA).collect();
+    if !out.iter().any(|t| t == UMBRA) && all_icon_themes().iter().any(|t| is_umbra(t)) {
+        out.push(UMBRA.into());
+        out.sort_by_key(|n| n.to_lowercase());
+    }
+    out
+}
+
+fn all_icon_themes() -> Vec<String> {
     let mut out: Vec<String> =
         [PathBuf::from("/usr/share/icons"), paths::home().join(".local/share/icons"), paths::home().join(".icons")]
             .iter()
@@ -96,6 +165,18 @@ pub fn set_interface_font(desc: &str) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn umbra_is_one_choice() {
+        assert!(is_umbra("Umbra") && is_umbra("Umbra-Solid") && is_umbra("Umbra-Line"));
+        assert!(!is_umbra("Umbra-Other") && !is_umbra("Yaru"));
+        assert_eq!(umbra_dir("line"), "Umbra-Line");
+        assert_eq!(umbra_dir("nonsense"), "Umbra");
+        let solid = Config { icon_theme: Some("Umbra-Solid".into()) };
+        assert_eq!(chosen(&solid).as_deref(), Some(UMBRA));
+        let yaru = Config { icon_theme: Some("Yaru".into()) };
+        assert_eq!(chosen(&yaru).as_deref(), Some("Yaru"));
+    }
 
     fn theme_dir(name: &str, index: Option<&str>) -> PathBuf {
         let d = std::env::temp_dir().join(format!("settings-icons-{}-{name}", std::process::id()));
