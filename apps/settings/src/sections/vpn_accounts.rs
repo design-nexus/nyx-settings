@@ -218,16 +218,23 @@ fn config_path() -> std::path::PathBuf {
     gtk::glib::user_config_dir().join("nyx/vpn.toml")
 }
 
-fn chosen() -> Option<String> {
-    let text = std::fs::read_to_string(config_path()).ok()?;
-    text.lines().find_map(|l| {
-        let (k, v) = l.split_once('=')?;
-        (k.trim() == "default").then(|| v.trim().trim_matches('"').to_string())
-    })
+fn read_config() -> toml::Table {
+    std::fs::read_to_string(config_path()).ok().and_then(|t| toml::from_str(&t).ok()).unwrap_or_default()
 }
 
+fn chosen() -> Option<String> {
+    read_config().get("default").and_then(|v| v.as_str()).map(String::from)
+}
+
+/// Set the default VPN, keeping the rest of the file (the Control Center's favourite
+/// and default servers).
 fn set_chosen(id: &str) {
-    let text = format!("# The VPN the Control Center shows. Set in Settings › Online Accounts › VPN.\ndefault = \"{id}\"\n");
+    let mut t = read_config();
+    t.insert("default".into(), toml::Value::String(id.to_string()));
+    let text = match toml::to_string(&t) {
+        Ok(s) => s,
+        Err(e) => return window::toast(&format!("Couldn't save: {e}")),
+    };
     if let Err(e) = cmd::atomic_write(&config_path(), text) {
         window::toast(&format!("Couldn't save: {e}"));
     }
