@@ -54,7 +54,7 @@ pub fn dock_installed() -> bool {
 }
 
 /// Change one key in `dock.toml`, keeping the rest (the dock reloads it).
-fn set_dock(key: &str, value: toml::Value) {
+pub fn set_dock(key: &str, value: toml::Value) {
     let path = config("dock.toml");
     let Ok(text) = std::fs::read_to_string(&path) else { return };
     let mut t: toml::Table = match toml::from_str(&text) {

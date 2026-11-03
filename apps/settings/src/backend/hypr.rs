@@ -95,7 +95,11 @@ pub fn generate(state: &State, self_cmd: &str) -> String {
         }
     }
 
-    out.push_str(&super::titlebars::lua(&super::titlebars::apps(state), &nyx_desktop::apps::from_gio()));
+    out.push_str(&super::titlebars::lua(
+        &super::titlebars::apps(state),
+        &nyx_desktop::apps::from_gio(),
+        state.hover_window_controls,
+    ));
 
     let ws_lines = workspace_lines(state);
     if !ws_lines.is_empty() {

@@ -93,6 +93,9 @@ pub struct State {
     /// Apps that draw their own titlebar, so Omarchy's floating titlebar is left off
     /// (`None`: the built-in list; see `backend::titlebars`).
     pub own_titlebar_apps: Option<Vec<String>>,
+    /// On floating workspaces, the Nyx Dock's hover buttons instead of Omarchy's
+    /// titlebar (mirrored to `window_controls` in the dock's `dock.toml`).
+    pub hover_window_controls: bool,
     pub layer_rules: Vec<Rule>,
     /// Workspaces 1..=N always exist, even when empty (0: Hyprland's default).
     pub persistent_workspaces: u32,

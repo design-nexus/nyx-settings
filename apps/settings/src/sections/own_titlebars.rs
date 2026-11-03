@@ -1,9 +1,10 @@
-//! Tiling & Workspaces: apps that draw their own titlebar. On a floating workspace
-//! Omarchy adds a titlebar to every window; these apps keep only their own.
+//! Tiling & Workspaces: window controls, and apps that draw their own titlebar. On a
+//! floating workspace Omarchy adds a titlebar to every window; these apps keep only
+//! their own, and the Nyx Dock's hover buttons can stand in for it everywhere.
 
-use crate::backend::{store, titlebars};
+use crate::backend::{appearance, store, titlebars};
 use crate::widgets::{self, Page};
-use crate::window;
+use crate::{cmd, window};
 use gtk::gio;
 use gtk::prelude::*;
 
@@ -33,7 +34,42 @@ fn set_list(list: Vec<String>) {
     window::rebuild("workspaces");
 }
 
+fn set_hover(on: bool) {
+    store::update(true, move |s| s.hover_window_controls = on);
+    store::flush();
+    super::desktop::set_dock("window_controls", toml::Value::Boolean(on));
+}
+
 pub fn build(page: &Page) {
+    let g = page.group("Window controls");
+    let (r, _) = widgets::switch_row(
+        "Window buttons in GTK apps",
+        "Apps that draw their own header (Files, Text Editor, most GNOME apps) show maximize beside close, and minimize where it works. Those apps show them when tiled too.",
+        appearance::gtk_window_buttons(),
+        |on| {
+            cmd::background(
+                move || appearance::set_gtk_window_buttons(on),
+                |r: anyhow::Result<()>| {
+                    if let Err(e) = r {
+                        window::toast(&format!("Couldn't change the buttons: {e}"));
+                    }
+                },
+            );
+        },
+    );
+    g.add(&r);
+    if super::desktop::dock_installed() {
+        let hover = store::read(|s| s.hover_window_controls);
+        let (r, _) = widgets::choice_row(
+            "On floating windows",
+            "Omarchy's titlebar puts a bar with minimize, maximize and close above every window. Hover buttons are three small dots at the window's top-right corner that open into the same buttons, with no extra bar; drag a window by its own header or with Super and the mouse. Nyx apps always show their own.",
+            vec![("titlebar".into(), "Omarchy titlebar".into()), ("hover".into(), "Hover buttons".into())],
+            if hover { "hover" } else { "titlebar" },
+            |v| set_hover(v == "hover"),
+        );
+        g.add(&r);
+    }
+
     let g = page.group("Apps with their own titlebar");
     g.note("On a floating workspace every window gets a titlebar. Apps listed here draw their own, so they don't get a second one. The Switcher's overview can add the app in front.");
     let list = store::read(titlebars::apps);
@@ -72,5 +108,7 @@ pub fn build(page: &Page) {
         content.append(&add);
         g.add(&widgets::row("Add an app", "", Some(content.upcast_ref())));
     }
-    widgets::keywords("titlebar title bar double two floating window controls decorations hyprbars");
+    widgets::keywords(
+        "titlebar title bar double two floating window controls decorations hyprbars minimize maximize close buttons hover gtk",
+    );
 }
