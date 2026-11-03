@@ -19,9 +19,18 @@ use anyhow::{Context, Result};
 use gtk::gio::prelude::*;
 use nyx_desktop::apps::Index;
 
-/// Apps known to draw their own titlebar, used until the list is changed: ChatGPT and
-/// the Chromium-based browsers. Only installed ones count.
-pub const DEFAULTS: &[&str] = &["chatgpt", "chromium", "google-chrome", "brave-browser", "microsoft-edge", "vivaldi-stable"];
+/// Apps known to draw their own titlebar, used until the list is changed: ChatGPT,
+/// and the Chromium- and Firefox-based browsers. Only installed ones count.
+pub const DEFAULTS: &[&str] = &[
+    "chatgpt",
+    "chromium",
+    "google-chrome",
+    "brave-browser",
+    "microsoft-edge",
+    "vivaldi-stable",
+    "firefox",
+    "zen",
+];
 
 /// The tag Nyx apps put on windows that draw their own window controls.
 pub const OWN_CONTROLS_TAG: &str = "nyx-own-controls";
