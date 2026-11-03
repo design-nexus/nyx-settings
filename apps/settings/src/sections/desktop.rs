@@ -118,7 +118,7 @@ pub fn build_dock(page: &Page) {
     let (r, _) = widgets::choice_row(
         "Hide",
         "Smart: hide while a window covers it. Automatically: until the pointer reaches the edge.",
-        opts(&[("smart", "Smart"), ("auto", "Automatically"), ("never", "Never")]),
+        opts(&[("smart", "Smart"), ("always", "Automatically"), ("never", "Never")]),
         &s("hide", "smart"),
         |v| set_dock("hide", toml::Value::String(v)),
     );
