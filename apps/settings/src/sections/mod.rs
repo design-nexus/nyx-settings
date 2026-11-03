@@ -45,6 +45,7 @@ pub mod rules;
 pub mod services;
 pub mod sharing;
 pub mod sign_in;
+pub mod switcher;
 pub mod software;
 pub mod theme;
 pub mod trackpad;
@@ -353,6 +354,17 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || vec![gtk::glib::user_config_dir().join("nyx/dock.toml")],
             build: Build::Native(desktop::build_dock),
             visible: desktop::dock_installed,
+        },
+        Section {
+            id: "switcher",
+            title: "Switcher",
+            icon: "view-dual-symbolic",
+            group: "Desktop",
+            description: "Nyx Switcher: Alt+Tab and Super+Tab, thumbnails, keys.",
+            keywords: "switcher alt tab super tab windows apps overview keys thumbnails",
+            files: || vec![gtk::glib::user_config_dir().join("nyx/switcher.toml")],
+            build: Build::Native(switcher::build),
+            visible: switcher::installed,
         },
         Section {
             id: "control-center",
