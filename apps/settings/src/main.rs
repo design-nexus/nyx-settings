@@ -37,7 +37,9 @@ const USAGE: &str = "Usage: nyx-settings [--section ID] [--volume raise|lower|+N
   --kbd-idle     (internal) turn the keyboard backlight off when idle; run by the settings-kbd-idle service\n\
   --remove-old-panels [--dry-run]  remove the settings panels this app replaces (backed up first)\n\
   --install-helper  (run with sudo) install the root helper that system changes (users, firewall, time, services, printers) need\n\
-  --apply        rewrite ~/.config/hypr/settings.lua from saved state and exit\n";
+  --apply        rewrite ~/.config/hypr/settings.lua from saved state and exit\n\
+  --workspace-profile NAME  switch to a workspace profile (and move its apps' open windows)\n\
+  --workspace-profiles      list the workspace profiles (* marks the active one)\n";
 
 fn main() -> glib::ExitCode {
     nyx_core::app::init(nyx_core::app::App { slug: "nyx-settings", name: "Settings" });
@@ -146,6 +148,30 @@ fn main() -> glib::ExitCode {
                 glib::ExitCode::FAILURE
             }
         };
+    }
+    if let Some(i) = args.iter().position(|a| a == "--workspace-profile") {
+        let Some(name) = args.get(i + 1) else {
+            eprintln!("nyx-settings: --workspace-profile takes a profile's name");
+            return glib::ExitCode::FAILURE;
+        };
+        return match backend::profiles::switch(name) {
+            Ok(msg) => {
+                println!("{msg}");
+                glib::ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("nyx-settings: {e:#}");
+                glib::ExitCode::FAILURE
+            }
+        };
+    }
+    if args.iter().any(|a| a == "--workspace-profiles") {
+        let store = backend::profiles::store();
+        let active = store.active();
+        for p in store.list() {
+            println!("{}{}\t{}", if active.as_deref() == Some(p.id.as_str()) { "* " } else { "  " }, p.id, p.name);
+        }
+        return glib::ExitCode::SUCCESS;
     }
     if args.iter().any(|a| a == "--apply") {
         let state = backend::state::State::load(&paths::state_file());

@@ -18,6 +18,7 @@ pub mod net;
 pub mod notify;
 pub mod notifyd;
 pub mod passwd;
+pub mod profiles;
 pub mod pkgupdates;
 pub mod rules;
 pub mod shell;

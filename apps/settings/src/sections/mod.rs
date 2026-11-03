@@ -49,6 +49,7 @@ pub mod switcher;
 pub mod software;
 pub mod theme;
 pub mod trackpad;
+pub mod workspace_profiles;
 pub mod workspace_rules;
 pub mod vpn_accounts;
 pub mod workspaces;
@@ -397,6 +398,17 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "windows focus follows mouse layout dwindle master scrolling split workspace resize",
             files: || hypr(&["looknfeel.lua", "settings.lua"]),
             build: Build::Native(workspaces::build),
+            visible: always,
+        },
+        Section {
+            id: "workspace-profiles",
+            title: "Workspace Profiles",
+            icon: "view-paged-symbolic",
+            group: "Desktop",
+            description: "Named sets of workspaces, like Work and Home, and the apps that open on each workspace.",
+            keywords: "workspace profiles sets work home apps open on workspace switch",
+            files: || vec![gtk::glib::user_config_dir().join("nyx/desktop/profiles")],
+            build: Build::Native(workspace_profiles::build),
             visible: always,
         },
         Section {

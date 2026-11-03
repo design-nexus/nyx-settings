@@ -83,6 +83,7 @@ pub fn generate(state: &State, self_cmd: &str) -> String {
     let rule_lines: Vec<String> = state
         .window_rules
         .iter()
+        .chain(state.profile_rules.iter())
         .filter_map(|r| super::rules::lua_line(false, r))
         .chain(state.layer_rules.iter().filter_map(|r| super::rules::lua_line(true, r)))
         .collect();

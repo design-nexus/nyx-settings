@@ -21,6 +21,21 @@ thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::load(&paths::state_file()));
     static PENDING: Cell<Option<glib::SourceId>> = const { Cell::new(None) };
     static RELOAD_AFTER: Cell<bool> = const { Cell::new(false) };
+    /// The workspace profile this copy of the state belongs to.
+    static PROFILE_SEEN: RefCell<Option<String>> = RefCell::new(super::profiles::store().active());
+}
+
+/// Take the workspaces (and profile rules) from disk, after a workspace profile was
+/// switched to outside this window (`nyx-settings --workspace-profile`).
+pub fn reload_workspaces() {
+    let disk = State::load(&paths::state_file());
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        s.persistent_workspaces = disk.persistent_workspaces;
+        s.workspaces = disk.workspaces;
+        s.profile_rules = disk.profile_rules;
+    });
+    PROFILE_SEEN.with(|p| *p.borrow_mut() = super::profiles::store().active());
 }
 
 pub fn read<T>(f: impl FnOnce(&State) -> T) -> T {
@@ -57,6 +72,10 @@ pub fn flush() {
             id.remove();
         }
     });
+    // Another profile became active meanwhile: its workspaces win over this copy's.
+    if PROFILE_SEEN.with(|p| *p.borrow() != super::profiles::store().active()) {
+        reload_workspaces();
+    }
     let state = read(State::clone);
     if let Ok(text) = serde_json::to_string_pretty(&state)
         && let Err(e) = cmd::atomic_write(&paths::state_file(), &text)
@@ -67,6 +86,7 @@ pub fn flush() {
         eprintln!("nyx-settings: {e:#}");
         crate::window::toast(&format!("Couldn't write Hyprland settings: {e}"));
     }
+    super::profiles::sync_active(&state);
     if RELOAD_AFTER.with(|r| r.replace(false)) {
         hypr::reload();
     }

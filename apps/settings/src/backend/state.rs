@@ -87,6 +87,9 @@ pub struct State {
     /// (process name -> command).
     pub autostart: BTreeMap<String, String>,
     pub window_rules: Vec<Rule>,
+    /// Window rules from the active workspace profile (its apps' workspaces); replaced
+    /// whenever a profile is switched to.
+    pub profile_rules: Vec<Rule>,
     pub layer_rules: Vec<Rule>,
     /// Workspaces 1..=N always exist, even when empty (0: Hyprland's default).
     pub persistent_workspaces: u32,
