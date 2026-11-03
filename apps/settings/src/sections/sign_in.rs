@@ -82,6 +82,9 @@ pub fn build(page: &Page) {
     let uses = page.group("Where they're used");
     uses.note("Changes to sign-in open a terminal that shows exactly what changes and tests it before keeping it.");
     let uses_h = holder(&uses, "");
+    let ssh = page.group("SSH keys on a security key");
+    ssh.note("The private key stays on the security key; each use needs a touch. Keys kept in the vault are Nyx Passwords' to serve.");
+    let ssh_h = holder(&ssh, "");
     let hw = page.collapsible("This computer", false);
     let hw_h = holder(&hw, "");
 
@@ -134,6 +137,7 @@ pub fn build(page: &Page) {
         ways_h.append(&r);
 
         surface_rows(&uses_h, &status);
+        ssh_rows(&ssh_h, &status["ssh_keys"]);
 
         for f in status["findings"].as_array().into_iter().flatten() {
             let msg = f["message"].as_str().unwrap_or_default();
@@ -263,6 +267,46 @@ fn keys_rows(h: &gtk::Box, keys: &Value) {
     h.append(&r);
 }
 
+/// The plain SSH key names `nyx-authctl ssh-key create` accepts.
+fn ssh_name(name: &str) -> Option<String> {
+    let name = name.trim();
+    let ok = !name.is_empty() && name.len() <= 32 && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    ok.then(|| name.to_string())
+}
+
+fn ssh_rows(h: &gtk::Box, keys: &Value) {
+    clear(h);
+    for k in keys.as_array().into_iter().flatten() {
+        let r = widgets::row(
+            k["comment"].as_str().filter(|c| !c.is_empty()).unwrap_or_else(|| k["file"].as_str().unwrap_or("SSH key")),
+            &format!("~/.ssh/{}.pub · {}", k["file"].as_str().unwrap_or_default(), k["kind"].as_str().unwrap_or_default()),
+            None,
+        );
+        widgets::keywords("ssh key security key fido2");
+        h.append(&r);
+    }
+    let (r, _) = widgets::entry_row(
+        "New SSH key",
+        "Made on the plugged-in security key and kept there, so another computer can fetch it. Each use asks for the key's PIN.",
+        "",
+        "name, such as github",
+        |name| match ssh_name(&name) {
+            Some(n) => in_terminal(&format!("nyx-authctl ssh-key create {n} --pin")),
+            None => window::toast("Use letters, digits, dashes or underscores in the name"),
+        },
+    );
+    widgets::keywords("ssh key security key fido2 new create github");
+    h.append(&r);
+    let (r, _) = widgets::button_row(
+        "Bring keys to this computer",
+        "Fetch the SSH keys kept on a security key into ~/.ssh.",
+        "Load…",
+        |_| in_terminal("nyx-authctl ssh-key load"),
+    );
+    widgets::keywords("ssh key security key load resident");
+    h.append(&r);
+}
+
 const METHODS: [(&str, &str); 3] = [("face", "Face"), ("fingerprint", "Fingerprint"), ("security-key", "Security key")];
 
 fn surface_rows(h: &gtk::Box, status: &Value) {
@@ -342,6 +386,14 @@ fn surface_rows(h: &gtk::Box, status: &Value) {
 #[cfg(test)]
 mod tests {
     use super::safe_name;
+
+    #[test]
+    fn ssh_names_are_shell_safe() {
+        assert_eq!(super::ssh_name(" github "), Some("github".into()));
+        assert!(super::ssh_name("a b").is_none());
+        assert!(super::ssh_name("x'; rm -rf ~").is_none());
+        assert!(super::ssh_name("").is_none());
+    }
 
     #[test]
     fn key_names_are_shell_safe() {
