@@ -115,4 +115,5 @@ pub fn build(page: &Page) {
         Sketch::MiddlePaste,
     ));
     super::workspace_rules::build(page);
+    super::own_titlebars::build(page);
 }

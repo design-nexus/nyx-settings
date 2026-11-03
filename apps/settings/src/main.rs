@@ -39,7 +39,8 @@ const USAGE: &str = "Usage: nyx-settings [--section ID] [--volume raise|lower|+N
   --install-helper  (run with sudo) install the root helper that system changes (users, firewall, time, services, printers) need\n\
   --apply        rewrite ~/.config/hypr/settings.lua from saved state and exit\n\
   --workspace-profile NAME  switch to a workspace profile (and move its apps' open windows)\n\
-  --workspace-profiles      list the workspace profiles (* marks the active one)\n";
+  --workspace-profiles      list the workspace profiles (* marks the active one)\n\
+  --own-titlebar APP [off]  no Omarchy titlebar on floating workspaces for an app that draws its own\n";
 
 fn main() -> glib::ExitCode {
     nyx_core::app::init(nyx_core::app::App { slug: "nyx-settings", name: "Settings" });
@@ -155,6 +156,23 @@ fn main() -> glib::ExitCode {
             return glib::ExitCode::FAILURE;
         };
         return match backend::profiles::switch(name) {
+            Ok(msg) => {
+                println!("{msg}");
+                glib::ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("nyx-settings: {e:#}");
+                glib::ExitCode::FAILURE
+            }
+        };
+    }
+    if let Some(i) = args.iter().position(|a| a == "--own-titlebar") {
+        let Some(app) = args.get(i + 1) else {
+            eprintln!("nyx-settings: --own-titlebar takes an app's desktop id");
+            return glib::ExitCode::FAILURE;
+        };
+        let on = args.get(i + 2).map(String::as_str) != Some("off");
+        return match backend::titlebars::set(app, on) {
             Ok(msg) => {
                 println!("{msg}");
                 glib::ExitCode::SUCCESS

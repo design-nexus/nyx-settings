@@ -90,6 +90,9 @@ pub struct State {
     /// Window rules from the active workspace profile (its apps' workspaces); replaced
     /// whenever a profile is switched to.
     pub profile_rules: Vec<Rule>,
+    /// Apps that draw their own titlebar, so Omarchy's floating titlebar is left off
+    /// (`None`: the built-in list; see `backend::titlebars`).
+    pub own_titlebar_apps: Option<Vec<String>>,
     pub layer_rules: Vec<Rule>,
     /// Workspaces 1..=N always exist, even when empty (0: Hyprland's default).
     pub persistent_workspaces: u32,

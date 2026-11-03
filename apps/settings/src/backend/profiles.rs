@@ -66,25 +66,30 @@ pub fn to_state(profile: &Profile, state: &mut State, index: &Index) {
     state.profile_rules = placement_rules(profile, index);
 }
 
+/// A class pattern matching an app's windows (a desktop id, or `class:<class>`),
+/// ignoring case, since apps and desktop files disagree on it.
+pub fn class_pattern(app: &str, index: &Index) -> Option<String> {
+    let mut classes = match app.strip_prefix("class:") {
+        Some(class) => vec![class.to_lowercase()],
+        None => index.classes_of(app),
+    };
+    if classes.is_empty() {
+        classes.push(app.to_lowercase());
+    }
+    // Rule text can't hold quotes or backslashes; a '.' left unescaped matches itself
+    // (and anything else, which is harmless here).
+    classes.retain(|c| !c.is_empty() && c.chars().all(|ch| !ch.is_control() && !"\"\\()|@".contains(ch)));
+    (!classes.is_empty()).then(|| format!("(?i)^({})$", classes.join("|")))
+}
+
 /// A window rule per app: its windows open on its workspace (without taking you there).
-/// Classes are matched ignoring case, since apps and desktop files disagree on it.
 pub fn placement_rules(profile: &Profile, index: &Index) -> Vec<Rule> {
     profile
         .apps
         .iter()
         .filter_map(|a| {
-            let mut classes = match a.app.strip_prefix("class:") {
-                Some(class) => vec![class.to_lowercase()],
-                None => index.classes_of(&a.app),
-            };
-            if classes.is_empty() {
-                classes.push(a.app.to_lowercase());
-            }
-            // Rule text can't hold quotes or backslashes; a '.' left unescaped matches
-            // itself (and anything else, which is harmless here).
-            classes.retain(|c| !c.is_empty() && c.chars().all(|ch| !ch.is_control() && !"\"\\()|".contains(ch)));
-            (!classes.is_empty()).then(|| Rule {
-                class: format!("(?i)^({})$", classes.join("|")),
+            Some(Rule {
+                class: class_pattern(&a.app, index)?,
                 title: String::new(),
                 effect: "workspace".into(),
                 value: format!("{} silent", a.workspace),

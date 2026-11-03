@@ -27,5 +27,6 @@ pub mod store;
 pub mod streams;
 pub mod sysinfo;
 pub mod themehook;
+pub mod titlebars;
 pub mod udisks;
 pub mod updates;

@@ -95,6 +95,8 @@ pub fn generate(state: &State, self_cmd: &str) -> String {
         }
     }
 
+    out.push_str(&super::titlebars::lua(&super::titlebars::apps(state), &nyx_desktop::apps::from_gio()));
+
     let ws_lines = workspace_lines(state);
     if !ws_lines.is_empty() {
         out.push_str("\n-- Workspaces\n");
@@ -309,7 +311,9 @@ mod tests {
 
     #[test]
     fn empty_state_is_just_the_header() {
-        assert_eq!(generate(&State::default(), "settings"), HEADER);
+        // An explicitly empty titlebar list: the built-in one depends on what's installed.
+        let state = State { own_titlebar_apps: Some(Vec::new()), ..Default::default() };
+        assert_eq!(generate(&state, "settings"), HEADER);
     }
 
     #[test]

@@ -35,6 +35,7 @@ pub mod mouse;
 pub mod network;
 pub mod nightlight;
 pub mod nyx;
+pub mod own_titlebars;
 pub mod online_accounts;
 pub mod online_presets;
 pub mod plugins;
