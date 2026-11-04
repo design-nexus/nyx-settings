@@ -346,8 +346,8 @@ pub fn build(page: &Page) {
     past_last.set_sensitive(!looping);
     let (count_row, _) = widgets::slider_row(
         "Workspaces to swipe through",
-        "1 to this many, like the bar shows, including empty ones. Swipes never go past the last one \
-         (with Loop around, they wrap back to 1).",
+        "1 to this many always stay open, like the bar shows, including empty ones; any other open workspace \
+         joins them. Swipes never go past the last one (with Loop around, they wrap back to the first).",
         (2.0, 10.0, 1.0),
         loop_count.max(2) as f64,
         0,

@@ -94,7 +94,8 @@ pub struct Gestures {
     /// Workspace swipes wrap around: past the last workspace comes the first.
     pub loop_workspaces: bool,
     /// Workspaces 1 to this always exist (like the bar shows them), so swipes
-    /// reach empty ones too; it's also the range the loop wraps around.
+    /// reach empty ones too. With Hyprland's native wrap the loop also takes in
+    /// any higher workspace that's open; the fallback wraps around 1..N only.
     pub loop_count: u32,
 }
 
@@ -136,11 +137,26 @@ fn dispatch(dsp: &str) -> String {
 /// Name of the Lua helper that steps through workspaces 1..N with wrap-around.
 const STEP_FN: &str = "settings_workspace_step";
 
-/// Defined once, before any gesture that uses it. Off the ends of 1..N (on a
-/// higher-numbered workspace) the next step lands on 1, the previous on N.
+/// Whether the running Hyprland wraps workspace swipes itself
+/// (`gestures:workspace_swipe_wrap`, from the Nyx patch). `hl.get_config` returns
+/// nil for an option it doesn't know, where `hl.config` would show a config error.
+const NATIVE_WRAP: &str = "settings_native_wrap";
+
+fn native_wrap_check() -> String {
+    format!("local {NATIVE_WRAP} = hl.get_config(\"gestures.workspace_swipe_wrap\") ~= nil")
+}
+
+/// Defined once, before any gesture that uses it. With native wrap it steps
+/// through whatever workspaces the monitor has (`m+1` wraps); otherwise, off the
+/// ends of 1..N (on a higher-numbered workspace) the next step lands on 1, the
+/// previous on N.
 fn step_helper() -> String {
     format!(
         "local function {STEP_FN}(delta, count)\n\
+         \x20 if {NATIVE_WRAP} then\n\
+         \x20   hl.dispatch(hl.dsp.focus({{ workspace = delta > 0 and \"m+1\" or \"m-1\" }}))\n\
+         \x20   return\n\
+         \x20 end\n\
          \x20 local ws = hl.get_active_workspace()\n\
          \x20 local id = ws and ws.id or 1\n\
          \x20 local target\n\
@@ -224,35 +240,40 @@ pub fn physical(set: &FingerSet, dir: &str) -> &'static str {
     }
 }
 
-/// Placeholder workspaces either side of 1..N. Hyprland's smooth swipe can't
-/// wrap, but it slides into any workspace that exists, so these give it
-/// somewhere to go past each end; arriving on one jumps to the other end of the
-/// loop. The bar only shows workspaces 1-10, so neither appears there. A named
-/// workspace gets a negative id, which puts it before 1.
+/// Fallback for a Hyprland without native wrap: placeholder workspaces either
+/// side of 1..N. Stock Hyprland's smooth swipe can't wrap, but it slides into
+/// any workspace that exists, so these give it somewhere to go past each end;
+/// arriving on one jumps to the other end of the loop. The bar only shows
+/// workspaces 1-10, so neither appears there. A named workspace gets a negative
+/// id, which puts it before 1.
 pub const LOOP_START: &str = "settings-loop-start";
 pub const LOOP_END_ID: u32 = 11;
 
 fn loop_redirect(count: u32) -> String {
     format!(
-        "hl.workspace_rule({{ workspace = \"name:{LOOP_START}\", monitor = settings_gesture_monitor, persistent = true }})\n\
-hl.workspace_rule({{ workspace = \"{LOOP_END_ID}\", monitor = settings_gesture_monitor, persistent = true }})\n\
-local settings_loop_last = (hl.get_active_workspace() or {{ id = 1 }}).id\n\
-hl.on(\"workspace.active\", function()\n\
-\x20 local ws = hl.get_active_workspace()\n\
-\x20 if not ws then return end\n\
-\x20 local target\n\
-\x20 if ws.name == \"{LOOP_END_ID}\" then\n\
-\x20   -- Past the last: normally wrap to 1 (or to the last when backing out of 1).\n\
-\x20   target = settings_loop_last == 1 and {count} or 1\n\
-\x20 elseif ws.name == \"{LOOP_START}\" then\n\
-\x20   target = settings_loop_last == {count} and 1 or {count}\n\
-\x20 else\n\
-\x20   settings_loop_last = ws.id\n\
-\x20   return\n\
-\x20 end\n\
-\x20 -- Just after the swipe finishes, never while it's still running.\n\
-\x20 hl.timer(function() hl.dispatch(hl.dsp.focus({{ workspace = tostring(target) }})) end, {{ timeout = 30, type = \"oneshot\" }})\n\
-end)"
+        "if {NATIVE_WRAP} then\n\
+\x20 hl.config({{ gestures = {{ workspace_swipe_wrap = true }} }})\n\
+else\n\
+\x20 hl.workspace_rule({{ workspace = \"name:{LOOP_START}\", monitor = settings_gesture_monitor, persistent = true }})\n\
+\x20 hl.workspace_rule({{ workspace = \"{LOOP_END_ID}\", monitor = settings_gesture_monitor, persistent = true }})\n\
+\x20 local settings_loop_last = (hl.get_active_workspace() or {{ id = 1 }}).id\n\
+\x20 hl.on(\"workspace.active\", function()\n\
+\x20   local ws = hl.get_active_workspace()\n\
+\x20   if not ws then return end\n\
+\x20   local target\n\
+\x20   if ws.name == \"{LOOP_END_ID}\" then\n\
+\x20     -- Past the last: normally wrap to 1 (or to the last when backing out of 1).\n\
+\x20     target = settings_loop_last == 1 and {count} or 1\n\
+\x20   elseif ws.name == \"{LOOP_START}\" then\n\
+\x20     target = settings_loop_last == {count} and 1 or {count}\n\
+\x20   else\n\
+\x20     settings_loop_last = ws.id\n\
+\x20     return\n\
+\x20   end\n\
+\x20   -- Just after the swipe finishes, never while it's still running.\n\
+\x20   hl.timer(function() hl.dispatch(hl.dsp.focus({{ workspace = tostring(target) }})) end, {{ timeout = 30, type = \"oneshot\" }})\n\
+\x20 end)\n\
+end"
     )
 }
 
@@ -296,12 +317,16 @@ pub fn lua(g: &Gestures) -> Vec<String> {
     // Omarchy can add a virtual display. Keep the swipe path on the laptop
     // panel instead of letting empty persistent workspaces land on HEADLESS-1.
     out.push("local settings_gesture_monitor = (function() local active = hl.get_active_monitor(); for _, monitor in ipairs(hl.get_monitors()) do if monitor.name:match(\"^eDP\") or monitor.name:match(\"^LVDS\") or monitor.name:match(\"^DSI\") then return monitor.name end end; return active and active.name or nil end)()".into());
+    if loop_count.is_some() {
+        out.push(native_wrap_check());
+    }
     // Keep 1..N alive even when empty. Hyprland removes empty workspaces, and a
     // swipe only moves between workspaces that exist, so without this it would
     // skip straight over the empty ones the bar still shows.
     for id in 1..=count {
         out.push(format!("hl.workspace_rule({{ workspace = \"{id}\", monitor = settings_gesture_monitor, persistent = true }})"));
     }
+    let helper_at = out.len();
     let invert3 = set_lines(3, &g.three, loop_count, &mut out);
     let invert4 = set_lines(4, &g.four, loop_count, &mut out);
     let smooth_loop = loop_count.is_some() && (invert3.is_some() || invert4.is_some());
@@ -309,7 +334,7 @@ pub fn lua(g: &Gestures) -> Vec<String> {
         out.push(loop_redirect(count));
     }
     if out.iter().any(|l| l.contains(STEP_FN)) {
-        out.insert(count as usize + 1, step_helper());
+        out.insert(helper_at, step_helper());
     }
     if smooth_loop || out.iter().any(|l| l.contains(STEP_FN)) {
         // Slide in from the correct side when wrapping from the last to the first.
@@ -423,6 +448,27 @@ mod tests {
         assert!(r.contains("settings_loop_last == 5 and 1 or 5"));
         assert!(lines.iter().any(|l| l.contains("workspace_wraparound = true")));
         assert!(lines.iter().any(|l| l.contains("workspace_swipe_invert = true")));
+    }
+
+    #[test]
+    fn loop_prefers_native_wrap() {
+        let lines = lua(&looping());
+        let check = lines.iter().position(|l| l.contains("local settings_native_wrap = hl.get_config(\"gestures.workspace_swipe_wrap\") ~= nil"));
+        let rules = lines.iter().position(|l| l.contains("workspace = \"1\""));
+        assert!(check.is_some() && check < rules, "checked before anything uses it");
+        let r = lines.iter().find(|l| l.contains("settings-loop-start")).unwrap();
+        let native = r.find("workspace_swipe_wrap = true").unwrap();
+        let fallback = r.find("else").unwrap();
+        assert!(r.starts_with("if settings_native_wrap then") && native < fallback);
+        assert!(r[fallback..].contains("name:settings-loop-start"), "placeholders only as the fallback");
+        let step = lines.iter().find(|l| l.starts_with("local function settings_workspace_step")).unwrap();
+        assert!(step.contains("if settings_native_wrap then") && step.contains("\"m+1\" or \"m-1\""));
+    }
+
+    #[test]
+    fn no_native_check_without_loop() {
+        let lines = lua(&Gestures { enabled: true, ..Gestures::default() });
+        assert!(!lines.iter().any(|l| l.contains("settings_native_wrap")));
     }
 
     #[test]
