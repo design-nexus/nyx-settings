@@ -627,7 +627,7 @@ pub fn build(page: &Page) {
         page.body.append(&notice);
     }
     let g = page.group("Add a mount");
-    g.note("Adding one asks for your password once, then remembers it for a few minutes (Users can turn this off).");
+    g.note(crate::platform::mounts_note());
     let flow = gtk::FlowBox::new();
     flow.set_selection_mode(gtk::SelectionMode::None);
     flow.set_homogeneous(true);

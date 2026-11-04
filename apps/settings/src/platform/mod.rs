@@ -155,6 +155,18 @@ pub fn provide_tool(program: &str, package: &'static str) -> bool {
     }
 }
 
+/// How adding a mount is asked for.
+pub fn mounts_note() -> &'static str {
+    match PLATFORM {
+        Platform::NyxOS => {
+            "Adding one asks for an administrator's password; it becomes part of the system configuration, which is rebuilt."
+        }
+        Platform::Omarchy => {
+            "Adding one asks for your password once, then remembers it for a few minutes (Users can turn this off)."
+        }
+    }
+}
+
 /// Whether system changes can be made now (Omarchy needs its root helper installed).
 pub fn system_ready() -> bool {
     match PLATFORM {
