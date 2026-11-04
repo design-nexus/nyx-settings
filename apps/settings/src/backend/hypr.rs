@@ -314,10 +314,12 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn empty_state_is_just_the_header() {
+    fn empty_state_is_the_header_and_the_titlebar_rules() {
         // An explicitly empty titlebar list: the built-in one depends on what's installed.
+        // Nyx's own windows always get their titlebar rule.
         let state = State { own_titlebar_apps: Some(Vec::new()), ..Default::default() };
-        assert_eq!(generate(&state, "settings"), HEADER);
+        let titlebars = super::super::titlebars::lua(&[], &nyx_desktop::apps::from_gio(), false);
+        assert_eq!(generate(&state, "settings"), format!("{HEADER}{titlebars}"));
     }
 
     #[test]
