@@ -9,10 +9,10 @@ edition = "2024"
 default-run = "nyx-settings"
 
 [dependencies]
-nyx-cloud = { git = "https://github.com/design-nexus/nyx-cloud.git", rev = "709168078a32a3fe93632574c00281fbe5cdd01f" }
-nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "9dc196245bbf0ccc93b8bf04ac61bb476b85e4d5" }
-nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "b723d5535652a8e23e4676c328a02900fd17be0f" }
-nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "b723d5535652a8e23e4676c328a02900fd17be0f" }
+nyx-cloud = { git = "https://github.com/design-nexus/nyx-cloud.git", rev = "ba6385f60597a9ca6ebd5fb63836a1ea3dfa0f49" }
+nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "394ddf8193797cd1f420fac98b097d04fa75f0e2" }
+nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "d2398b346b6bc414cc031b0a08a1b2a9a0f6ee2e" }
+nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "d2398b346b6bc414cc031b0a08a1b2a9a0f6ee2e" }
 nyx-share-client = { git = "https://github.com/design-nexus/nyx-share.git", rev = "53a5cacbc46a4269ba40a0fb17c1ee07f12e5177" }
 anyhow = "1.0.104"
 gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
@@ -24,5 +24,5 @@ wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 
 nyx-accounts-native = { package = "nyx-accounts-service", git = "https://github.com/design-nexus/nyx-accounts.git", rev = "afdc1482cb910746f942556090870d3ec083dd34" }
 
-nyx-desktop = { git = "https://github.com/design-nexus/nyx-core.git", rev = "ce9cdf835790b2347a3bc5d65ef2d45f634132d5" }
-nyx-pim = { git = "https://github.com/design-nexus/nyx-core.git", rev = "9dc196245bbf0ccc93b8bf04ac61bb476b85e4d5" }
+nyx-desktop = { git = "https://github.com/design-nexus/nyx-core.git", rev = "394ddf8193797cd1f420fac98b097d04fa75f0e2" }
+nyx-pim = { git = "https://github.com/design-nexus/nyx-core.git", rev = "394ddf8193797cd1f420fac98b097d04fa75f0e2" }
