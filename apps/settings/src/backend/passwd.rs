@@ -18,8 +18,10 @@ pub struct User {
 }
 
 impl User {
+    /// A person's account: a uid in people's range and a shell to sign in with (NixOS's
+    /// build users have uids there too, but no shell).
     pub fn is_human(&self) -> bool {
-        (FIRST_UID..LAST_UID).contains(&self.uid)
+        (FIRST_UID..LAST_UID).contains(&self.uid) && !self.shell.ends_with("/nologin") && !self.shell.ends_with("/false")
     }
 }
 

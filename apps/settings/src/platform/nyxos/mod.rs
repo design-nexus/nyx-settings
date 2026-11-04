@@ -7,6 +7,7 @@ pub mod accounts;
 pub mod layout;
 pub mod pages;
 pub mod printers;
+pub mod users;
 
 use crate::sections::home::Hero;
 use crate::widgets::{self, Page};

@@ -64,6 +64,7 @@ pub fn apply(list: &mut [Section]) {
         };
         let own: Option<fn(&crate::widgets::Page)> = match s.id {
             "online-accounts" => Some(super::accounts::build),
+            "accounts" => Some(super::users::build),
             "region" => Some(super::pages::region),
             "services" => Some(super::pages::services),
             "software" => Some(super::pages::software),

@@ -66,7 +66,7 @@ fn args(list: &[&str]) -> Vec<String> {
 }
 
 /// Check a new password typed twice.
-fn password_problem(a: &str, b: &str) -> Option<String> {
+pub(crate) fn password_problem(a: &str, b: &str) -> Option<String> {
     if a.is_empty() {
         Some("Enter a password.".into())
     } else if a != b {
