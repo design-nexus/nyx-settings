@@ -5,6 +5,7 @@
 
 pub mod accounts;
 pub mod layout;
+pub mod lock;
 pub mod mounts;
 pub mod pages;
 pub mod printers;

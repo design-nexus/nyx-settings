@@ -38,6 +38,8 @@ pub enum Sketch {
     ResizeOnBorder,
     /// The bar at the "top", "bottom", "left" or "right".
     Bar(&'static str),
+    /// A lock screen's sign-in indicator: "circular", "cyberpunk", "minimal" or "edge".
+    LockStyle(&'static str),
 }
 
 /// The theme's colours, as Cairo wants them.
@@ -510,6 +512,67 @@ pub fn draw(cr: &Context, s: Sketch, w: f64, h: f64, on: bool) {
             let (a, b) = body.hsplit(0.5, g);
             win(cr, &p, a, focused);
             win(cr, &p, b, plain);
+        }
+        Sketch::LockStyle(style) => {
+            rounded(cr, area.x, area.y, area.w, area.h, 2.5);
+            set(cr, mix(p.bg, (0.0, 0.0, 0.0), 0.4), 1.0);
+            let _ = cr.fill();
+            // The clock, and the card with the password under the indicator.
+            set(cr, p.text, 0.85);
+            rounded(cr, area.cx() - 14.0, area.y + 6.0, 28.0, 6.0, 2.0);
+            let _ = cr.fill();
+            let card = R::new(area.cx() - 26.0, area.y + 17.0, 52.0, area.h - 22.0);
+            rounded(cr, card.x, card.y, card.w, card.h, 4.0);
+            set(cr, p.surface, 0.95);
+            let _ = cr.fill();
+            set(cr, p.dim, 0.6);
+            rounded(cr, card.x + 6.0, card.y + card.h - 10.0, card.w - 12.0, 5.0, 2.0);
+            cr.set_line_width(0.8);
+            let _ = cr.stroke();
+            let (cx, cy) = (card.cx(), card.y + (card.h - 12.0) / 2.0);
+            match style {
+                "cyberpunk" => {
+                    let r = 11.0;
+                    cr.set_line_width(1.4);
+                    set(cr, p.accent, 1.0);
+                    for (sx, sy) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+                        cr.move_to(cx + sx * r, cy + sy * (r - 4.0));
+                        cr.line_to(cx + sx * r, cy + sy * r);
+                        cr.line_to(cx + sx * (r - 4.0), cy + sy * r);
+                    }
+                    let _ = cr.stroke();
+                    set(cr, p.accent, 0.8);
+                    cr.rectangle(cx - r + 2.0, cy - 2.0, 2.0 * r - 4.0, 1.2);
+                    let _ = cr.fill();
+                }
+                "minimal" => {
+                    set(cr, p.accent, 0.9);
+                    cr.arc(cx, cy, 4.0, 0.0, 2.0 * PI);
+                    let _ = cr.fill();
+                    set(cr, p.accent, 0.3);
+                    cr.arc(cx, cy, 7.0, 0.0, 2.0 * PI);
+                    cr.set_line_width(1.0);
+                    let _ = cr.stroke();
+                }
+                "edge" => {
+                    for i in 0..4 {
+                        let d = i as f64 * 1.5;
+                        rounded(cr, area.x + d, area.y + d, area.w - 2.0 * d, area.h - 2.0 * d, 2.5);
+                        set(cr, p.accent, 0.7 - i as f64 * 0.17);
+                        cr.set_line_width(1.5);
+                        let _ = cr.stroke();
+                    }
+                }
+                _ => {
+                    set(cr, p.dim, 0.35);
+                    cr.arc(cx, cy, 10.0, 0.0, 2.0 * PI);
+                    cr.set_line_width(2.0);
+                    let _ = cr.stroke();
+                    set(cr, p.accent, 1.0);
+                    cr.arc(cx, cy, 10.0, -PI / 2.0, PI / 2.0);
+                    let _ = cr.stroke();
+                }
+            }
         }
     }
 }

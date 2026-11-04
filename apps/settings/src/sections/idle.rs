@@ -6,7 +6,7 @@ use serde_json::json;
 use std::cell::Cell;
 use std::rc::Rc;
 
-fn minutes_label(secs: i64) -> String {
+pub fn minutes_label(secs: i64) -> String {
     if secs <= 0 { "Never".into() } else { format!("{} min", secs / 60) }
 }
 
@@ -32,8 +32,9 @@ fn idle_row(key: &'static str, title: &str, desc: &str, default: i64, times: Tim
     r
 }
 
-/// A line from "you stop" to the screensaver and the lock, at their minutes.
-fn timeline(times: Times) -> gtk::DrawingArea {
+/// A line from "you stop" to what happens when, at their minutes: `marks` gives
+/// (seconds, name) on every draw, 0 seconds for never.
+pub fn timeline(marks: impl Fn() -> Vec<(i64, &'static str)> + 'static) -> gtk::DrawingArea {
     use crate::sketch::{self, mix, rounded, set};
     let area = gtk::DrawingArea::new();
     area.set_content_height(74);
@@ -41,8 +42,9 @@ fn timeline(times: Times) -> gtk::DrawingArea {
     area.set_draw_func(move |_, cr, w, _h| {
         let p = sketch::pal();
         let w = w as f64;
-        let (saver, lock) = times.get();
-        let end = (saver.max(lock) as f64 / 60.0 + 5.0).clamp(15.0, 65.0);
+        let mut marks: Vec<(i64, &str)> = marks().into_iter().filter(|m| m.0 > 0).collect();
+        let last = marks.iter().map(|m| m.0).max().unwrap_or(0);
+        let end = (last as f64 / 60.0 + 5.0).clamp(15.0, 125.0);
         let (x0, x1, y) = (16.0, w - 16.0, 30.0);
         let at = |secs: i64| x0 + (x1 - x0) * (secs as f64 / 60.0 / end);
         set(cr, p.dim, 0.35);
@@ -66,20 +68,13 @@ fn timeline(times: Times) -> gtk::DrawingArea {
         cr.arc(x0, y, 5.0, 0.0, std::f64::consts::TAU);
         let _ = cr.fill();
         text(cr, "You stop", x0 + 20.0, y - 12.0, p.dim, false);
-        let mut marks: Vec<(i64, &str)> = Vec::new();
-        if saver > 0 {
-            marks.push((saver, "Screensaver"));
-        }
-        if lock > 0 {
-            marks.push((lock, "Lock"));
-        }
         marks.sort_by_key(|m| m.0);
         for (i, (secs, name)) in marks.iter().enumerate() {
             let x = at(*secs);
             set(cr, mix(p.accent, p.text, 0.0), 1.0);
             cr.arc(x, y, 6.0, 0.0, std::f64::consts::TAU);
             let _ = cr.fill();
-            let below = i % 2 == 1 && marks.len() > 1 && (at(marks[1].0) - at(marks[0].0)) < 110.0;
+            let below = i % 2 == 1 && (x - at(marks[i - 1].0)) < 110.0;
             let ly = if below { y + 32.0 } else { y + 22.0 };
             text(cr, &format!("{name} · {} min", secs / 60), x, ly, p.text, true);
         }
@@ -95,7 +90,11 @@ pub fn build(page: &Page) {
     let saver = shell::get(&["idle", "screensaver"]).and_then(|v| v.as_i64()).unwrap_or(150);
     let lock = shell::get(&["idle", "lock"]).and_then(|v| v.as_i64()).unwrap_or(300);
     let times: Times = Rc::new(Cell::new((saver, lock)));
-    let line = timeline(times.clone());
+    let t = times.clone();
+    let line = timeline(move || {
+        let (saver, lock) = t.get();
+        vec![(saver, "Screensaver"), (lock, "Lock")]
+    });
     let card = gtk::Box::new(gtk::Orientation::Vertical, 0);
     card.add_css_class("preview-card");
     card.append(&line);

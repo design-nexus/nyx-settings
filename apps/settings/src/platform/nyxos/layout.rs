@@ -69,6 +69,7 @@ pub fn apply(list: &mut [Section]) {
             "services" => Some(super::pages::services),
             "software" => Some(super::pages::software),
             "boot" => Some(super::pages::boot),
+            "idle" => Some(super::lock::build),
             _ => None,
         };
         if let Some(build) = own {
