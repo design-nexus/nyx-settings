@@ -19,12 +19,8 @@ const TIMES: [(&str, &str, &str, i64, f64, &str); 3] = [
     ("suspend", "Sleep after", "0 never sleeps on its own; closing the lid still can.", 0, 120.0, "Sleep"),
 ];
 
-const STYLES: [(&str, &str); 4] = [
-    ("circular", "Circular face scan"),
-    ("cyberpunk", "Cyberpunk scanner"),
-    ("minimal", "Minimal floating"),
-    ("edge", "Edge glow"),
-];
+const STYLES: [(&str, &str); 4] =
+    [("circular", "Circular"), ("cyberpunk", "Cyberpunk"), ("minimal", "Minimal"), ("edge", "Edge glow")];
 
 /// The transient unit that holds an idle inhibitor while Stay awake is on.
 const AWAKE_UNIT: &str = "nyx-stay-awake";
@@ -133,7 +129,8 @@ pub fn build(page: &Page) {
     widgets::keywords("idle timeout minutes screen off dpms sleep suspend lock");
 
     let g = page.group("Look");
-    let current = get("appearance", "lock-style").filter(|s| STYLES.iter().any(|(id, _)| id == s)).unwrap_or_else(|| "circular".into());
+    let current =
+        get("appearance", "lock-style").filter(|s| STYLES.iter().any(|(id, _)| id == s)).unwrap_or_else(|| "circular".into());
     let chosen = Rc::new(RefCell::new(current.clone()));
     let c = chosen.clone();
     let (r, _, _) = widgets::visual_choice(
@@ -155,11 +152,13 @@ pub fn build(page: &Page) {
         move |_| cmd::spawn(&["nyx-locker", "--demo", "--style", &c.borrow()]),
     );
     g.add(&r);
-    let ways = ways_in();
-    let desc = if ways.is_empty() {
-        "Your password. Sign-in sets up a fingerprint, your face or a security key.".to_string()
-    } else {
-        format!("Your password, or {}, all at once.", ways.join(" or "))
+    let mut ways = ways_in();
+    let desc = match ways.pop() {
+        None => "Your password. Sign-in sets up a fingerprint, your face or a security key.".to_string(),
+        Some(last) => {
+            ways.insert(0, "Your password".into());
+            format!("{} or {last}, whichever you use first.", ways.join(", "))
+        }
     };
     let (r, _) = widgets::button_row("Ways to unlock", &desc, "Sign-in", |_| window::navigate("sign-in"));
     widgets::keywords("lock style animation fingerprint face biometrics");
