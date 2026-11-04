@@ -84,10 +84,10 @@ fn flow_add(f: &gtk::FlowBox, w: &impl IsA<gtk::Widget>) {
 
 // ---------- Hero ----------
 
-struct Hero {
-    count: gtk::Label,
-    caption: gtk::Label,
-    badge: gtk::Button,
+pub(crate) struct Hero {
+    pub(crate) count: gtk::Label,
+    pub(crate) caption: gtk::Label,
+    pub(crate) badge: gtk::Button,
     uptime: gtk::Label,
 }
 
@@ -667,7 +667,7 @@ fn run_check(ui: &Rc<UpdatesUi>, force: bool) {
     );
 }
 
-fn updates_group(page: &Page, hero: Rc<Hero>) {
+pub(crate) fn updates_group(page: &Page, hero: Rc<Hero>) {
     let g = page.group("Updates");
     let ui = Rc::new(UpdatesUi { list: g.list.clone(), hero: hero.clone() });
     let cached = pkgupdates::cached();
@@ -684,23 +684,6 @@ fn updates_group(page: &Page, hero: Rc<Hero>) {
             root.vadjustment().set_value(p.y() as f64);
         }
     });
-}
-
-/// NyxOS: the generation in the badge; updates are on Software & Updates.
-fn nyxos_updates(page: &Page, hero: &Hero) {
-    let current = crate::nyxos::generations().into_iter().find(|g| g.current).map(|g| g.number);
-    hero.count.set_text(&current.map(|n| n.to_string()).unwrap_or_default());
-    hero.caption.set_text("Generation");
-    hero.badge.set_tooltip_text(Some("Software & Updates"));
-    hero.badge.connect_clicked(|_| window::navigate("software"));
-    let g = page.group("Updates");
-    let (r, _) = widgets::button_row(
-        &crate::nyxos::version(),
-        "NyxOS, its apps and the software for everyone update together. Software & Updates has the update and earlier generations.",
-        "Open",
-        |_| window::navigate("software"),
-    );
-    g.add(&r);
 }
 
 // ---------- Quick actions ----------
@@ -811,11 +794,7 @@ pub fn build(page: &Page) {
     let act = activity(page);
     start_sampling(page, tiles, act, hero.clone());
     storage(page, disk);
-    if crate::nyxos::active() {
-        nyxos_updates(page, &hero);
-    } else {
-        updates_group(page, hero);
-    }
+    crate::platform::home_updates(page, hero);
     quick_actions(page);
 }
 

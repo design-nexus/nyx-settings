@@ -344,15 +344,7 @@ pub fn set_nav_badge(id: &'static str, text: Option<&str>) {
 /// The theme's name for a group of pages (`[sections.settings]`): Home's pages
 /// have no group.
 fn section_key(group: &str) -> String {
-    // NyxOS's categories take the colours of the groups they come from.
-    let group = match group {
-        "Appearance" => "Personalization",
-        "Displays" | "Sound" | "Power" | "Storage & Backup" => "Hardware",
-        "Network" => "Connections",
-        "Security" => "Accounts",
-        "Apps & Defaults" => "System",
-        other => other,
-    };
+    let group = crate::platform::colour_group(group);
     if group.is_empty() { "home".into() } else { group.to_lowercase().replace(' ', "-") }
 }
 
@@ -362,7 +354,7 @@ fn fill_nav(list: &gtk::Box, sections: &[Section]) -> NavParts {
     let mut compact_items: Vec<gtk::Widget> = Vec::new();
     let mut last_group = "";
     for s in sections {
-        if !(s.visible)() || crate::sections::off_sidebar(s.id) {
+        if !(s.visible)() || crate::platform::off_sidebar(s.id) {
             continue;
         }
         if s.group != last_group {

@@ -67,9 +67,6 @@ fn list(user: bool) -> Vec<Unit> {
 }
 
 pub fn build(page: &Page) {
-    if crate::nyxos::active() {
-        return super::nyxos_pages::services(page);
-    }
     let can_edit = require_helper(page, "services", "starting and stopping system services");
     let mine = list(true);
     let system = list(false);

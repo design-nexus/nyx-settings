@@ -2,7 +2,7 @@
 //! and the boot and sign-in screens. Changes are collected on the page and applied
 //! together through the Nyx System Manager, as one rebuild.
 
-use crate::nyxos::{self, tag_system};
+use crate::platform::nyxos::{self, tag_system};
 use crate::widgets::{self, Page};
 use crate::{cmd, window};
 use gtk::prelude::*;

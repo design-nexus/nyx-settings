@@ -8,6 +8,10 @@ authors = ["Ken Smith"]
 edition = "2024"
 default-run = "nyx-settings"
 
+[features]
+# Settings for NyxOS: its sidebar, and system pages through the Nyx System Manager.
+nyxos = []
+
 [dependencies]
 nyx-cloud = { git = "https://github.com/design-nexus/nyx-cloud.git", rev = "ba6385f60597a9ca6ebd5fb63836a1ea3dfa0f49" }
 nyx-system-proto = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "7a9c74d4a964fbdf82435dbf89b4de94ed73e9d0" }

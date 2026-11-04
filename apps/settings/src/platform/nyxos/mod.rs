@@ -3,17 +3,19 @@
 //! switched to only when it builds, so pages collect what changed and apply it together.
 //! Settings asks the manager through `nyx-system`, never runs privileged commands itself.
 
+pub mod accounts;
+pub mod layout;
+pub mod pages;
+
+use crate::sections::home::Hero;
+use crate::widgets::{self, Page};
 use crate::{cmd, window};
+use gtk::prelude::*;
 use nyx_system_proto::{Change, SystemSettings};
 use std::cell::Cell;
 use std::path::Path;
 
 const PROFILES: &str = "/nix/var/nix/profiles";
-
-/// Whether this is NyxOS (NixOS with the Nyx System Manager).
-pub fn active() -> bool {
-    Path::new("/etc/NIXOS").exists() && Path::new("/etc/nyxos/system.toml").exists()
-}
 
 /// The System Manager's settings (empty when it can't be reached).
 pub fn settings() -> SystemSettings {
@@ -123,5 +125,41 @@ pub fn version() -> String {
 
 /// Mark a row as a system setting, applied with a rebuild.
 pub fn tag_system(row: &gtk::Box) {
-    crate::widgets::tag_row(row, "System");
+    widgets::tag_row(row, "System");
+}
+
+/// Home: the generation in the badge; updates are on Software & Updates.
+pub fn home_updates(page: &Page, hero: &Hero) {
+    let current = generations().into_iter().find(|g| g.current).map(|g| g.number);
+    hero.count.set_text(&current.map(|n| n.to_string()).unwrap_or_default());
+    hero.caption.set_text("Generation");
+    hero.badge.set_tooltip_text(Some("Software & Updates"));
+    hero.badge.connect_clicked(|_| window::navigate("software"));
+    let g = page.group("Updates");
+    let (r, _) = widgets::button_row(
+        &version(),
+        "NyxOS, its apps and the software for everyone update together. Software & Updates has the update and earlier generations.",
+        "Open",
+        |_| window::navigate("software"),
+    );
+    g.add(&r);
+}
+
+/// About: NyxOS's version and generation; updates and going back are on Software & Updates.
+pub fn about(page: &Page) {
+    let g = page.group("NyxOS");
+    let (r, _) = widgets::info_row("Version", &version());
+    g.add(&r);
+    if let Some(current) = generations().into_iter().find(|x| x.current) {
+        let (r, _) = widgets::info_row("Generation", &current.number.to_string());
+        g.add(&r);
+    }
+    let (r, _) = widgets::button_row(
+        "Updates and generations",
+        "Update NyxOS, or go back to an earlier generation.",
+        "Software & Updates",
+        |_| window::navigate("software"),
+    );
+    widgets::keywords("update upgrade rollback generation version nixos");
+    g.add(&r);
 }

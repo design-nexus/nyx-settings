@@ -305,6 +305,14 @@ It's built with Rust and gtk4-rs, and doesn't use libadwaita. Each sidebar page
 is one file in `src/sections/`, and the Hyprland and audio logic lives in
 `src/backend/`.
 
+Settings is built for one platform: Omarchy by default, or NyxOS with
+`--features nyxos` (`cargo run --features nyxos`), which NyxOS's package uses. The
+pages are shared; what a platform does its own way lives in `src/platform/`: NyxOS's
+twelve categories, its system pages (time and language, services and groups, software
+and updates, boot and sign-in) through the Nyx System Manager, its Accounts page, and
+its version and generation on Home and About. Pages don't check which platform they're
+on.
+
 ## License
 
 [MIT](LICENSE) © Ken Smith

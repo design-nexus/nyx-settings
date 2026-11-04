@@ -31,9 +31,6 @@ fn canonical_locale(l: &str) -> String {
 }
 
 pub fn build(page: &Page) {
-    if crate::nyxos::active() {
-        return super::nyxos_pages::region(page);
-    }
     let can_edit = require_helper(page, "region", "changing the date, language and name");
     time_group(page, can_edit);
     language_group(page, can_edit);
