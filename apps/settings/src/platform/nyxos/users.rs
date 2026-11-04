@@ -12,34 +12,44 @@ use crate::{cmd, window};
 use gtk::prelude::*;
 use nyx_system_proto::{Change, valid_full_name};
 
-/// Set `user`'s password through the System Manager (yours asks for your own).
-fn set_password(user: String, password: String) {
-    window::toast("Changing the password…");
+/// Run `nyx-system ARGS` with `input` on its stdin (a password never goes on a command
+/// line), then toast `done` or what went wrong and rebuild Users.
+fn with_stdin(args: Vec<String>, input: String, working: &str, done: &'static str) {
+    window::toast(working);
     cmd::background(
         move || -> Result<(), String> {
             use std::io::Write;
             let mut child = std::process::Command::new("nyx-system")
-                .args(["password", &user])
+                .args(&args)
                 .stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::piped())
                 .spawn()
                 .map_err(|e| e.to_string())?;
             if let Some(mut stdin) = child.stdin.take() {
-                stdin.write_all(format!("{password}\n").as_bytes()).map_err(|e| e.to_string())?;
+                stdin.write_all(format!("{input}\n").as_bytes()).map_err(|e| e.to_string())?;
             }
             let out = child.wait_with_output().map_err(|e| e.to_string())?;
             if out.status.success() {
-                Ok(())
-            } else {
-                Err(String::from_utf8_lossy(&out.stderr).trim().trim_start_matches("nyx-system: ").to_string())
+                return Ok(());
             }
+            let err = String::from_utf8_lossy(&out.stderr);
+            let last = err.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("it didn't work");
+            Err(last.trim().trim_start_matches("nyx-system: ").to_string())
         },
-        |r| match r {
-            Ok(()) => window::toast("Password changed"),
-            Err(e) => window::toast(&e),
+        move |r| {
+            match r {
+                Ok(()) => window::toast(done),
+                Err(e) => window::toast(&e),
+            }
+            window::rebuild("accounts");
         },
     );
+}
+
+/// Set `user`'s password through the System Manager (yours asks for your own).
+fn set_password(user: String, password: String) {
+    with_stdin(vec!["password".into(), user], password, "Changing the password…", "Password changed");
 }
 
 fn password_dialog(user: String, mine: bool) {
@@ -80,14 +90,12 @@ fn add_dialog() {
             if let Some(p) = password_problem(&v[2], &v[3]) {
                 return Some(p);
             }
-            let password = v[2].clone();
-            let login = name.clone();
-            nyxos::apply(vec![Change::AddPerson { name, full_name: full, admin }], "Account added", move |ok| {
-                if ok {
-                    set_password(login, password);
-                }
-                window::rebuild("accounts");
-            });
+            let mut args = vec!["person".to_string(), "add".into(), name, full];
+            if admin {
+                args.push("--admin".into());
+            }
+            args.push("--password-stdin".into());
+            with_stdin(args, v[2].clone(), "Adding the account. The system is rebuilt; it takes a minute.", "Account added");
             None
         },
     );
