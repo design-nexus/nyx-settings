@@ -87,6 +87,53 @@ pub fn firewall_group(page: &Page) {
     }
 }
 
+/// Whether the printing service (CUPS) is on.
+pub fn printing_on() -> bool {
+    let active = |unit: &str| crate::cmd::output(&["systemctl", "is-active", unit]).is_some_and(|s| s == "active");
+    match PLATFORM {
+        // NixOS starts CUPS from its socket when something prints.
+        Platform::NyxOS => active("cups.socket") || active("cups.service"),
+        Platform::Omarchy => active("cups.service"),
+    }
+}
+
+/// Turn the printing service (CUPS) on or off.
+pub fn set_printing(on: bool, section: &'static str) {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::set_service("printing", on, if on { "Printing is on" } else { "Printing is off" }, section),
+        Platform::Omarchy => crate::sections::accounts::run_admin(
+            &["service", if on { "enable-now" } else { "disable-now" }, "cups.service"],
+            None,
+            if on { "Printing is on" } else { "Printing is off" },
+            section,
+        ),
+    }
+}
+
+/// Add a driverless printer (`queue` is its CUPS name).
+pub fn printer_add(queue: &str, uri: &str, section: &'static str) {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::printers::add(queue, uri, section),
+        Platform::Omarchy => crate::sections::accounts::run_admin(&["printer-add", queue, uri], None, "Printer added", section),
+    }
+}
+
+pub fn printer_remove(queue: &str, section: &'static str) {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::printers::remove(queue, section),
+        Platform::Omarchy => crate::sections::accounts::run_admin(&["printer-remove", queue], None, "Printer removed", section),
+    }
+}
+
+pub fn printer_set_uri(queue: &str, uri: &str, section: &'static str) {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::printers::set_uri(queue, uri, section),
+        Platform::Omarchy => {
+            crate::sections::accounts::run_admin(&["printer-set-uri", queue, uri], None, "Printer updated", section)
+        }
+    }
+}
+
 /// The system's rows in Disks' Clean up group.
 pub fn system_cleanup(g: &crate::widgets::Group) {
     match PLATFORM {

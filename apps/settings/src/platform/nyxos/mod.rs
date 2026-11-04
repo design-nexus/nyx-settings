@@ -6,6 +6,7 @@
 pub mod accounts;
 pub mod layout;
 pub mod pages;
+pub mod printers;
 
 use crate::sections::home::Hero;
 use crate::widgets::{self, Page};
@@ -136,6 +137,11 @@ pub fn version() -> String {
     let name = field("NAME");
     let version = field("VERSION");
     format!("{} {}", if name.is_empty() { "NyxOS".into() } else { name }, version).trim().to_string()
+}
+
+/// Turn one of the System Manager's services on or off.
+pub fn set_service(name: &str, on: bool, done: &'static str, section: &'static str) {
+    apply(vec![Change::Service { name: name.into(), enabled: Some(on) }], done, move |_| window::rebuild(section));
 }
 
 pub fn set_power(key: &str, action: &str, section: &'static str) {

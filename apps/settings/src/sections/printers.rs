@@ -2,7 +2,6 @@
 //! your default and printing a test page don't.
 
 use crate::dialog::{Field, ask};
-use crate::sections::accounts::{require_helper, run_admin};
 use crate::widgets::{self, Page};
 use crate::{cmd, window};
 use gtk::prelude::*;
@@ -66,21 +65,19 @@ pub fn build(page: &Page) {
         page.banner("Printing isn't installed. Install cups to use printers: sudo pacman -S cups", true);
         return;
     }
-    let can_edit = require_helper(page, "printers", "adding and removing printers");
+    let (can_edit, notice) = crate::platform::system_notice("printers", "adding and removing printers");
+    if let Some(n) = notice {
+        page.body.append(&n);
+    }
     let g = page.group("Printing");
-    let on = cmd::output(&["systemctl", "is-active", "cups.service"]).is_some_and(|s| s == "active");
+    let on = crate::platform::printing_on();
     let (r, sw) = widgets::switch_row(
         "Printing service",
         "CUPS, which sends documents to printers. Turn it on to add or use printers.",
         on,
         move |now| {
             if now != on {
-                run_admin(
-                    &["service", if now { "enable-now" } else { "disable-now" }, "cups.service"],
-                    None,
-                    if now { "Printing is on" } else { "Printing is off" },
-                    "printers",
-                );
+                crate::platform::set_printing(now, "printers");
             }
         },
     );
@@ -170,7 +167,7 @@ fn fill(g: &widgets::Group, holder: &gtk::Box, can_edit: bool, printers: Vec<Pri
                         if uri.is_empty() {
                             return Some("Enter the printer's address.".into());
                         }
-                        run_admin(&["printer-set-uri", &name, &uri], None, "Printer updated", "printers");
+                        crate::platform::printer_set_uri(&name, &uri, "printers");
                         None
                     },
                 );
@@ -178,7 +175,7 @@ fn fill(g: &widgets::Group, holder: &gtk::Box, can_edit: bool, printers: Vec<Pri
             controls.append(&edit);
             let name = p.name.clone();
             controls.append(&widgets::confirm_button("Remove", "Remove printer?", move |_| {
-                run_admin(&["printer-remove", &name], None, "Printer removed", "printers")
+                crate::platform::printer_remove(&name, "printers")
             }));
         }
         let r = widgets::row(
@@ -228,7 +225,7 @@ fn fill(g: &widgets::Group, holder: &gtk::Box, can_edit: bool, printers: Vec<Pri
                             let (queue, u) = (queue_name(&name), uri.clone());
                             add.connect_clicked(move |b| {
                                 b.set_sensitive(false);
-                                run_admin(&["printer-add", &queue, &u], None, "Printer added", "printers");
+                                crate::platform::printer_add(&queue, &u, "printers");
                             });
                             results.append(&widgets::row(&name, &gtk::glib::markup_escape_text(&uri), Some(add.upcast_ref())));
                         }
@@ -249,7 +246,7 @@ fn fill(g: &widgets::Group, holder: &gtk::Box, can_edit: bool, printers: Vec<Pri
             return;
         }
         let host = uri.split("//").nth(1).and_then(|r| r.split(['/', ':']).next()).unwrap_or("Printer").to_string();
-        run_admin(&["printer-add", &queue_name(&host), &uri], None, "Printer added", "printers");
+        crate::platform::printer_add(&queue_name(&host), &uri, "printers");
     });
     widgets::keywords("add printer address uri url ip");
     g.add(&r);
