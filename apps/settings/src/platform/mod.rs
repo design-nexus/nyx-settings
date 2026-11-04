@@ -47,6 +47,46 @@ pub fn home_updates(page: &Page, hero: Rc<Hero>) {
     }
 }
 
+/// Whether system changes can be made from `section`, and a notice to show when they
+/// can't yet (Omarchy's root helper isn't set up).
+pub fn system_notice(section: &'static str, what: &str) -> (bool, Option<gtk::Box>) {
+    match PLATFORM {
+        Platform::NyxOS => (true, None),
+        Platform::Omarchy => crate::sections::accounts::helper_notice(section, what),
+    }
+}
+
+/// What logind does for a lid or button event (`key` is one of `[Login]`'s).
+pub fn set_power(key: &str, action: &str, section: &'static str) {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::set_power(key, action, section),
+        Platform::Omarchy => crate::sections::accounts::run_admin(&["logind", key, action], None, "Saved", section),
+    }
+}
+
+/// How long suspend-then-hibernate sleeps before hibernating, in seconds.
+pub fn set_hibernate_delay(secs: &str, section: &'static str) {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::set_hibernate_delay(secs, section),
+        Platform::Omarchy => crate::sections::accounts::run_admin(&["sleep-delay", secs], None, "Saved", section),
+    }
+}
+
+pub fn hibernation_available() -> bool {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::hibernation_available(),
+        Platform::Omarchy => crate::cmd::run(&["omarchy-hibernation-available"]).is_ok(),
+    }
+}
+
+/// The Network page's firewall group.
+pub fn firewall_group(page: &Page) {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::pages::firewall(page),
+        Platform::Omarchy => crate::sections::network::ufw_group(page),
+    }
+}
+
 /// About's group for the system itself.
 pub fn about(page: &Page) {
     match PLATFORM {

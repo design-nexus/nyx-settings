@@ -368,3 +368,59 @@ pub fn boot(page: &Page) {
     );
     g.add(&r);
 }
+
+/// The Network page's firewall: on or off, and the ports opened through Settings.
+pub fn firewall(page: &Page) {
+    let s = nyxos::settings();
+    let g = page.collapsible("Firewall", false);
+    g.note("Other computers can only reach the ports you allow here, and the ones services you turn on need (like remote login). Changes are system settings, applied with a rebuild.");
+    let on = cmd::output(&["systemctl", "is-active", "firewall.service"]).is_some_and(|x| x == "active");
+    let (r, _) = widgets::switch_row("Block incoming connections", "NyxOS's firewall.", on, move |now| {
+        if now != on {
+            nyxos::apply(
+                vec![Change::Firewall { enabled: Some(now) }],
+                if now { "Firewall is on" } else { "Firewall is off" },
+                |_| window::rebuild("network"),
+            );
+        }
+    });
+    tag_system(&r);
+    widgets::keywords("firewall block ports security");
+    g.add(&r);
+    for (protocol, ports) in [("tcp", &s.firewall.tcp), ("udp", &s.firewall.udp)] {
+        for port in ports.iter().copied() {
+            let remove = widgets::confirm_button("Remove", "Close this port?", move |b| {
+                b.set_sensitive(false);
+                let change = Change::FirewallPort { port, protocol: protocol.into(), open: false };
+                nyxos::apply(vec![change], "Port closed", |_| window::rebuild("network"));
+            });
+            g.add(&widgets::row(&format!("{port}/{protocol}"), "Allowed in", Some(remove.upcast_ref())));
+        }
+    }
+    let (r, _) = widgets::entry_row(
+        "Allow a port",
+        "A port number, optionally with /tcp or /udp, e.g. 8080/tcp. Press Enter.",
+        "",
+        "8080/tcp",
+        |t| {
+            let t = t.trim().to_string();
+            if t.is_empty() {
+                return;
+            }
+            let Some((port, proto)) = crate::sections::network::parse_rule(&t) else {
+                return window::toast("Use a port like 8080 or 8080/tcp");
+            };
+            let Ok(port) = port.parse::<u16>() else { return window::toast("Use a port from 1 to 65535") };
+            let protocols: &[&str] = match proto.as_str() {
+                "tcp" => &["tcp"],
+                "udp" => &["udp"],
+                _ => &["tcp", "udp"],
+            };
+            let changes = protocols.iter().map(|p| Change::FirewallPort { port, protocol: p.to_string(), open: true }).collect();
+            nyxos::apply(changes, "Port allowed", |_| window::rebuild("network"));
+        },
+    );
+    tag_system(&r);
+    widgets::keywords("open port allow rule");
+    g.add(&r);
+}

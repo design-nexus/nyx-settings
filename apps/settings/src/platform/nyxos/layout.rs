@@ -114,8 +114,7 @@ mod tests {
         let mut list = crate::sections::all_with(false);
         apply(&mut list);
         assert_eq!(list[0].id, "home");
-        let order: Vec<usize> =
-            list.iter().skip(1).map(|s| GROUPS.iter().position(|g| *g == s.group).unwrap()).collect();
+        let order: Vec<usize> = list.iter().skip(1).map(|s| GROUPS.iter().position(|g| *g == s.group).unwrap()).collect();
         assert!(order.windows(2).all(|w| w[0] <= w[1]));
     }
 }

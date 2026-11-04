@@ -308,15 +308,15 @@ fn time_span_secs(text: &str) -> Option<u32> {
     any.then_some(total)
 }
 
-/// Lid, power button and sleep delay. These are system settings, so they use the root helper.
+/// Lid, power button and sleep delay: system settings, made the platform's way.
 fn buttons_group(page: &Page) {
     let g = page.collapsible("Lid & buttons", false);
-    let (can_edit, notice) = crate::sections::accounts::helper_notice("power", "changing what the lid and power button do");
+    let (can_edit, notice) = crate::platform::system_notice("power", "changing what the lid and power button do");
     if let Some(n) = notice {
         g.top(&n);
     }
     let conf = parse_logind(logind_files().iter().map(String::as_str));
-    let hibernate = cmd::run(&["omarchy-hibernation-available"]).is_ok();
+    let hibernate = crate::platform::hibernation_available();
     let mut actions = vec![("ignore", "Do nothing"), ("suspend", "Suspend")];
     if hibernate {
         actions.extend([("hibernate", "Hibernate"), ("suspend-then-hibernate", "Suspend, then hibernate")]);
@@ -351,7 +351,7 @@ fn buttons_group(page: &Page) {
             let current = current.clone();
             move |v| {
                 if v != current {
-                    crate::sections::accounts::run_admin(&["logind", key, &v], None, "Saved", "power");
+                    crate::platform::set_power(key, &v, "power");
                 }
             }
         });
@@ -382,7 +382,7 @@ fn buttons_group(page: &Page) {
                 let now = now.clone();
                 move |v| {
                     if v != now {
-                        crate::sections::accounts::run_admin(&["sleep-delay", &v], None, "Saved", "power");
+                        crate::platform::set_hibernate_delay(&v, "power");
                     }
                 }
             },

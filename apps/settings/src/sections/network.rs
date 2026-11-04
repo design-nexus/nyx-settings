@@ -13,7 +13,7 @@ pub fn build(page: &Page) {
     connections(page);
     dns(page);
     wifi_tools(page);
-    firewall(page);
+    crate::platform::firewall_group(page);
     if cmd::present("tailscale") {
         tailscale(page);
     }
@@ -242,7 +242,7 @@ fn wifi_tools(page: &Page) {
 // ----- Firewall -----
 
 /// "22", "22/tcp" or "8000:8010/udp" as (port, protocol).
-fn parse_rule(text: &str) -> Option<(String, String)> {
+pub(crate) fn parse_rule(text: &str) -> Option<(String, String)> {
     let (port, proto) = match text.trim().split_once('/') {
         Some((p, pr)) => (p.trim(), pr.trim().to_lowercase()),
         None => (text.trim(), "any".to_string()),
@@ -276,7 +276,8 @@ fn parse_ufw(text: &str) -> Vec<(String, String, String, String)> {
         .collect()
 }
 
-fn firewall(page: &Page) {
+/// Omarchy's firewall, ufw.
+pub(crate) fn ufw_group(page: &Page) {
     if !cmd::present("ufw") {
         return;
     }

@@ -123,6 +123,23 @@ pub fn version() -> String {
     format!("{} {}", if name.is_empty() { "NyxOS".into() } else { name }, version).trim().to_string()
 }
 
+pub fn set_power(key: &str, action: &str, section: &'static str) {
+    let change = Change::Power { key: key.into(), action: Some(action.into()) };
+    apply(vec![change], "Saved", move |_| window::rebuild(section));
+}
+
+pub fn set_hibernate_delay(secs: &str, section: &'static str) {
+    let Ok(seconds) = secs.parse::<u32>() else { return };
+    apply(vec![Change::HibernateDelay { seconds: Some(seconds) }], "Saved", move |_| window::rebuild(section));
+}
+
+/// Whether the kernel can hibernate and there's swap to hibernate to.
+pub fn hibernation_available() -> bool {
+    let disk = std::fs::read_to_string("/sys/power/state").is_ok_and(|s| s.split_whitespace().any(|w| w == "disk"));
+    let swap = std::fs::read_to_string("/proc/swaps").is_ok_and(|s| s.lines().count() > 1);
+    disk && swap
+}
+
 /// Mark a row as a system setting, applied with a rebuild.
 pub fn tag_system(row: &gtk::Box) {
     widgets::tag_row(row, "System");
