@@ -15,7 +15,7 @@ use std::rc::Rc;
 /// (key, title, description, default seconds, longest minutes, timeline name)
 const TIMES: [(&str, &str, &str, i64, f64, &str); 3] = [
     ("lock", "Lock the screen after", "0 never locks on its own.", 300, 60.0, "Lock"),
-    ("screen-off", "Turn the screen off after", "0 leaves it on.", 330, 60.0, "Screen off"),
+    ("screen-off", "Turn the screen off after", "0 leaves it on.", 360, 60.0, "Screen off"),
     ("suspend", "Sleep after", "0 never sleeps on its own; closing the lid still can.", 0, 120.0, "Sleep"),
 ];
 

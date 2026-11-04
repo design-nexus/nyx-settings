@@ -75,7 +75,7 @@ pub fn timeline(marks: impl Fn() -> Vec<(i64, &'static str)> + 'static) -> gtk::
             cr.arc(x, y, 6.0, 0.0, std::f64::consts::TAU);
             let _ = cr.fill();
             let below = i % 2 == 1 && (x - at(marks[i - 1].0)) < 110.0;
-            let ly = if below { y + 32.0 } else { y + 22.0 };
+            let ly = if below { y + 36.0 } else { y + 22.0 };
             text(cr, &format!("{name} · {} min", secs / 60), x, ly, p.text, true);
         }
         if marks.is_empty() {
