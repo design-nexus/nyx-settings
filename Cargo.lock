@@ -1688,7 +1688,7 @@ dependencies = [
 [[package]]
 name = "nyx-system-proto"
 version = "0.1.0"
-source = "git+https://github.com/nyxos-project/nyx-system.git?rev=bd825f97d378ad47fd0e91a11497747a5bff7074#bd825f97d378ad47fd0e91a11497747a5bff7074"
+source = "git+https://github.com/nyxos-project/nyx-system.git?rev=afa09fe764fc6aa932cc9e40dd366b765e673553#afa09fe764fc6aa932cc9e40dd366b765e673553"
 dependencies = [
  "anyhow",
  "serde",

@@ -5,7 +5,7 @@
 
 use super::disks::form;
 use crate::backend::mounts::{self, Kind, Mount};
-use crate::backend::{accounts, udisks};
+use crate::backend::udisks;
 use crate::widgets::{self, Page};
 use crate::{cmd, paths, window};
 use gtk::glib;
@@ -24,13 +24,7 @@ fn my_ids() -> (String, String) {
 }
 
 fn need(program: &str, package: &'static str) -> bool {
-    if cmd::present(program) {
-        return true;
-    }
-    window::toast_action(&format!("This needs {package}, which isn't installed."), "Install", move || {
-        super::accounts::terminal(&format!("sudo pacman -S --needed -- {package}"))
-    });
-    false
+    cmd::present(program) || crate::platform::provide_tool(program, package)
 }
 
 fn entry(placeholder: &str, text: &str) -> gtk::Entry {
@@ -133,7 +127,7 @@ pub fn startup_dialog(part: Option<udisks::Part>) {
             if !mounts::valid_dir(&dir, &paths::home()) {
                 return Some("Use a folder inside /mnt, /media or your home folder.".into());
             }
-            if mounts::fstab().iter().any(|m| m.dir == dir) {
+            if crate::platform::fstab().iter().any(|m| m.dir == dir) {
                 return Some(format!("Something already mounts at {dir}."));
             }
             let mut opts = vec!["nofail".to_string(), "x-gvfs-show".to_string(), "x-udisks-auth".to_string()];
@@ -150,7 +144,7 @@ pub fn startup_dialog(part: Option<udisks::Part>) {
             if p.uuid.is_empty() {
                 return Some("This partition has no filesystem id to mount it by.".into());
             }
-            if !accounts::helper_installed() {
+            if !crate::platform::system_ready() {
                 return Some("Settings' system helper isn't installed. Reinstall Settings to add it.".into());
             }
             // One helper call makes the folder, writes the line and mounts it,
@@ -160,7 +154,7 @@ pub fn startup_dialog(part: Option<udisks::Part>) {
             ));
             let (uuid, fs, options) = (p.uuid.clone(), fstab_type(&p.fs).to_string(), opts.join(","));
             cmd::background(
-                move || accounts::helper(&["mount-add-drive", &id, &uuid, &dir, &fs, &options], None).map(|_| dir),
+                move || crate::platform::mount_add_drive(&id, &uuid, &dir, &fs, &options).map(|_| dir),
                 |r| {
                     match r {
                         Ok(dir) => window::toast(&format!("It mounts at {dir} from now on.")),
@@ -280,7 +274,7 @@ fn smb_dialog() {
         cmd::background(
             move || {
                 let opts = opts.join(",");
-                accounts::helper(&["mount-test", "cifs", &source, &opts], Some(&login))
+                crate::platform::mount_test("cifs", &source, &opts, &login)
             },
             move |r| {
                 b2.set_sensitive(true);
@@ -367,7 +361,7 @@ fn nfs_dialog() {
 
 /// `id`, or `id-2`, `id-3`… if a mount already has it.
 fn unique_id(id: &str) -> String {
-    let taken: Vec<String> = mounts::fstab().into_iter().map(|m| m.id).collect();
+    let taken: Vec<String> = crate::platform::fstab().into_iter().map(|m| m.id).collect();
     let mut out = id.to_string();
     let mut n = 2;
     while taken.contains(&out) {
@@ -378,7 +372,7 @@ fn unique_id(id: &str) -> String {
 }
 
 fn add_network(id: String, fstype: &'static str, source: String, dir: String, opts: Vec<String>, login: String) {
-    if !accounts::helper_installed() {
+    if !crate::platform::system_ready() {
         window::toast("Settings' system helper isn't installed. Reinstall Settings to add it.");
         return;
     }
@@ -386,7 +380,7 @@ fn add_network(id: String, fstype: &'static str, source: String, dir: String, op
     cmd::background(
         move || {
             let opts = if opts.is_empty() { "-".to_string() } else { opts.join(",") };
-            accounts::helper(&["mount-add-net", &id2, fstype, &source, &dir, &opts], Some(&login))
+            crate::platform::mount_add_network(&id2, fstype, &source, &dir, &opts, &login)
         },
         |r| {
             match r {
@@ -545,7 +539,7 @@ fn remove(how: &Remove) {
         Remove::Helper(id) => {
             let id = id.clone();
             cmd::background(
-                move || accounts::helper(&["mount-remove", &id], None),
+                move || crate::platform::mount_remove(&id),
                 |r| {
                     match r {
                         Ok(_) => window::toast("Removed."),
@@ -629,8 +623,9 @@ fn add_card(title: &str, desc: &str, icon: &str, f: impl Fn() + 'static) -> gtk:
 }
 
 pub fn build(page: &Page) {
-    // Shares go into fstab through the root helper.
-    super::accounts::require_helper(page, "mounts", "adding a network share");
+    if let (_, Some(notice)) = crate::platform::system_notice("mounts", "adding a network share") {
+        page.body.append(&notice);
+    }
     let g = page.group("Add a mount");
     g.note("Adding one asks for your password once, then remembers it for a few minutes (Users can turn this off).");
     let flow = gtk::FlowBox::new();
@@ -666,7 +661,7 @@ pub fn build(page: &Page) {
     widgets::keywords("mount fstab nas samba smb cifs windows share nfs sshfs ssh network drive automount startup");
 
     let now = mounts::mounted();
-    let all: Vec<Mount> = mounts::fstab().into_iter().filter(|m| !m.system).collect();
+    let all: Vec<Mount> = crate::platform::fstab().into_iter().filter(|m| !m.system).collect();
     let ssh = mounts::ssh_folders(&paths::home());
 
     let g = page.group("Mounts");
@@ -690,7 +685,7 @@ pub fn build(page: &Page) {
         };
         g.add(&mount_row(&m, &now, Some(Remove::Ssh(id))));
     }
-    let system: Vec<Mount> = mounts::fstab().into_iter().filter(|m| m.system).collect();
+    let system: Vec<Mount> = crate::platform::fstab().into_iter().filter(|m| m.system).collect();
     if !system.is_empty() {
         let g = page.collapsible("The system's own", false);
         g.note("Where the system itself is mounted. Settings leaves these alone.");

@@ -134,6 +134,77 @@ pub fn printer_set_uri(queue: &str, uri: &str, section: &'static str) {
     }
 }
 
+/// `program` (from `package`) isn't installed: offer it, or say the system brings it.
+/// Whether to go ahead anyway.
+pub fn provide_tool(program: &str, package: &'static str) -> bool {
+    match PLATFORM {
+        // A share's tools come with the first mount of its kind.
+        Platform::NyxOS if program.starts_with("mount.") => true,
+        Platform::NyxOS => {
+            crate::window::toast_action(&format!("This needs {package}, which isn't installed."), "Open Store", move || {
+                let _ = std::process::Command::new("nyx-store").args(["--search", package]).spawn();
+            });
+            false
+        }
+        Platform::Omarchy => {
+            crate::window::toast_action(&format!("This needs {package}, which isn't installed."), "Install", move || {
+                crate::sections::accounts::terminal(&format!("sudo pacman -S --needed -- {package}"))
+            });
+            false
+        }
+    }
+}
+
+/// Whether system changes can be made now (Omarchy needs its root helper installed).
+pub fn system_ready() -> bool {
+    match PLATFORM {
+        Platform::NyxOS => true,
+        Platform::Omarchy => crate::backend::accounts::helper_installed(),
+    }
+}
+
+/// fstab, with the mounts Settings made named by their ids.
+pub fn fstab() -> Vec<crate::backend::mounts::Mount> {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::mounts::fstab(),
+        Platform::Omarchy => crate::backend::mounts::fstab(),
+    }
+}
+
+// Mounts: blocking, for a background thread.
+
+pub fn mount_add_drive(id: &str, uuid: &str, dir: &str, fs: &str, options: &str) -> anyhow::Result<String> {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::mounts::add_drive(id, uuid, dir, fs, options),
+        Platform::Omarchy => crate::backend::accounts::helper(&["mount-add-drive", id, uuid, dir, fs, options], None),
+    }
+}
+
+/// `login` is a share's user, password and domain on three lines (empty for a guest).
+pub fn mount_add_network(id: &str, fstype: &str, source: &str, dir: &str, options: &str, login: &str) -> anyhow::Result<String> {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::mounts::add_network(id, fstype, source, dir, options, login),
+        Platform::Omarchy => crate::backend::accounts::helper(&["mount-add-net", id, fstype, source, dir, options], Some(login)),
+    }
+}
+
+pub fn mount_remove(id: &str) -> anyhow::Result<String> {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::mounts::remove(id),
+        Platform::Omarchy => crate::backend::accounts::helper(&["mount-remove", id], None),
+    }
+}
+
+/// Try a share before adding it.
+pub fn mount_test(fstype: &str, source: &str, options: &str, login: &str) -> anyhow::Result<String> {
+    match PLATFORM {
+        Platform::NyxOS => {
+            anyhow::bail!("Testing a share first isn't on NyxOS yet; add it, and the list shows whether it mounts")
+        }
+        Platform::Omarchy => crate::backend::accounts::helper(&["mount-test", fstype, source, options], Some(login)),
+    }
+}
+
 /// The system's rows in Disks' Clean up group.
 pub fn system_cleanup(g: &crate::widgets::Group) {
     match PLATFORM {

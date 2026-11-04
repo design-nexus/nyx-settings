@@ -5,6 +5,7 @@
 
 pub mod accounts;
 pub mod layout;
+pub mod mounts;
 pub mod pages;
 pub mod printers;
 pub mod users;
