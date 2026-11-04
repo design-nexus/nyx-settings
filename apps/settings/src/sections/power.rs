@@ -1,13 +1,10 @@
 use crate::backend::kbdidle;
 use crate::widgets::{self, Page};
-use crate::{cmd, paths, window};
+use crate::{cmd, window};
 use gtk::prelude::*;
 
 fn state_file(source: &str) -> std::path::PathBuf {
-    std::env::var_os("OMARCHY_POWERPROFILES_STATE_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| paths::state_home().join("omarchy/powerprofiles"))
-        .join(source)
+    crate::platform::power_profile_state_dir().join(source)
 }
 
 /// What Omarchy has saved for "ac" or "battery", if anything.
@@ -39,11 +36,7 @@ fn on_battery() -> bool {
 /// Save the profile for a power source. Omarchy's own command also switches to it right away, which
 /// is only wanted when that source is the one in use, so for the other source just record the choice.
 fn remember(source: &str, profile: &str, in_use: bool) -> anyhow::Result<()> {
-    if in_use {
-        cmd::run(&["omarchy-powerprofiles-set", source, profile])?;
-        return Ok(());
-    }
-    cmd::atomic_write(&state_file(source), format!("{profile}\n"))
+    crate::platform::set_power_profile(source, profile, in_use)
 }
 
 /// The Status and Time remaining lines, from `omarchy-battery-status --shell`
@@ -87,12 +80,7 @@ fn battery_lines(shell: &str) -> (String, String) {
 pub fn build(page: &Page) {
     // ----- Profile -----
     let g = page.group("Power profile");
-    let profiles: Vec<String> = cmd::output(&["omarchy-powerprofiles-list"])
-        .unwrap_or_default()
-        .lines()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
+    let profiles = crate::platform::power_profiles();
     let current = cmd::output(&["powerprofilesctl", "get"]).unwrap_or_default();
     let label = |p: &str| match p {
         "power-saver" => "Power saver".to_string(),
@@ -133,10 +121,10 @@ pub fn build(page: &Page) {
     }
 
     // ----- Battery -----
-    if cmd::output(&["omarchy-battery-present"]).is_some() || std::path::Path::new("/sys/class/power_supply/BAT0").exists() {
+    if crate::platform::battery_present() {
         let g = page.group("Battery");
         let read = || {
-            let (status, time) = battery_lines(&cmd::output(&["omarchy-battery-status", "--shell"]).unwrap_or_default());
+            let (status, time) = battery_lines(&crate::platform::battery_shell());
             let or_unknown = |s: String| if s.is_empty() { "Unknown".to_string() } else { s };
             (or_unknown(status), or_unknown(time))
         };
@@ -164,9 +152,9 @@ pub fn build(page: &Page) {
 
     // ----- Brightness -----
     let g = page.group("Brightness");
-    if let Some(b) = cmd::output(&["omarchy-brightness-display", "--no-osd"]).and_then(|s| s.trim().parse::<f64>().ok()) {
+    if let Some(b) = crate::platform::brightness() {
         let (r, _) = widgets::slider_row("Display", "The focused screen.", (1.0, 100.0, 1.0), b, 0, "%", |v| {
-            cmd::spawn(&["omarchy-brightness-display", "--no-osd", &format!("{}%", v.round() as i64)]);
+            crate::platform::set_brightness(v.round() as i64);
         });
         g.add(&r);
     }
@@ -191,7 +179,7 @@ pub fn build(page: &Page) {
     // ----- Lid & buttons -----
     let g = page.collapsible("Session", false);
     let now = widgets::hbox(8);
-    now.append(&widgets::command_button("Lock", &["omarchy-system-lock"]));
+    now.append(&widgets::command_button("Lock", crate::platform::lock_command()));
     // Omarchy hides these when suspend is switched off or hibernation isn't set up.
     if cmd::run(&["omarchy-toggle-enabled", "suspend-off"]).is_err() {
         now.append(&widgets::command_button("Suspend", &["systemctl", "suspend"]));

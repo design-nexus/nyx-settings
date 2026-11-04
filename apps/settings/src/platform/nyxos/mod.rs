@@ -8,6 +8,7 @@ pub mod layout;
 pub mod lock;
 pub mod mounts;
 pub mod pages;
+pub mod power;
 pub mod printers;
 pub mod users;
 

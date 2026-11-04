@@ -232,3 +232,98 @@ pub fn about(page: &Page) {
         Platform::Omarchy => omarchy::about(page),
     }
 }
+
+/// The power profiles power-profiles-daemon offers, power saver first, from
+/// `powerprofilesctl list`.
+pub fn power_profiles() -> Vec<String> {
+    parse_profiles(&crate::cmd::output(&["powerprofilesctl", "list"]).unwrap_or_default())
+}
+
+fn parse_profiles(list: &str) -> Vec<String> {
+    let mut out: Vec<String> = list
+        .lines()
+        .filter_map(|l| {
+            let name = l.trim().trim_start_matches('*').trim().strip_suffix(':')?;
+            (!name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')).then(|| name.to_string())
+        })
+        .collect();
+    out.reverse();
+    out
+}
+
+/// Where the profile for each power source (`ac`, `battery`) is kept.
+pub fn power_profile_state_dir() -> std::path::PathBuf {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::power::profile_state_dir(),
+        Platform::Omarchy => std::env::var_os("OMARCHY_POWERPROFILES_STATE_DIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| crate::paths::state_home().join("omarchy/powerprofiles")),
+    }
+}
+
+/// Save the profile for a power source, and switch to it when that source is in use.
+pub fn set_power_profile(source: &str, profile: &str, in_use: bool) -> anyhow::Result<()> {
+    match PLATFORM {
+        Platform::Omarchy if in_use => crate::cmd::run(&["omarchy-powerprofiles-set", source, profile]).map(|_| ()),
+        _ => {
+            crate::cmd::atomic_write(&power_profile_state_dir().join(source), format!("{profile}\n"))?;
+            if in_use {
+                crate::cmd::run(&["powerprofilesctl", "set", profile])?;
+            }
+            Ok(())
+        }
+    }
+}
+
+pub fn battery_present() -> bool {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::power::battery_present(),
+        Platform::Omarchy => {
+            crate::cmd::output(&["omarchy-battery-present"]).is_some()
+                || std::path::Path::new("/sys/class/power_supply/BAT0").exists()
+        }
+    }
+}
+
+/// The battery as `key\tvalue` lines: state, time, percentage, rate, size (and threshold).
+pub fn battery_shell() -> String {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::power::battery_shell(),
+        Platform::Omarchy => crate::cmd::output(&["omarchy-battery-status", "--shell"]).unwrap_or_default(),
+    }
+}
+
+/// The screen's brightness in percent, when it can be set.
+pub fn brightness() -> Option<f64> {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::power::brightness(),
+        Platform::Omarchy => {
+            crate::cmd::output(&["omarchy-brightness-display", "--no-osd"]).and_then(|s| s.trim().parse::<f64>().ok())
+        }
+    }
+}
+
+pub fn set_brightness(percent: i64) {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::power::set_brightness(percent),
+        Platform::Omarchy => crate::cmd::spawn(&["omarchy-brightness-display", "--no-osd", &format!("{percent}%")]),
+    }
+}
+
+/// The command that locks the screen now.
+pub fn lock_command() -> &'static [&'static str] {
+    match PLATFORM {
+        Platform::NyxOS => &["loginctl", "lock-session"],
+        Platform::Omarchy => &["omarchy-system-lock"],
+    }
+}
+
+#[cfg(test)]
+mod power_tests {
+    #[test]
+    fn profiles_from_powerprofilesctl() {
+        let list = "  performance:\n    CpuDriver:\tintel_pstate\n\n* balanced:\n    CpuDriver:\tintel_pstate\n\n  power-saver:\n    PlatformDriver:\tplaceholder\n";
+        assert_eq!(super::parse_profiles(list), vec!["power-saver", "balanced", "performance"]);
+        assert!(super::parse_profiles("").is_empty());
+    }
+}

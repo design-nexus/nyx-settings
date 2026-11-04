@@ -731,12 +731,7 @@ fn quick_actions(page: &Page) {
 
 /// The switches people reach for most, at the top: Do Not Disturb and the power profile.
 fn quick_settings(page: &Page) {
-    let profiles: Vec<String> = cmd::output(&["omarchy-powerprofiles-list"])
-        .unwrap_or_default()
-        .lines()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
+    let profiles = crate::platform::power_profiles();
     let has_dnd = cmd::present("omarchy-shell");
     if profiles.is_empty() && !has_dnd {
         return;
