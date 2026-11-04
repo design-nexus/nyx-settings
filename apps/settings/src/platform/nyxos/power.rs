@@ -6,7 +6,9 @@ use crate::cmd;
 
 /// Where the profile for `ac` and for `battery` is kept.
 pub fn profile_state_dir() -> std::path::PathBuf {
-    crate::paths::state_home().join("nyx/power-profiles")
+    std::env::var_os("NYX_POWER_PROFILES_STATE_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| crate::paths::state_home().join("nyx/power-profiles"))
 }
 
 /// A system battery (not a mouse's or a headset's).

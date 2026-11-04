@@ -474,11 +474,17 @@ mod tests {
     fn records_the_other_source_without_running_omarchy() {
         let dir = std::env::temp_dir().join(format!("settings-power-test-{}", std::process::id()));
         // SAFETY: no other test reads or writes this variable.
-        unsafe { std::env::set_var("OMARCHY_POWERPROFILES_STATE_DIR", &dir) };
+        unsafe {
+            std::env::set_var("OMARCHY_POWERPROFILES_STATE_DIR", &dir);
+            std::env::set_var("NYX_POWER_PROFILES_STATE_DIR", &dir);
+        }
         remember("battery", "power-saver", false).unwrap();
         assert_eq!(read_saved("battery").as_deref(), Some("power-saver"));
         assert!(read_saved("ac").is_none());
         let _ = std::fs::remove_dir_all(&dir);
-        unsafe { std::env::remove_var("OMARCHY_POWERPROFILES_STATE_DIR") };
+        unsafe {
+            std::env::remove_var("OMARCHY_POWERPROFILES_STATE_DIR");
+            std::env::remove_var("NYX_POWER_PROFILES_STATE_DIR");
+        }
     }
 }
