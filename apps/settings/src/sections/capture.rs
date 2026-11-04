@@ -80,22 +80,47 @@ fn screenshots(page: &Page) {
     });
     widgets::keywords("screenshot screen capture print region window scroll clipboard");
     g.add(&r);
-    if cmd::present("omarchy-capture-text") {
+    if let Some(args) = capture_tool("--text", "omarchy-capture-text") {
         let (r, _) = widgets::button_row(
             "Copy text from the screen",
             "Drag over text in an image or video to copy it.",
             "Select…",
-            |_| hide_and_run(vec!["omarchy-capture-text".into()]),
+            move |_| hide_and_run(args.clone()),
         );
         widgets::keywords("ocr text recognition extract");
         g.add(&r);
     }
-    if cmd::present("omarchy-capture-qr") {
-        let (r, _) = widgets::button_row("Read a QR code", "Drag over a QR code on the screen.", "Scan…", |_| {
-            hide_and_run(vec!["omarchy-capture-qr".into()])
+    if let Some(args) = capture_tool("--qr", "omarchy-capture-qr") {
+        let (r, _) = widgets::button_row("Read a QR code", "Drag over a QR code on the screen.", "Scan…", move |_| {
+            hide_and_run(args.clone())
         });
         widgets::keywords("qr code scan");
         g.add(&r);
+    }
+    let colour = if cmd::present("nyx-capture") {
+        Some(vec!["nyx-capture".to_string(), "--colour".into()])
+    } else if cmd::present("hyprpicker") {
+        Some(vec!["hyprpicker".to_string(), "-a".into()])
+    } else {
+        None
+    };
+    if let Some(args) = colour {
+        let (r, _) = widgets::button_row("Pick a colour", "Click any pixel on the screen to copy its colour.", "Pick…", move |_| {
+            hide_and_run(args.clone())
+        });
+        widgets::keywords("colour color picker eyedropper hex");
+        g.add(&r);
+    }
+}
+
+/// Nyx Capture's `flag` when it is installed, else Omarchy's `script`.
+fn capture_tool(flag: &str, script: &str) -> Option<Vec<String>> {
+    if cmd::present("nyx-capture") {
+        Some(vec!["nyx-capture".into(), flag.into()])
+    } else if cmd::present(script) {
+        Some(vec![script.into()])
+    } else {
+        None
     }
 }
 
