@@ -67,6 +67,9 @@ fn list(user: bool) -> Vec<Unit> {
 }
 
 pub fn build(page: &Page) {
+    if crate::nyxos::active() {
+        return super::nyxos_pages::services(page);
+    }
     let can_edit = require_helper(page, "services", "starting and stopping system services");
     let mine = list(true);
     let system = list(false);
@@ -87,6 +90,13 @@ pub fn build(page: &Page) {
     }
     section(page, "Your services", "Run as you, started when you sign in.", true, mine, true);
     section(page, "System services", "Run for the whole computer.", false, system, can_edit);
+}
+
+/// NyxOS: your own services, and the system's to look at (they're turned on and off as
+/// system settings).
+pub fn user_and_system_lists(page: &Page) {
+    section(page, "Your services", "Run as you, started when you sign in.", true, list(true), true);
+    section(page, "Running on this computer", "The whole computer's services, for reference.", false, list(false), false);
 }
 
 fn section(page: &Page, title: &str, note: &str, user: bool, units: Vec<Unit>, can_edit: bool) {

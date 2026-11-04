@@ -54,6 +54,7 @@ pub mod vpn_accounts;
 pub mod workspace_profiles;
 pub mod workspace_rules;
 pub mod workspaces;
+pub mod nyxos_pages;
 
 /// How a page is filled in.
 #[derive(Clone)]
@@ -685,7 +686,99 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
         let at = list.iter().rposition(|s| s.group == section.group).map(|i| i + 1).unwrap_or(list.len());
         list.insert(at, section);
     }
+    if crate::nyxos::active() {
+        nyxos_layout(&mut list);
+    }
     list
 }
 
+/// NyxOS's categories, in order (Home sits above them).
+const NYXOS_GROUPS: &[&str] = &[
+    "Accounts",
+    "Appearance",
+    "Displays",
+    "Desktop",
+    "Input",
+    "Network",
+    "Sound",
+    "Power",
+    "Security",
+    "Apps & Defaults",
+    "Storage & Backup",
+    "System",
+];
+
+/// A page's NyxOS category, from its id, or else from its Omarchy group.
+fn nyxos_group(id: &str, group: &'static str) -> &'static str {
+    match id {
+        "online-accounts" | "accounts" => "Accounts",
+        "theme" | "look" => "Appearance",
+        "displays" | "nightlight" => "Displays",
+        "bar" | "plugins" | "dock" | "switcher" | "control-center" | "notifications" | "workspaces" | "workspace-profiles"
+        | "rules" | "capture" => "Desktop",
+        "keyboard" | "mouse" | "trackpad" | "keybindings" => "Input",
+        "wifi" | "bluetooth" | "network" | "sharing" => "Network",
+        "audio" => "Sound",
+        "power" => "Power",
+        "sign-in" | "idle" => "Security",
+        "apps" | "software" | "extensions" => "Apps & Defaults",
+        "disks" | "mounts" => "Storage & Backup",
+        "region" | "boot" | "services" | "printers" | "about" => "System",
+        _ => match group {
+            "" => "",
+            "Connections" => "Network",
+            "Personalization" => "Appearance",
+            "Assistant" => "Apps & Defaults",
+            "Hardware" => "System",
+            other => other,
+        },
+    }
+}
+
+fn never() -> bool {
+    false
+}
+
+/// NyxOS's layout: its twelve categories, and the pages it names its own way. Nyx apps
+/// come from the System Manager there (Store and Welcome), so that page goes.
+fn nyxos_layout(list: &mut [Section]) {
+    for s in list.iter_mut() {
+        s.group = nyxos_group(s.id, s.group);
+        s.title = match s.id {
+            "online-accounts" => "Accounts",
+            "accounts" => "Users",
+            "software" => "Software & Updates",
+            "boot" => "Boot & Sign-in",
+            "idle" => "Lock Screen",
+            _ => s.title,
+        };
+        if s.id == "nyx" {
+            s.visible = never;
+        }
+    }
+    list.sort_by_key(|s| NYXOS_GROUPS.iter().position(|g| *g == s.group).map_or(0, |i| i + 1));
+}
+
+/// Pages that stay out of the sidebar: on NyxOS, Users opens from Accounts.
+pub fn off_sidebar(id: &str) -> bool {
+    id == "accounts" && crate::nyxos::active()
+}
+
 mod native_accounts;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nyxos_puts_every_page_in_one_of_its_categories() {
+        for s in all_with(false) {
+            let group = nyxos_group(s.id, s.group);
+            assert!(
+                (s.id == "home" && group.is_empty()) || NYXOS_GROUPS.contains(&group),
+                "{} lands in {group:?}",
+                s.id
+            );
+        }
+    }
+}

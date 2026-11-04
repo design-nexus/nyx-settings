@@ -64,6 +64,36 @@ fn in_terminal(command: &str) {
     gtk::glib::timeout_add_seconds_local_once(20, || window::rebuild_if_built(ID));
 }
 
+/// What's set up, in a line ("Face, 2 fingerprints. Your password works too."), for
+/// the Accounts page's card.
+pub fn summary(done: impl FnOnce(String) + 'static) {
+    if !available() {
+        done("Nyx Biometrics isn't installed.".into());
+        return;
+    }
+    cmd::run_async(&[CTL, "status", "--json"], move |result| {
+        let v: Value = result.ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        let mut parts = Vec::new();
+        if v["face"]["ready"] == true {
+            parts.push("Face".to_string());
+        }
+        let fingers: usize = v["fingerprint"]["readers"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|r| r["fingers"].as_array().map_or(0, Vec::len))
+            .sum();
+        if fingers > 0 {
+            parts.push(format!("{fingers} fingerprint{}", if fingers == 1 { "" } else { "s" }));
+        }
+        done(if parts.is_empty() {
+            "Not set up. Your password works everywhere.".into()
+        } else {
+            format!("{}. Your password works too.", parts.join(", "))
+        });
+    });
+}
+
 pub fn build(page: &Page) {
     if !available() {
         let g = page.group("Sign-in & Security");

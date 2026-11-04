@@ -686,6 +686,23 @@ fn updates_group(page: &Page, hero: Rc<Hero>) {
     });
 }
 
+/// NyxOS: the generation in the badge; updates are on Software & Updates.
+fn nyxos_updates(page: &Page, hero: &Hero) {
+    let current = crate::nyxos::generations().into_iter().find(|g| g.current).map(|g| g.number);
+    hero.count.set_text(&current.map(|n| n.to_string()).unwrap_or_default());
+    hero.caption.set_text("Generation");
+    hero.badge.set_tooltip_text(Some("Software & Updates"));
+    hero.badge.connect_clicked(|_| window::navigate("software"));
+    let g = page.group("Updates");
+    let (r, _) = widgets::button_row(
+        &crate::nyxos::version(),
+        "NyxOS, its apps and the software for everyone update together. Software & Updates has the update and earlier generations.",
+        "Open",
+        |_| window::navigate("software"),
+    );
+    g.add(&r);
+}
+
 // ---------- Quick actions ----------
 
 fn quick_actions(page: &Page) {
@@ -794,7 +811,11 @@ pub fn build(page: &Page) {
     let act = activity(page);
     start_sampling(page, tiles, act, hero.clone());
     storage(page, disk);
-    updates_group(page, hero);
+    if crate::nyxos::active() {
+        nyxos_updates(page, &hero);
+    } else {
+        updates_group(page, hero);
+    }
     quick_actions(page);
 }
 

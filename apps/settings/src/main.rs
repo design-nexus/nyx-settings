@@ -9,6 +9,7 @@ mod dialog;
 mod ext;
 mod fangraph;
 mod live;
+mod nyxos;
 mod paths;
 mod prefs;
 mod preview;

@@ -318,6 +318,10 @@ pub fn build(page: &Page) {
     settings_group(page);
     changes_group(page);
     backup_group(page);
+    if crate::nyxos::active() {
+        nyxos_group(page);
+        return;
+    }
     let g = page.group("Omarchy");
     let (r, _) = widgets::info_row("Version", &cmd::output(&["omarchy-version"]).unwrap_or_default());
     g.add(&r);
@@ -357,5 +361,24 @@ pub fn build(page: &Page) {
         },
     );
     widgets::keywords("backup restore snapper rollback");
+    g.add(&r);
+}
+
+/// NyxOS: its version and generation; updates and going back are on Software & Updates.
+fn nyxos_group(page: &Page) {
+    let g = page.group("NyxOS");
+    let (r, _) = widgets::info_row("Version", &crate::nyxos::version());
+    g.add(&r);
+    if let Some(current) = crate::nyxos::generations().into_iter().find(|x| x.current) {
+        let (r, _) = widgets::info_row("Generation", &current.number.to_string());
+        g.add(&r);
+    }
+    let (r, _) = widgets::button_row(
+        "Updates and generations",
+        "Update NyxOS, or go back to an earlier generation.",
+        "Software & Updates",
+        |_| window::navigate("software"),
+    );
+    widgets::keywords("update upgrade rollback generation version nixos");
     g.add(&r);
 }

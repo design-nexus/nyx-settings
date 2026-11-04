@@ -10,6 +10,9 @@ use gtk::prelude::*;
 use std::collections::HashSet;
 
 pub fn build(page: &Page) {
+    if crate::nyxos::active() {
+        return super::nyxos_pages::software(page);
+    }
     channel(page);
     let launchers = launchers();
     web_apps(page, &launchers);

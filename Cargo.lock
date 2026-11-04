@@ -1644,6 +1644,7 @@ dependencies = [
  "nyx-desktop",
  "nyx-pim",
  "nyx-share-client",
+ "nyx-system-proto",
  "nyx-theme",
  "nyx-ui",
  "serde",
@@ -1682,6 +1683,16 @@ dependencies = [
  "nyx-share-core",
  "serde",
  "zbus",
+]
+
+[[package]]
+name = "nyx-system-proto"
+version = "0.1.0"
+source = "git+https://github.com/nyxos-project/nyx-system.git?rev=7a9c74d4a964fbdf82435dbf89b4de94ed73e9d0#7a9c74d4a964fbdf82435dbf89b4de94ed73e9d0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

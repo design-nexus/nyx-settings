@@ -6,6 +6,9 @@ use crate::widgets::{self, Page};
 use crate::{cmd, window};
 
 pub fn build(page: &Page) {
+    if crate::nyxos::active() {
+        return super::nyxos_pages::boot(page);
+    }
     screens(page);
     sleep(page);
     recovery(page);
