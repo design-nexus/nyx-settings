@@ -150,7 +150,12 @@ fn hero(page: &Page) -> Hero {
         .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
         .and_then(|v| v.get("tag").and_then(|x| x.as_str()).map(String::from))
         .unwrap_or_else(|| "—".into());
-    let v = fact(&grid, 0, "Omarchy", &omarchy);
+    // Without Omarchy (NyxOS, say), the system's own name.
+    let system = full_version.is_empty().then(os_name).flatten();
+    let v = match &system {
+        Some(name) => fact(&grid, 0, "System", name),
+        None => fact(&grid, 0, "Omarchy", &omarchy),
+    };
     if !full_version.is_empty() {
         v.set_tooltip_text(Some(&full_version));
     }
@@ -811,4 +816,11 @@ mod tests {
         assert_eq!(short_version("4.0.0.r6694.g821ae58"), "4.0.0");
         assert_eq!(short_version("3.1.2"), "3.1.2");
     }
+}
+
+/// `PRETTY_NAME` from /etc/os-release.
+fn os_name() -> Option<String> {
+    let text = std::fs::read_to_string("/etc/os-release").ok()?;
+    let name = text.lines().find_map(|l| l.strip_prefix("PRETTY_NAME="))?.trim_matches('"').to_string();
+    (!name.is_empty()).then_some(name)
 }
