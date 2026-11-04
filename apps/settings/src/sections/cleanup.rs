@@ -10,7 +10,7 @@ use crate::{cmd, paths, window};
 use gtk::prelude::*;
 
 /// One cleanup: a row whose size is worked out in the background.
-fn cleanup_row(
+pub(crate) fn cleanup_row(
     g: &widgets::Group,
     title: &str,
     desc: &str,
@@ -130,43 +130,7 @@ pub fn build(page: &Page) {
 
     let g = page.group("Clean up");
     g.note("Each one says how much it frees before you click.");
-    if let (_, Some(notice)) = super::accounts::helper_notice("disks", "cleaning the package cache and logs") {
-        g.top(&notice);
-    }
-    cleanup_row(
-        &g,
-        "Package cache",
-        "Downloaded copies of packages: keeps the newest of each, for going back after a bad update.",
-        cleanup::package_cache,
-        |b| helper(&["clean-pkg-cache"], "Package cache cleaned.", b),
-    );
-    cleanup_row(
-        &g,
-        "Packages nothing needs",
-        "Installed to support other packages that are gone now.",
-        || cleanup::orphans().1,
-        |b| {
-            let names = cleanup::orphans().0;
-            if names.is_empty() {
-                window::toast("There are none now.");
-                return;
-            }
-            let shown = names.iter().take(12).cloned().collect::<Vec<_>>().join(", ");
-            let more = if names.len() > 12 { format!(" and {} more", names.len() - 12) } else { String::new() };
-            let b2 = b.clone();
-            window::toast_action(&format!("Remove {shown}{more}?"), "Remove", move || {
-                helper(&["remove-orphans"], "Removed.", b2.clone())
-            });
-            b.set_sensitive(true);
-        },
-    );
-    cleanup_row(
-        &g,
-        "Old system logs",
-        "Keeps the newest 200 MB of the system journal.",
-        || cleanup::journal_extra(200 << 20),
-        |b| helper(&["vacuum-journal", "200M"], "Old logs removed.", b),
-    );
+    crate::platform::system_cleanup(&g);
     let trash = paths::home().join(".local/share/Trash");
     let t2 = trash.clone();
     cleanup_row(
@@ -217,4 +181,46 @@ pub fn build(page: &Page) {
 
 fn glib_escape(s: &str) -> String {
     gtk::glib::markup_escape_text(s).to_string()
+}
+
+/// Omarchy's system cleanup: pacman's cache, orphaned packages and old logs, through the
+/// root helper.
+pub(crate) fn omarchy_rows(g: &widgets::Group) {
+    if let (_, Some(notice)) = super::accounts::helper_notice("disks", "cleaning the package cache and logs") {
+        g.top(&notice);
+    }
+    cleanup_row(
+        g,
+        "Package cache",
+        "Downloaded copies of packages: keeps the newest of each, for going back after a bad update.",
+        cleanup::package_cache,
+        |b| helper(&["clean-pkg-cache"], "Package cache cleaned.", b),
+    );
+    cleanup_row(
+        g,
+        "Packages nothing needs",
+        "Installed to support other packages that are gone now.",
+        || cleanup::orphans().1,
+        |b| {
+            let names = cleanup::orphans().0;
+            if names.is_empty() {
+                window::toast("There are none now.");
+                return;
+            }
+            let shown = names.iter().take(12).cloned().collect::<Vec<_>>().join(", ");
+            let more = if names.len() > 12 { format!(" and {} more", names.len() - 12) } else { String::new() };
+            let b2 = b.clone();
+            window::toast_action(&format!("Remove {shown}{more}?"), "Remove", move || {
+                helper(&["remove-orphans"], "Removed.", b2.clone())
+            });
+            b.set_sensitive(true);
+        },
+    );
+    cleanup_row(
+        g,
+        "Old system logs",
+        "Keeps the newest 200 MB of the system journal.",
+        || cleanup::journal_extra(200 << 20),
+        |b| helper(&["vacuum-journal", "200M"], "Old logs removed.", b),
+    );
 }

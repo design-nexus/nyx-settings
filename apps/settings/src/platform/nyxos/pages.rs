@@ -424,3 +424,35 @@ pub fn firewall(page: &Page) {
     widgets::keywords("open port allow rule");
     g.add(&r);
 }
+
+/// Disks' Clean up on NyxOS: old generations and the packages only they used, and old
+/// system logs, through the System Manager.
+pub fn cleanup_rows(g: &widgets::Group) {
+    const DAYS: u32 = 14;
+    let cutoff = gtk::glib::DateTime::now_local().map(|d| d.to_unix()).unwrap_or(0) - i64::from(DAYS) * 86400;
+    let old = nyxos::generations().iter().filter(|x| !x.current && x.created < cutoff).count();
+    let desc = format!(
+        "Removes generations older than two weeks ({old} now; never the one running) and the packages only they used. The boot menu keeps the rest."
+    );
+    let (r, b) = widgets::button_row("Old generations and unused packages", &desc, "Clean", |b| {
+        b.set_sensitive(false);
+        nyxos::clean(DAYS, |_| window::rebuild_if_built("disks"));
+    });
+    b.set_sensitive(!nyxos::busy());
+    widgets::keywords("garbage collect nix store generations old space free");
+    g.add(&r);
+    crate::sections::cleanup::cleanup_row(
+        g,
+        "Old system logs",
+        "Keeps the newest 200 MB of the system journal.",
+        || crate::backend::cleanup::journal_extra(200 << 20),
+        |b| {
+            nyxos::clean_logs(200, move |ok| {
+                if !ok {
+                    b.set_sensitive(true);
+                }
+                window::rebuild_if_built("disks");
+            })
+        },
+    );
+}

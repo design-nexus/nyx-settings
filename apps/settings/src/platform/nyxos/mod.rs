@@ -81,6 +81,21 @@ pub fn rollback(then: impl FnOnce(bool) + 'static) {
     );
 }
 
+/// Remove generations older than `days` and what nothing needs any more.
+pub fn clean(days: u32, then: impl FnOnce(bool) + 'static) {
+    run(
+        vec!["nyx-system".into(), "clean".into(), days.to_string()],
+        "Removing old generations and unused packages…",
+        "Cleaned up",
+        then,
+    );
+}
+
+/// Shrink the system log to `megabytes`.
+pub fn clean_logs(megabytes: u32, then: impl FnOnce(bool) + 'static) {
+    run(vec!["nyx-system".into(), "clean-logs".into(), megabytes.to_string()], "Removing old logs…", "Old logs removed", then);
+}
+
 /// One system generation.
 pub struct Generation {
     pub number: u32,

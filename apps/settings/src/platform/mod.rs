@@ -87,6 +87,14 @@ pub fn firewall_group(page: &Page) {
     }
 }
 
+/// The system's rows in Disks' Clean up group.
+pub fn system_cleanup(g: &crate::widgets::Group) {
+    match PLATFORM {
+        Platform::NyxOS => nyxos::pages::cleanup_rows(g),
+        Platform::Omarchy => crate::sections::cleanup::omarchy_rows(g),
+    }
+}
+
 /// About's group for the system itself.
 pub fn about(page: &Page) {
     match PLATFORM {
