@@ -77,11 +77,14 @@ fn battery_lines(shell: &str) -> (String, String) {
     (status, remaining)
 }
 
+/// What the page asks while being built, for [`cmd::fetch_ahead`].
+pub const READS: &[&[&str]] = &[&["powerprofilesctl", "list"], &["powerprofilesctl", "get"]];
+
 pub fn build(page: &Page) {
     // ----- Profile -----
     let g = page.group("Power profile");
     let profiles = crate::platform::power_profiles();
-    let current = cmd::output(&["powerprofilesctl", "get"]).unwrap_or_default();
+    let current = cmd::read(&["powerprofilesctl", "get"]).unwrap_or_default();
     let label = |p: &str| match p {
         "power-saver" => "Power saver".to_string(),
         "balanced" => "Balanced".to_string(),

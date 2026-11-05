@@ -13,11 +13,10 @@
   background: @theme_divider;
 }
 
+/* The icon-only sidebar hides the group headings (the dividers stand in), so they
+ * keep their size: one sized to nothing there stays blank when the sidebar widens. */
 .settings-navigation.compact .nav-group {
-  margin: 6px 0;
-  padding: 0;
-  min-height: 0;
-  font-size: 0;
+  font-size: 0.846em;
 }
 
 .settings-navigation .search-count {

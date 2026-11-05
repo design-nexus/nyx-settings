@@ -23,8 +23,29 @@ pub fn parse(text: &str) -> Option<Value> {
     text.lines().rev().find_map(|l| serde_json::from_str::<Value>(l.trim()).ok())
 }
 
+/// What the pages ask the assistant while being built, for [`cmd::fetch_ahead`].
+pub const READS: &[&[&str]] = &[
+    &[PROGRAM, "config", "get", "--json"],
+    &[PROGRAM, "status", "--json"],
+    &[PROGRAM, "perf", "--json"],
+    &[PROGRAM, "preset", "show", "--json"],
+    &[PROGRAM, "models", "list", "--json"],
+    &[PROGRAM, "tasks", "--limit", "10", "--json"],
+    &[PROGRAM, "audit", "--limit", "30", "--json"],
+    &[PROGRAM, "dictionary", "list"],
+    &[PROGRAM, "privacy", "failure"],
+];
+
+/// Like [`run`] for a command that only reads; a page being built may get the answer
+/// fetched ahead.
+fn read(args: &[&str]) -> Result<String> {
+    let mut all = vec![PROGRAM];
+    all.extend_from_slice(args);
+    cmd::read(&all)
+}
+
 pub fn json(args: &[&str]) -> Option<Value> {
-    run(args).ok().and_then(|t| parse(&t))
+    read(args).ok().and_then(|t| parse(&t))
 }
 
 /// The assistant's settings as they are on disk.
@@ -51,6 +72,7 @@ pub fn get_str(cfg: &Value, key: &str) -> String {
 /// Change one setting. The assistant checks it, keeps the file's comments, and reloads
 /// (or restarts, for the model and devices). The error says why a value was refused.
 pub fn set(key: &str, value: &str) -> Result<()> {
+    cmd::forget_ahead();
     run(&["config", "set", key, value]).map(|_| ()).map_err(|e| {
         // `cmd::run` puts the whole command line first; only the reason matters.
         let text = e.to_string();
@@ -70,7 +92,7 @@ pub fn list(items: &[String]) -> String {
 
 /// The daemon's health (`status --json`): running, model loaded, pending approvals…
 pub fn status() -> Option<Value> {
-    run(&["status", "--json"])
+    read(&["status", "--json"])
         .ok()
         .and_then(|t| t.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).find(|v| v.get("ok").is_some()))
 }

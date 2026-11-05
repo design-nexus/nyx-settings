@@ -54,16 +54,21 @@ pub fn parse_units(units: &str, files: &str) -> Vec<Unit> {
     out
 }
 
+const UNITS: &[&str] = &["list-units", "--type=service", "--all", "--plain", "--no-legend", "--no-pager"];
+const UNIT_FILES: &[&str] = &["list-unit-files", "--type=service", "--plain", "--no-legend", "--no-pager"];
+
+/// What the page asks systemctl while being built, for [`cmd::fetch_ahead`].
+pub fn reads() -> Vec<Vec<&'static str>> {
+    [&["systemctl", "--user"][..], &["systemctl"][..]]
+        .iter()
+        .flat_map(|base| [UNITS, UNIT_FILES].map(|extra| [*base, extra].concat()))
+        .collect()
+}
+
 fn list(user: bool) -> Vec<Unit> {
     let base: &[&str] = if user { &["systemctl", "--user"] } else { &["systemctl"] };
-    let run = |extra: &[&str]| {
-        let mut a = base.to_vec();
-        a.extend_from_slice(extra);
-        cmd::output(&a).unwrap_or_default()
-    };
-    let units = run(&["list-units", "--type=service", "--all", "--plain", "--no-legend", "--no-pager"]);
-    let files = run(&["list-unit-files", "--type=service", "--plain", "--no-legend", "--no-pager"]);
-    parse_units(&units, &files)
+    let run = |extra: &[&str]| cmd::read(&[base, extra].concat()).unwrap_or_default();
+    parse_units(&run(UNITS), &run(UNIT_FILES))
 }
 
 pub fn build(page: &Page) {

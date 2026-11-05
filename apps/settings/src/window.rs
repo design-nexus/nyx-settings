@@ -89,6 +89,12 @@ pub fn present(app: &gtk::Application, section: Option<&str>) {
         window.present();
         return;
     }
+    // The slowest pages' questions to the system, asked while the window opens.
+    crate::cmd::fetch_ahead(sections::power::READS);
+    crate::cmd::fetch_ahead(&sections::services::reads());
+    if sections::assistant::client::installed() {
+        crate::cmd::fetch_ahead(sections::assistant::client::READS);
+    }
     theme::install();
     build(app);
     let p = prefs::get();
@@ -125,7 +131,7 @@ pub fn present(app: &gtk::Application, section: Option<&str>) {
     });
     // Build the other pages a little at a time while nothing else is happening,
     // so the first search finds everything without a pause.
-    glib::timeout_add_local_once(std::time::Duration::from_secs(3), prebuild_next);
+    prebuild_after(std::time::Duration::from_millis(400));
     // The sidebar used what extensions said last time; ask again in case devices came or went.
     crate::cmd::background(crate::ext::refresh_pages, |changed| {
         if changed {
@@ -167,6 +173,9 @@ fn build(app: &gtk::Application) {
     let stack = gtk::Stack::new();
     stack.add_css_class("settings-content");
     stack.set_hexpand(true);
+    // Sized by the page shown: measuring every built page on each search keystroke is slow.
+    stack.set_hhomogeneous(false);
+    stack.set_vhomogeneous(false);
     stack.set_transition_type(gtk::StackTransitionType::Crossfade);
     stack.set_transition_duration(if prefs::get().reduce_motion { 0 } else { 160 });
     let (empty, empty_label) = search_empty_page();
@@ -625,13 +634,23 @@ fn apply_compact(compact: bool) {
     for wdg in u.compact_fixed.iter().chain(&u.compact_items) {
         wdg.set_visible(!compact);
     }
+    show_group_labels(&u);
     show_dividers(&u.nav_list, compact);
+    show_search_counts(&u);
     u.collapse_button.set_tooltip_text(Some(if compact {
         "Expand the sidebar (Ctrl+B)"
     } else {
         "Collapse the sidebar (Ctrl+B)"
     }));
     centre_icons(u.nav.upcast_ref(), compact);
+}
+
+/// The full sidebar's group headings: shown for groups with a page showing.
+fn show_group_labels(u: &Ui) {
+    for (label, ids) in &u.nav_groups {
+        let any = ids.iter().any(|id| u.nav_items.get(id).is_some_and(|b| b.is_visible()));
+        label.set_visible(any && !u.compact.get());
+    }
 }
 
 /// The icon-only sidebar's group dividers: shown for groups with a page showing.
@@ -721,15 +740,22 @@ fn busy_on_page() -> bool {
 
 /// Build one page that hasn't been yet, then come back for the next.
 fn prebuild_next() {
-    let Some(ui) = ui() else { return };
-    let next = {
-        let u = ui.borrow();
-        u.sections.iter().filter(|s| (s.visible)()).map(|s| s.id).find(|id| !u.pages.contains_key(id))
-    };
-    if let Some(id) = next {
+    if let Some(id) = next_unbuilt() {
         ensure_built(id);
-        glib::timeout_add_local_once(std::time::Duration::from_millis(250), prebuild_next);
+        prebuild_after(std::time::Duration::from_millis(60));
     }
+}
+
+/// After `wait`, once input and redraws are done, build the next page.
+fn prebuild_after(wait: std::time::Duration) {
+    glib::timeout_add_local_full(wait, glib::Priority::LOW, || {
+        prebuild_next();
+        glib::ControlFlow::Break
+    });
+}
+
+thread_local! {
+    static BUILT_ONCE: RefCell<std::collections::HashSet<&'static str>> = RefCell::default();
 }
 
 fn ensure_built(id: &'static str) {
@@ -744,7 +770,12 @@ fn ensure_built(id: &'static str) {
     let Some(section) = section else { return };
     let sid = section.id;
     let page = widgets::page(sid);
-    section.run(&page);
+    // Only a page's first build may use answers fetched ahead; a redraw asks again.
+    if BUILT_ONCE.with(|b| b.borrow_mut().insert(sid)) {
+        crate::cmd::building(|| section.run(&page));
+    } else {
+        section.run(&page);
+    }
     mark_page(&page.root, NARROW.with(|n| n.get()));
     let stack = ui.borrow().stack.clone();
     stack.add_named(&page.root, Some(sid));
@@ -886,18 +917,52 @@ thread_local! {
     /// Search results in page order, and which one Up / Down is on.
     static HITS: RefCell<Vec<(&'static str, gtk::Widget)>> = const { RefCell::new(Vec::new()) };
     static HIT_AT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// What's being searched for, while pages not built yet are built for it.
+    static QUERY: RefCell<String> = const { RefCell::new(String::new()) };
+    static CATCHING_UP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The first page in the sidebar that hasn't been built.
+fn next_unbuilt() -> Option<&'static str> {
+    let ui = ui()?;
+    let u = ui.borrow();
+    u.sections.iter().filter(|s| (s.visible)()).map(|s| s.id).find(|id| !u.pages.contains_key(id))
 }
 
 fn filter(query: &str) {
+    QUERY.with(|q| *q.borrow_mut() = query.to_string());
+    search_for(query, true);
+    if !crate::search::terms(query).is_empty() && next_unbuilt().is_some() && !CATCHING_UP.with(|c| c.replace(true)) {
+        glib::idle_add_local_full(glib::Priority::LOW, || {
+            search_catch_up();
+            glib::ControlFlow::Break
+        });
+    }
+}
+
+/// While searching, build the pages that aren't yet, one at a time between keystrokes
+/// and redraws, and add what each one matches.
+fn search_catch_up() {
+    let query = QUERY.with(|q| q.borrow().clone());
+    let next = if crate::search::terms(&query).is_empty() { None } else { next_unbuilt() };
+    let Some(id) = next else {
+        CATCHING_UP.with(|c| c.set(false));
+        return;
+    };
+    ensure_built(id);
+    search_for(&query, false);
+    glib::idle_add_local_full(glib::Priority::LOW, || {
+        search_catch_up();
+        glib::ControlFlow::Break
+    });
+}
+
+/// Show only what matches `query` on the pages built so far. `fresh` is a new query:
+/// it starts on the first result; otherwise the result Up / Down is on stays.
+fn search_for(query: &str, fresh: bool) {
     let Some(ui) = ui() else { return };
     let terms = crate::search::terms(query);
-
-    if !terms.is_empty() {
-        let ids: Vec<&'static str> = ui.borrow().sections.iter().filter(|s| (s.visible)()).map(|s| s.id).collect();
-        for id in ids {
-            ensure_built(id);
-        }
-    }
+    let kept = if fresh { None } else { HITS.with(|h| h.borrow().get(HIT_AT.with(|a| a.get())).map(|(_, r)| r.clone())) };
 
     let mut section_hits: HashMap<String, usize> = HashMap::new();
     let title_hits: Vec<&'static str> = {
@@ -959,41 +1024,47 @@ fn filter(query: &str) {
     }
     HITS.with(|h| *h.borrow_mut() = ordered);
     HIT_AT.with(|h| h.set(0));
+    let counts =
+        (!terms.is_empty()).then(|| u.sections.iter().filter_map(|s| section_hits.get(s.id).map(|n| (s.id, *n))).collect());
+    COUNTS.with(|c| *c.borrow_mut() = counts);
+    show_search_counts(&u);
 
     let mut first_match: Option<&'static str> = None;
     for s in &u.sections {
         let Some(button) = u.nav_items.get(s.id) else { continue };
         let visible = terms.is_empty() || section_hits.contains_key(s.id) || title_hits.contains(&s.id);
         button.set_visible(visible);
-        set_search_count(button, if terms.is_empty() { None } else { section_hits.get(s.id).copied() });
         if visible && first_match.is_none() && !terms.is_empty() {
             first_match = Some(s.id);
         }
     }
-    for (label, ids) in &u.nav_groups {
-        let any = ids.iter().any(|id| u.nav_items.get(id).is_some_and(|b| b.is_visible()));
-        label.set_visible(any && !u.compact.get());
-    }
+    show_group_labels(&u);
     show_dividers(&u.nav_list, u.compact.get());
     let current = u.current;
     let current_visible = u.nav_items.get(current).is_some_and(|b| b.is_visible());
+    let was_empty = u.stack.visible_child_name().as_deref() == Some(EMPTY_PAGE);
     let nothing = !terms.is_empty() && first_match.is_none();
     if nothing {
         u.empty_label.set_text(&format!("No settings match “{}”", query.trim()));
         u.stack.set_visible_child_name(EMPTY_PAGE);
-    } else if u.stack.visible_child_name().as_deref() == Some(EMPTY_PAGE) {
+    } else if was_empty {
         u.stack.set_visible_child_name(current);
     }
     drop(u);
+    // Results found later on other pages don't take you away from the one shown.
+    let move_on = if fresh { !current_visible || !section_hits.contains_key(current) } else { !current_visible || was_empty };
     if let Some(first) = first_match
-        && (!current_visible || !section_hits.contains_key(current))
+        && move_on
     {
         // Typing moves between pages; only where the search started goes in the history.
         NO_HISTORY.with(|n| n.set(true));
         navigate(first);
         NO_HISTORY.with(|n| n.set(false));
     }
-    if !terms.is_empty() {
+    if let Some(at) = kept.and_then(|row| HITS.with(|h| h.borrow().iter().position(|(_, r)| *r == row))) {
+        HIT_AT.with(|h| h.set(at));
+        HITS.with(|h| h.borrow()[at].1.add_css_class("search-hit"));
+    } else if !terms.is_empty() {
         // Start on the first result on the page shown.
         let current = ui.borrow().current;
         let at = HITS.with(|h| h.borrow().iter().position(|(s, _)| *s == current));
@@ -1001,6 +1072,30 @@ fn filter(query: &str) {
             show_hit(at);
         }
     }
+}
+
+thread_local! {
+    /// Each page's number of results while searching; `None` when not.
+    static COUNTS: RefCell<Option<HashMap<&'static str, usize>>> = const { RefCell::new(None) };
+}
+
+/// The number of results after each page's name in the sidebar while searching, or
+/// in its tooltip when the sidebar shows only icons (a count there would widen it).
+fn show_search_counts(u: &Ui) {
+    let compact = u.compact.get();
+    COUNTS.with(|counts| {
+        let counts = counts.borrow();
+        for s in &u.sections {
+            let Some(button) = u.nav_items.get(s.id) else { continue };
+            let count = counts.as_ref().and_then(|c| c.get(s.id).copied());
+            set_search_count(button, if compact { None } else { count });
+            let tip = match count {
+                Some(n) if compact => format!("{}: {n} matching {}", s.title, if n == 1 { "setting" } else { "settings" }),
+                _ => s.description.to_string(),
+            };
+            button.set_tooltip_text(Some(&tip));
+        }
+    });
 }
 
 /// How many results a page has, after its name in the sidebar while searching.
