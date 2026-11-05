@@ -142,15 +142,25 @@ pub fn build_dock(page: &Page) {
         set_dock("trash", toml::Value::Boolean(on))
     });
     g.add(&r);
+    let (r, _) = widgets::switch_row(
+        "Folder item counts",
+        "A badge with how many items each folder holds. Right-click a folder to set it for that folder.",
+        b("folder_counts", true),
+        |on| set_dock("folder_counts", toml::Value::Boolean(on)),
+    );
+    g.add(&r);
     let (r, _) =
         widgets::switch_row("Apps button", "First in the dock: every app in a grid, with search.", b("apps", true), |on| {
             set_dock("apps", toml::Value::Boolean(on))
         });
     g.add(&r);
-    widgets::keywords("position size hide autohide previews thumbnails trash apps launcher running monitor screen");
+    widgets::keywords(
+        "position size hide autohide previews thumbnails trash apps launcher running monitor screen folder count badge",
+    );
     g.note(
         "Right-click the dock for these settings and to add a folder (or drag a folder onto it). \
-         Right-click a folder for how it looks and opens: stack, fan, grid or list.",
+         Right-click a folder for how it looks and opens: stack, fan, grid or list, and its count. \
+         Right-click an app for its card.",
     );
 }
 
