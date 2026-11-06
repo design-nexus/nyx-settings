@@ -124,6 +124,74 @@ pub fn build(page: &Page) {
             g.add(&r);
         }
     }
+
+    if installed("nyx-browser") {
+        browser_group(page);
+    }
+}
+
+const BROWSER_DESKTOP: &str = "io.github.design_nexus.nyx.Browser.desktop";
+
+/// What Browser may reach. The browser's native host reads this file on every request, so a
+/// change applies at once. A group that isn't listed is on.
+fn browser_integrations_file() -> std::path::PathBuf {
+    let config = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".config")))
+        .unwrap_or_default();
+    config.join("nyx-browser/integrations.json")
+}
+
+fn browser_integrations() -> serde_json::Map<String, serde_json::Value> {
+    std::fs::read_to_string(browser_integrations_file())
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+fn set_browser_integration(key: &str, on: bool) -> std::io::Result<()> {
+    let mut all = browser_integrations();
+    all.insert(key.to_string(), on.into());
+    let file = browser_integrations_file();
+    if let Some(parent) = file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let temporary = file.with_extension("json.tmp");
+    std::fs::write(&temporary, serde_json::Value::Object(all).to_string())?;
+    std::fs::rename(&temporary, &file)
+}
+
+fn browser_group(page: &Page) {
+    let g = page.group("Browser");
+    g.note("Theme, tabs and sidebar are set in Browser itself.");
+
+    let is_default = cmd::output(&["xdg-settings", "get", "default-web-browser"]).is_some_and(|d| d.trim() == BROWSER_DESKTOP);
+    let (r, _) = widgets::switch_row("Default browser", "Opens links from every app in Browser.", is_default, |on| {
+        if on {
+            cmd::run_async(&["xdg-settings", "set", "default-web-browser", BROWSER_DESKTOP], |r| match r {
+                Ok(_) => window::toast("Default set to Browser"),
+                Err(e) => window::toast(&format!("{e}")),
+            });
+        } else {
+            window::toast("Choose another browser under Web browser");
+        }
+    });
+    g.add(&r);
+
+    let saved = browser_integrations();
+    for (key, title, desc) in [
+        ("share", "Share", "Lets Browser send pages, selections, images and downloads to the Share Sheet."),
+        ("capture", "Capture", "Lets Browser open screenshots of pages in Capture."),
+        ("assistant", "Assistant", "Lets Browser ask the local Assistant about a page. It asks you before reading each page."),
+    ] {
+        let on = saved.get(key).and_then(serde_json::Value::as_bool).unwrap_or(true);
+        let (r, _) = widgets::switch_row(title, desc, on, move |on| {
+            if let Err(e) = set_browser_integration(key, on) {
+                window::toast(&format!("Couldn't save that: {e}"));
+            }
+        });
+        g.add(&r);
+    }
 }
 
 fn mime_row(c: &'static Category) -> Option<gtk::Box> {
