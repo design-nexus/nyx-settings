@@ -53,7 +53,7 @@ pub fn build(page: &Page) {
     g.add(&hypr_slider(
         "master.mfact",
         "Master width",
-        "Master & stack: how much of the screen the big window takes.",
+        "Master &amp; stack: how much of the screen the big window takes.",
         (0.2, 0.8, 0.01),
         2,
         "",
