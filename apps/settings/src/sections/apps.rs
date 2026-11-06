@@ -75,6 +75,93 @@ fn omarchy_defaults(page: &Page) {
             ("emacs", "Emacs", "emacs"),
         ],
     ));
+    if let Some(r) = omarchy_agent_row() {
+        g.add(&r);
+    }
+}
+
+const AGENT_DESC: &str = "Opens in a terminal with <tt>Super Shift Ctrl A</tt>, set to work without stopping to ask.";
+
+/// The coding agents Omarchy's launcher knows: (id, label, command).
+const OMARCHY_AGENTS: &[(&str, &str, &str)] = &[
+    ("claude", "Claude Code", "claude"),
+    ("codex", "Codex", "codex"),
+    ("agy", "Antigravity", "agy"),
+    ("cursor-agent", "Cursor CLI", "cursor-agent"),
+    ("grok", "Grok", "grok"),
+    ("crush", "Crush", "crush"),
+    ("opencode", "OpenCode", "opencode"),
+    ("omp", "Oh My Pi", "omp"),
+    ("pi", "Pi", "pi"),
+    ("copilot", "GitHub Copilot", "copilot"),
+];
+
+/// The agents a `nyx agent list` prints, one `command<TAB>name` per line.
+fn agent_list(text: &str) -> Vec<(String, String)> {
+    text.lines().filter_map(|l| l.split_once('\t')).map(|(c, n)| (c.to_string(), n.to_string())).collect()
+}
+
+/// A "Coding agent" row: None first, then the installed agents and the current one.
+fn agent_row(mut options: Vec<(String, String)>, current: &str, set: impl Fn(&str) -> Result<(), String> + 'static) -> gtk::Box {
+    options.insert(0, ("none".into(), "None".into()));
+    let current = if current.is_empty() { "none" } else { current };
+    let names = options.clone();
+    let (r, _) = widgets::choice_row("Coding agent", AGENT_DESC, options, current, move |id| {
+        let name = names.iter().find(|(i, _)| *i == id).map(|(_, n)| n.clone()).unwrap_or_default();
+        match set(&id) {
+            Ok(()) if id == "none" => window::toast("No default coding agent"),
+            Ok(()) => window::toast(&format!("Coding agent set to {name}")),
+            Err(e) => window::toast(&format!("Couldn't set the coding agent: {e}")),
+        }
+    });
+    r
+}
+
+/// The default agent in `nyx agent`, which knows each one's command and flags.
+fn nyxos_agent_row() -> Option<gtk::Box> {
+    let installed = agent_list(&cmd::output(&["nyx", "agent", "list"])?);
+    let current = cmd::output(&["nyx", "agent", "default"]).unwrap_or_default().trim().to_string();
+    let mut options = installed;
+    if !current.is_empty() && !options.iter().any(|(c, _)| *c == current) {
+        let all = agent_list(&cmd::output(&["nyx", "agent", "list", "--all"]).unwrap_or_default());
+        let name = all.into_iter().find(|(c, _)| *c == current).map(|(_, n)| n).unwrap_or(current.clone());
+        options.push((current.clone(), format!("{name} (not installed)")));
+    }
+    if options.is_empty() {
+        return None;
+    }
+    Some(agent_row(options, &current, |id| cmd::read(&["nyx", "agent", "default", id]).map(|_| ()).map_err(|e| e.to_string())))
+}
+
+/// Omarchy's default agent is the file its launcher reads. `omarchy-default-agent` would
+/// also start the agent, so the row writes the file itself.
+fn omarchy_agent_file() -> std::path::PathBuf {
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from).unwrap_or_default();
+    home.join(".config/omarchy/defaults/agent")
+}
+
+fn omarchy_agent_row() -> Option<gtk::Box> {
+    let current = std::fs::read_to_string(omarchy_agent_file()).unwrap_or_default().trim().to_string();
+    let options: Vec<(String, String)> = OMARCHY_AGENTS
+        .iter()
+        .filter(|(id, _, bin)| installed(bin) || *id == current)
+        .map(|(id, label, _)| (id.to_string(), label.to_string()))
+        .collect();
+    if options.is_empty() {
+        return None;
+    }
+    Some(agent_row(options, &current, |id| {
+        let file = omarchy_agent_file();
+        if id == "none" {
+            return std::fs::remove_file(&file)
+                .or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(()) } else { Err(e) })
+                .map_err(|e| e.to_string());
+        }
+        if let Some(dir) = file.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&file, format!("{id}\n")).map_err(|e| e.to_string())
+    }))
 }
 
 /// NyxOS's defaults: the browser as a MIME default, the terminal in
@@ -106,6 +193,9 @@ fn nyxos_defaults(page: &Page) {
                 Err(e) => window::toast(&format!("Couldn't set the editor: {e}")),
             }
         });
+        g.add(&r);
+    }
+    if let Some(r) = nyxos_agent_row() {
         g.add(&r);
     }
 }
