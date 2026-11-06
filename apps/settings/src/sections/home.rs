@@ -57,8 +57,9 @@ fn balance_rows(f: &gtk::FlowBox) -> gtk::DrawingArea {
             .max(1);
         let fit = ((width + 12) / (tile + 12)).max(1) as u32;
         let per = balanced_per_line(n, fit);
+        // Only the most per line: a minimum would make this the page's minimum width,
+        // which keeps the sidebar icon-only once the tiles have room.
         if f.max_children_per_line() != per {
-            f.set_min_children_per_line(per);
             f.set_max_children_per_line(per);
         }
     });

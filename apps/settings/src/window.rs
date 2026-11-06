@@ -518,8 +518,9 @@ thread_local! {
     static SIZED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// Below this the sidebar always shows only icons.
-const NARROW_BELOW: i32 = 980;
+/// Below this the sidebar always shows only icons. Above it, only when the page
+/// wouldn't fit beside the full sidebar (half a 1920-pixel screen keeps the headings).
+const NARROW_BELOW: i32 = 760;
 /// The full sidebar's width, a little over what it measures.
 const SIDEBAR_WIDTH: i32 = 272;
 /// How much wider a page gets when it leaves the narrow padding (20 px a side more).
