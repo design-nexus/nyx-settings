@@ -2,14 +2,14 @@
 Type=Application
 Name=Settings
 GenericName=System Settings
-Comment=Appearance, input, gestures, sound, displays and everything else in Omarchy
+Comment=Appearance, input, gestures, sound, displays and everything else on your desktop
 Exec=nyx-settings
 Icon=io.github.design_nexus.nyx.Settings
 Terminal=false
 StartupNotify=true
 StartupWMClass=io.github.design_nexus.nyx.Settings
 Categories=Settings;DesktopSettings;HardwareSettings;GTK;
-Keywords=settings;preferences;omarchy;hyprland;theme;audio;equalizer;trackpad;gestures;keyboard;display;
+Keywords=settings;preferences;nyxos;omarchy;hyprland;theme;audio;equalizer;trackpad;gestures;keyboard;display;
 Actions=sound;trackpad;
 
 [Desktop Action sound]
