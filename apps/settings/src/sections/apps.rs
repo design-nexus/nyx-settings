@@ -168,8 +168,9 @@ fn omarchy_agent_row() -> Option<gtk::Box> {
 /// xdg-terminals.list and the editor in ~/.config/nyx/editor.
 fn nyxos_defaults(page: &Page) {
     let g = page.group("Defaults");
-    if let Some(r) = mime_row(&WEB_BROWSER) {
-        g.add(&r);
+    match mime_row(&WEB_BROWSER) {
+        Some(r) => g.add(&r),
+        None => g.add(&widgets::row(WEB_BROWSER.title, "No browser is installed. Get one in the Store.", None)),
     }
     let (options, current) = defaults::terminals();
     if !options.is_empty() {

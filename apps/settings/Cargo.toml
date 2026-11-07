@@ -16,8 +16,8 @@ nyxos = []
 nyx-cloud = { git = "https://github.com/design-nexus/nyx-cloud.git", rev = "ba6385f60597a9ca6ebd5fb63836a1ea3dfa0f49" }
 nyx-system-proto = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "afa09fe764fc6aa932cc9e40dd366b765e673553" }
 nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "0b511a6e338f4c2c818bad6ebd351ae406578c00" }
-nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "b49ab72631cd6da8dc1bc241078200fcb7a83703" }
-nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "b49ab72631cd6da8dc1bc241078200fcb7a83703" }
+nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "f8eb24b88e4b4729238cfdd10472c67c33daf903" }
+nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "f8eb24b88e4b4729238cfdd10472c67c33daf903" }
 nyx-share-client = { git = "https://github.com/design-nexus/nyx-share.git", rev = "53a5cacbc46a4269ba40a0fb17c1ee07f12e5177" }
 anyhow = "1.0.104"
 gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }

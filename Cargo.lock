@@ -524,7 +524,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -802,7 +802,7 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1698,7 +1698,7 @@ dependencies = [
 [[package]]
 name = "nyx-theme"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-design.git?rev=b49ab72631cd6da8dc1bc241078200fcb7a83703#b49ab72631cd6da8dc1bc241078200fcb7a83703"
+source = "git+https://github.com/design-nexus/nyx-design.git?rev=f8eb24b88e4b4729238cfdd10472c67c33daf903#f8eb24b88e4b4729238cfdd10472c67c33daf903"
 dependencies = [
  "gtk4",
  "nyx-core",
@@ -1709,7 +1709,7 @@ dependencies = [
 [[package]]
 name = "nyx-ui"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-design.git?rev=b49ab72631cd6da8dc1bc241078200fcb7a83703#b49ab72631cd6da8dc1bc241078200fcb7a83703"
+source = "git+https://github.com/design-nexus/nyx-design.git?rev=f8eb24b88e4b4729238cfdd10472c67c33daf903#f8eb24b88e4b4729238cfdd10472c67c33daf903"
 dependencies = [
  "gtk4",
  "nyx-core",
@@ -2015,7 +2015,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2212,7 +2212,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2609,7 +2609,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
