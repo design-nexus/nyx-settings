@@ -61,7 +61,9 @@ fn queue_name(display: &str) -> String {
 }
 
 pub fn build(page: &Page) {
-    if !cmd::present("lpstat") {
+    // On NyxOS the switch below turns printing on through the System Manager, which
+    // brings CUPS and lpstat with it.
+    if !cmd::present("lpstat") && crate::platform::PLATFORM == crate::platform::Platform::Omarchy {
         page.banner("Printing isn't installed. Install cups to use printers: sudo pacman -S cups", true);
         return;
     }
