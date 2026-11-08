@@ -12,6 +12,7 @@ pub mod account_icons;
 pub mod accounts;
 pub mod apps;
 pub mod arrange;
+pub mod ai;
 pub mod assistant;
 pub mod audio;
 pub mod bar;
@@ -131,6 +132,10 @@ fn extension_sections(fresh: bool) -> Vec<Section> {
             visible: always,
         })
         .collect()
+}
+
+fn ai_config() -> Vec<PathBuf> {
+    vec![paths::config_home().join("nyx-ai/settings.toml"), paths::config_home().join("nyx-ai/models.ini")]
 }
 
 fn assistant_config() -> Vec<PathBuf> {
@@ -514,6 +519,29 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(online_accounts::build),
             visible: always,
+        },
+        // ----- Local AI -----
+        Section {
+            id: "local-ai",
+            title: "Local AI",
+            icon: "applications-science-symbolic",
+            group: "Local AI",
+            description: "Nyx AI Core: what it holds in memory, updates, default models and coding tools.",
+            keywords: "ai llm llama local model nyx ai core memory gpu vram unload update default openai api coding tools",
+            files: ai_config,
+            build: Build::Native(ai::runtime::build),
+            visible: ai::installed,
+        },
+        Section {
+            id: "local-ai-models",
+            title: "Models",
+            icon: "drive-harddisk-symbolic",
+            group: "Local AI",
+            description: "Download, update and remove the models Nyx apps run on this computer.",
+            keywords: "ai model llm gguf hugging face download remove update llama local",
+            files: ai_config,
+            build: Build::Native(ai::models::build),
+            visible: ai::installed,
         },
         // ----- Assistant -----
         Section {
