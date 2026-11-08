@@ -226,15 +226,19 @@ pub fn group(page: &Page) {
             return;
         };
         let of = |category: &str| s.targets.iter().filter(|t| t.category == category).collect::<Vec<_>>();
+        // The channel (and so the tools' newest pins) couldn't be asked: not "up to date".
+        let unchecked = s.status.notes.iter().any(|n| n.starts_with("The system channel couldn't be checked"));
+        let current = if unchecked { "Couldn't be checked right now." } else { "Up to date." };
 
         let sys = of("system");
         match sys.first() {
-            Some(t) if t.available.is_some() => system.show(
-                &format!("{}: NixOS, Nyx apps and apps from nixpkgs.", change(t)),
-                true,
-            ),
-            Some(t) => system.show(&format!("Up to date{}.", t.installed.as_ref().map(|v| format!(" ({v})")).unwrap_or_default()), false),
-            None => system.show("Up to date.", false),
+            Some(t) if t.available.is_some() => {
+                system.show(&format!("{}: NixOS, Nyx apps and apps from nixpkgs.", change(t)), true)
+            }
+            Some(t) if !unchecked => {
+                system.show(&format!("Up to date{}.", t.installed.as_ref().map(|v| format!(" ({v})")).unwrap_or_default()), false)
+            }
+            _ => system.show(current, false),
         }
 
         let user_apps: Vec<&Target> =
@@ -243,7 +247,11 @@ pub fn group(page: &Page) {
             let news: Vec<String> = user_apps.iter().filter(|t| t.available.is_some()).map(|t| change(t)).collect();
             let profile = user_apps.iter().any(|t| t.provider == "profile");
             let text = if news.is_empty() {
-                if profile { "Flatpaks are up to date; your Nix profile is checked as it updates.".to_string() } else { "Up to date.".into() }
+                if profile {
+                    "Flatpaks are up to date; your Nix profile is checked as it updates.".to_string()
+                } else {
+                    "Up to date.".into()
+                }
             } else {
                 news.join(", ")
             };
@@ -258,15 +266,13 @@ pub fn group(page: &Page) {
                 .map(|t| if t.needs_channel { format!("{} (with the system update)", change(t)) } else { change(t) })
                 .collect();
             let alone = tool_list.iter().any(|t| t.available.is_some() && !t.needs_channel || t.provider == "profile");
-            tools.show(&if news.is_empty() { "Up to date.".to_string() } else { news.join(", ") }, alone);
+            tools.show(&if news.is_empty() { current.to_string() } else { news.join(", ") }, alone);
         }
 
         match &s.firmware {
             Firmware::Devices { devices } if !devices.is_empty() => {
-                let news: Vec<String> = devices
-                    .iter()
-                    .filter_map(|d| d.update.as_ref().map(|u| format!("{} {} → {u}", d.name, d.version)))
-                    .collect();
+                let news: Vec<String> =
+                    devices.iter().filter_map(|d| d.update.as_ref().map(|u| format!("{} {} → {u}", d.name, d.version))).collect();
                 if news.is_empty() {
                     firmware.show("Up to date.", false);
                 } else {
