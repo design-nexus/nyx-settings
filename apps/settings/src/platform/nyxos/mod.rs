@@ -10,6 +10,7 @@ pub mod mounts;
 pub mod pages;
 pub mod power;
 pub mod printers;
+pub mod updates;
 pub mod users;
 
 use crate::sections::home::Hero;
@@ -35,6 +36,10 @@ pub fn busy() -> bool {
     BUSY.with(Cell::get)
 }
 
+fn set_busy(on: bool) {
+    BUSY.with(|b| b.set(on));
+}
+
 /// Run `nyx-system ARGS`: a toast while it builds, another when it's done, then `then`
 /// with whether it worked.
 fn run(args: Vec<String>, working: &str, done: &'static str, then: impl FnOnce(bool) + 'static) {
@@ -42,11 +47,11 @@ fn run(args: Vec<String>, working: &str, done: &'static str, then: impl FnOnce(b
         window::toast("Another system change is still running.");
         return;
     }
-    BUSY.with(|b| b.set(true));
+    set_busy(true);
     window::toast(working);
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
     cmd::run_async(&refs, move |r| {
-        BUSY.with(|b| b.set(false));
+        set_busy(false);
         match &r {
             Ok(_) => window::toast(done),
             Err(e) => {
@@ -71,10 +76,6 @@ pub fn apply(changes: Vec<Change>, done: &'static str, then: impl FnOnce(bool) +
         done,
         then,
     );
-}
-
-pub fn update(then: impl FnOnce(bool) + 'static) {
-    run(vec!["nyx-system".into(), "update".into()], "Updating NyxOS. This can take a while.", "NyxOS is up to date", then);
 }
 
 pub fn rollback(then: impl FnOnce(bool) + 'static) {

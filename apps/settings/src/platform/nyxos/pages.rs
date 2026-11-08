@@ -260,22 +260,11 @@ fn date(secs: i64) -> String {
 
 pub fn software(page: &Page) {
     let s = nyxos::settings();
-    let g = page.group("Updates");
-    let (r, b) = widgets::button_row(
-        &nyxos::version(),
-        "NyxOS, its Nyx apps and the software installed for everyone update together into a new generation, switched to only when it builds.",
-        "Update Now",
-        |b| {
-            b.set_sensitive(false);
-            nyxos::update(|_| window::rebuild("software"));
-        },
-    );
-    b.add_css_class("suggested-action");
-    b.set_sensitive(!nyxos::busy());
-    widgets::keywords("update upgrade nixos flake channel");
-    g.add(&r);
+    nyxos::updates::group(page);
+    nyxos::updates::history(page);
+    let g = page.group("Store");
     let (r, _) = widgets::button_row(
-        "Apps",
+        "Nyx Store",
         "Nyx Store installs apps from the NyxOS catalog, nixpkgs and Flathub, and updates Flathub apps.",
         "Open Store",
         |_| {
@@ -334,6 +323,7 @@ pub fn software(page: &Page) {
         let r = widgets::row(&format!("Nyx {app}"), if *on { "Turned on" } else { "Turned off" }, Some(reset.upcast_ref()));
         g.add(&r);
     }
+    nyxos::updates::settings(page);
 }
 
 pub fn boot(page: &Page) {
