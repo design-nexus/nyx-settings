@@ -85,6 +85,14 @@ struct HistoryEntry {
     error: Option<String>,
     #[serde(default)]
     reboot: bool,
+    /// How long each stage took; `total` is the whole.
+    #[serde(default)]
+    seconds: std::collections::BTreeMap<String, u64>,
+}
+
+/// `4 min`, `42 s`.
+fn took(secs: u64) -> String {
+    if secs < 60 { format!("{secs} s") } else { format!("{} min", (secs + 30) / 60) }
 }
 
 /// What came of an update, in one line.
@@ -312,11 +320,13 @@ pub fn history(page: &Page) {
         let what = match e.result.as_str() {
             "failed" => format!("Failed: {}", e.error.as_deref().unwrap_or("see nyx update history")),
             "current" => "Already up to date".to_string(),
+            "rolled-back" => "Went back a generation".to_string(),
             _ if e.changes.is_empty() => "Updated".to_string(),
             _ => format!("Updated, {} package{} changed", e.changes.len(), if e.changes.len() == 1 { "" } else { "s" }),
         };
         let restart = if e.reboot { " Needed a restart." } else { "" };
-        let r = widgets::row(&e.request, &format!("{} · {what}.{restart}", date(e.time)), None);
+        let duration = e.seconds.get("total").map(|s| format!(" · {}", took(*s))).unwrap_or_default();
+        let r = widgets::row(&e.request, &format!("{}{duration} · {what}.{restart}", date(e.time)), None);
         if e.result == "failed" {
             widgets::tag_row(&r, "Failed");
         }
