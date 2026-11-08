@@ -49,6 +49,7 @@ pub mod sign_in;
 pub mod software;
 pub mod switcher;
 pub mod theme;
+pub mod themes;
 pub mod trackpad;
 pub mod vpn_accounts;
 pub mod workspace_profiles;
@@ -295,9 +296,10 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             title: "Appearance",
             icon: "preferences-desktop-appearance-symbolic",
             group: "Personalization",
-            description: "Theme, wallpaper, fonts, and how this window looks.",
-            keywords: "theme colors colours palette wallpaper background font dracula catppuccin tokyo night one dark nord gruvbox follow omarchy",
-            files: || vec![paths::omarchy_colors(), paths::app_dir().join("settings.toml")],
+            description: "Theme, wallpaper, fonts, installing themes, each app's theme, and how this window looks.",
+            keywords: "theme colors colours palette wallpaper background font dracula catppuccin mocha tokyo night one dark nord gruvbox follow omarchy \
+                       install github import library update remove app theme override reset",
+            files: || vec![paths::omarchy_colors(), nyx_theme::suite_file(), paths::app_dir().join("settings.toml")],
             build: Build::Native(theme::build),
             visible: always,
         },

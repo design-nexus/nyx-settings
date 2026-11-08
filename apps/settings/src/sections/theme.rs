@@ -82,7 +82,16 @@ fn load_thumbnail(picture: &gtk::Picture, path: PathBuf) {
 }
 
 pub fn build(page: &Page) {
-    // ----- Omarchy theme -----
+    if super::themes::omarchy_chooses() {
+        omarchy_group(page);
+    } else {
+        super::themes::system_group(page);
+    }
+    rest(page);
+}
+
+/// The desktop theme where Omarchy chooses it: Omarchy's themes, set with its commands.
+fn omarchy_group(page: &Page) {
     let g = page.plain_group("Theme");
     g.note("Applies to the whole desktop: terminal, bar, editor, lock screen and wallpaper.");
     let flow = gtk::FlowBox::new();
@@ -188,7 +197,9 @@ pub fn build(page: &Page) {
     theme_row.add_css_class("bare");
     widgets::keywords(&format!("theme {}", names.join(" ")));
     g.add(&theme_row);
+}
 
+fn rest(page: &Page) {
     // ----- Wallpaper -----
     let g = page.group("Wallpaper");
     let buttons = widgets::hbox(8);
@@ -218,42 +229,28 @@ pub fn build(page: &Page) {
     g.add(&r);
     icons_row(&g);
 
+    super::themes::library_group(page);
+    super::themes::install_group(page);
+    super::themes::apps_group(page);
     apps_group(page);
 
     // ----- Settings window -----
     let g = page.collapsible("Settings window", false);
     let p = prefs::get();
-    let app_themes = theme::all();
-    let options: Vec<(String, String)> = app_themes.iter().map(|t| (t.id.clone(), t.name.clone())).collect();
-    let (theme_row, theme_dd) = widgets::choice_row(
+    let system = theme::engine::resolve_effective_theme(None, &theme::engine::suite(), &theme::A11y::default()).meta.name;
+    let mut options = vec![(String::new(), format!("Follow system ({system})"))];
+    options.extend(theme::engine::list_themes().into_iter().map(|m| (m.id, m.name)));
+    let (theme_row, _) = widgets::choice_row(
         "Settings theme",
-        "Dracula, Catppuccin, Tokyo Night, One Dark Pro and more. Add your own in <tt>~/.config/settings/themes</tt>.",
+        "Settings follows the system theme unless you give it one of its own. Add your own themes in <tt>~/.config/nyx/themes</tt>.",
         options,
-        &p.theme,
+        &theme::app_override().unwrap_or_default(),
         |id| {
-            prefs::update(|p| {
-                p.theme = id;
-                p.mode = prefs::ThemeMode::Theme;
-            });
-            theme::apply();
+            if let Err(e) = theme::set_app_theme((!id.is_empty()).then_some(id.as_str())) {
+                crate::window::toast(&e);
+            }
         },
     );
-    theme_dd.set_sensitive(p.mode == prefs::ThemeMode::Theme || !theme::omarchy_available());
-
-    if theme::omarchy_available() {
-        let dd = theme_dd.clone();
-        let (r, _) = widgets::switch_row(
-            "Follow Omarchy theme",
-            "Match the desktop's colors and update live whenever the Omarchy theme changes.",
-            p.mode == prefs::ThemeMode::Omarchy,
-            move |on| {
-                prefs::update(|p| p.mode = if on { prefs::ThemeMode::Omarchy } else { prefs::ThemeMode::Theme });
-                dd.set_sensitive(!on);
-                theme::apply();
-            },
-        );
-        g.add(&r);
-    }
     g.add(&theme_row);
 
     g.add(&nyx_ui::widgets::accent_row("settings"));
@@ -281,6 +278,9 @@ pub fn build(page: &Page) {
     // Shared by every Nyx app, like the theme.
     g.add(&nyx_ui::widgets::start_row());
     widgets::keywords("start startup launch first page home remember last open on");
+
+    let g = page.group("Defaults");
+    super::themes::reset_group(&g);
 }
 
 // ----- Apps follow the theme (hyprchroma) -----

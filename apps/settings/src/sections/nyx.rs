@@ -27,8 +27,14 @@ const APPS: &[(&str, &str, &str, &str)] = &[
     ("weather", "Weather", "nyx-weather", "Forecasts, hourly conditions and alerts"),
 ];
 
-fn installed(program: &str) -> bool {
+pub fn installed(program: &str) -> bool {
     paths::home().join(".local/bin").join(program).is_file()
+}
+
+/// Each app: what `nyx` calls it, its name, its program (also its id for theme
+/// choices) and what it is.
+pub fn apps() -> impl Iterator<Item = &'static (&'static str, &'static str, &'static str, &'static str)> {
+    APPS.iter()
 }
 
 /// Run `nyx …` in a terminal: installing can ask for a password and takes a while.
@@ -41,16 +47,20 @@ pub fn build(page: &Page) {
     let suite = nyx_theme::read_suite().unwrap_or_default();
 
     let g = page.group("Look");
-    g.note("Every Nyx app uses these, and follows a change within a second.");
+    g.note("Every Nyx app uses these and follows a change at once. Give one app its own theme under Appearance → App themes.");
     let follow = suite.mode == ThemeMode::Omarchy;
-    let themes: Vec<(String, String)> = nyx_theme::all().into_iter().map(|t| (t.id, t.name)).collect();
-    let (theme_row, theme_dd) =
-        widgets::choice_row("Theme", "The colors to use when not following Omarchy.", themes, &suite.theme, |id| {
-            nyx_theme::update_suite(|s| {
-                s.mode = ThemeMode::Theme;
-                s.theme = id;
-            })
-        });
+    let themes: Vec<(String, String)> = nyx_theme::engine::list_themes().into_iter().map(|m| (m.id, m.name)).collect();
+    let (theme_row, theme_dd) = widgets::choice_row(
+        "System theme",
+        "The theme Nyx apps and the shell follow when not following Omarchy.",
+        themes,
+        &suite.theme,
+        |id| {
+            if let Err(e) = nyx_theme::choose_system_theme(&id) {
+                crate::window::toast(&e);
+            }
+        },
+    );
     theme_dd.set_sensitive(!follow || !nyx_theme::omarchy_available());
     if nyx_theme::omarchy_available() {
         let dd = theme_dd.clone();
@@ -60,7 +70,10 @@ pub fn build(page: &Page) {
             follow,
             move |on| {
                 dd.set_sensitive(!on);
-                nyx_theme::update_suite(|s| s.mode = if on { ThemeMode::Omarchy } else { ThemeMode::Theme });
+                let id = if on { "omarchy".to_string() } else { nyx_theme::engine::suite().theme };
+                if let Err(e) = nyx_theme::choose_system_theme(&id) {
+                    crate::window::toast(&e);
+                }
             },
         );
         g.add(&r);

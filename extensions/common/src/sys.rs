@@ -52,9 +52,13 @@ pub fn home() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
 }
 
-/// The Omarchy theme's accent colour (`#rrggbb`), for "follow the theme".
+/// The Omarchy theme's accent colour (`#rrggbb`), for "follow the theme". Omarchy
+/// keeps the active theme under `$XDG_STATE_HOME`; `~/.config` is where it used to.
 pub fn theme_accent() -> Option<String> {
-    let text = std::fs::read_to_string(home().join(".config/omarchy/current/theme/colors.toml")).ok()?;
+    let state = std::env::var_os("XDG_STATE_HOME").map(PathBuf::from).filter(|p| p.is_absolute()).unwrap_or_else(|| home().join(".local/state"));
+    let text = std::fs::read_to_string(state.join("omarchy/current/theme/colors.toml"))
+        .or_else(|_| std::fs::read_to_string(home().join(".config/omarchy/current/theme/colors.toml")))
+        .ok()?;
     for key in ["accent", "color4", "foreground"] {
         if let Some(v) = text.lines().find_map(|l| {
             let (k, v) = l.split_once('=')?;

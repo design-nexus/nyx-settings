@@ -1,7 +1,8 @@
 //! The Omarchy theme-set hook. Omarchy resets the icon theme (and things like
 //! keyboard lighting) on every theme change; this hook runs `settings --theme-sync`
-//! right after, which puts back the icon theme chosen in Settings and tells the
-//! extensions that asked, so they can do the same.
+//! right after, which publishes the Nyx theme engine's snapshot of the new theme,
+//! puts back the icon theme chosen in Settings and tells the extensions that
+//! asked, so they can do the same.
 
 use super::appearance;
 use crate::{cmd, paths};
@@ -25,7 +26,9 @@ pub fn hook_script(self_cmd: &str) -> String {
 }
 
 fn wanted() -> bool {
-    appearance::load().icon_theme.is_some() || crate::ext::any_wants("theme-changed")
+    appearance::load().icon_theme.is_some()
+        || crate::ext::any_wants("theme-changed")
+        || nyx_theme::engine::suite().mode == nyx_theme::ThemeMode::Omarchy
 }
 
 /// Install, refresh or remove the hook to match what needs it.
@@ -48,6 +51,8 @@ pub fn ensure() {
 
 /// `settings --theme-sync` (and the older `--aura-sync`).
 pub fn sync() -> anyhow::Result<()> {
+    // The Nyx system theme follows Omarchy's: publish it and tell every client.
+    nyx_theme::announce("system", "omarchy-theme-set");
     let icons = appearance::apply_icons(&appearance::load());
     let extensions = crate::ext::theme_changed();
     icons.and(extensions)
