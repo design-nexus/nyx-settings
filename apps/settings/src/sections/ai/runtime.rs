@@ -138,6 +138,17 @@ pub fn build(page: &Page) {
         settings["model_updates"].as_str().unwrap_or("auto"),
         "updates",
     ));
+    if has_battery() {
+        let on = settings["battery_saver"].as_bool().unwrap_or(false);
+        let desc = if settings["cpu_only"].as_bool().unwrap_or(false) {
+            "On battery, models run on the processor instead of the graphics card: slower, but the battery lasts longer. Running on battery now."
+        } else {
+            "On battery, models run on the processor instead of the graphics card: slower, but the battery lasts longer."
+        };
+        g.add(&widgets::switch_row("Battery saver", desc, on, |on| {
+            change(vec!["service".into(), format!("battery_saver={}", if on { "on" } else { "off" })], PAGE, "")
+        }).0);
+    }
 
     let g = page.group("Default models");
     g.note("Apps use these when they have no choice of their own.");
@@ -172,6 +183,14 @@ pub fn build(page: &Page) {
         None => g.note("The OpenAI-compatible API is off (openai_endpoint in ~/.config/nyx-ai/settings.toml)."),
     }
     widgets::keywords("ai llm llama local model nyx ai core gpu memory vram cuda vulkan unload update default openai api coding tools");
+}
+
+fn has_battery() -> bool {
+    std::fs::read_dir("/sys/class/power_supply")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|e| std::fs::read_to_string(e.path().join("type")).is_ok_and(|t| t.trim() == "Battery"))
 }
 
 fn glib_escape(s: &str) -> String {
