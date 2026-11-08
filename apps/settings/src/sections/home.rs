@@ -119,6 +119,9 @@ fn short_version(v: &str) -> String {
 fn hero(page: &Page) -> Hero {
     let card = widgets::hbox(24);
     card.add_css_class("home-hero");
+    let logo = nyx_ui::widgets::logo(64);
+    logo.set_valign(gtk::Align::Start);
+    card.append(&logo);
 
     let left = widgets::vbox(14);
     left.set_hexpand(true);

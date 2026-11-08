@@ -461,6 +461,121 @@ pub fn apps_group(page: &Page) {
     }
 }
 
+/// Ask for a logo file (SVG or PNG) and hand it over, checked.
+pub fn choose_logo(done: impl Fn(engine::logo::Image) + 'static) {
+    let filter = gtk::FileFilter::new();
+    filter.set_name(Some("Logos (SVG or PNG)"));
+    filter.add_mime_type("image/svg+xml");
+    filter.add_mime_type("image/png");
+    filter.add_suffix("svg");
+    filter.add_suffix("png");
+    let filters = gtk::gio::ListStore::new::<gtk::FileFilter>();
+    filters.append(&filter);
+    let dialog = gtk::FileDialog::builder().title("Choose a logo").modal(true).filters(&filters).default_filter(&filter).build();
+    dialog.open(window::window().as_ref(), gtk::gio::Cancellable::NONE, move |res| {
+        let Ok(file) = res else { return };
+        let Some(path) = file.path() else { return };
+        match engine::logo::Image::read(&path) {
+            Ok(image) => done(image),
+            Err(e) => window::toast(&format!("That can't be the logo: {e}")),
+        }
+    });
+}
+
+/// Show `logo` in `image` as the current theme would draw it.
+pub fn preview_logo(image: &gtk::Image, logo: &engine::logo::Logo) {
+    image.set_paintable(nyx_theme::logo_texture_for(logo, image.pixel_size(), image.scale_factor()).as_ref());
+}
+
+const LOGO_NOTE: &str = "An SVG drawn in <tt>currentColor</tt> takes each theme's colour; a PNG is shown as it is.";
+
+/// Your own logo, used at once (where no System Manager keeps a system logo).
+pub fn logo_group(page: &Page) {
+    let g = page.group("Logo");
+    g.note(&format!("Shown in Nyx apps and the shell. {LOGO_NOTE}"));
+    widgets::keywords("logo brand mark emblem picture svg png");
+    let current = engine::logo::current();
+    let desc = match current.source {
+        engine::logo::Source::BuiltIn => "The Nyx mark.".to_string(),
+        engine::logo::Source::System => "This computer's logo.".to_string(),
+        engine::logo::Source::User => format!(
+            "Your own, {}.",
+            if current.recolorable() { "in each theme's colour" } else { "shown as it is" }
+        ),
+    };
+    let controls = widgets::hbox(8);
+    controls.append(&nyx_ui::widgets::logo(40));
+    let choose = gtk::Button::with_label("Choose…");
+    choose.set_valign(gtk::Align::Center);
+    choose.connect_clicked(|_| {
+        choose_logo(|image| match engine::logo::set_user(Some(&image)) {
+            Ok(()) => {
+                nyx_theme::themes_changed("logo-set");
+                window::rebuild("theme");
+            }
+            Err(e) => window::toast(&format!("Couldn't set the logo: {e}")),
+        })
+    });
+    controls.append(&choose);
+    if current.source == engine::logo::Source::User {
+        let reset = gtk::Button::with_label("Use the Nyx mark");
+        reset.set_valign(gtk::Align::Center);
+        reset.connect_clicked(|_| match engine::logo::set_user(None) {
+            Ok(()) => {
+                nyx_theme::themes_changed("logo-reset");
+                window::rebuild("theme");
+            }
+            Err(e) => window::toast(&e),
+        });
+        controls.append(&reset);
+    }
+    g.add(&widgets::row("Logo", &desc, Some(controls.upcast_ref())));
+}
+
+/// The system logo row of NyxOS's Boot & Sign-in page: a system setting, sent with
+/// the page's other changes through `stage` (`None` takes the change back).
+pub fn system_logo_row(current: Option<&nyx_system_proto::Logo>, stage: Rc<dyn Fn(Option<nyx_system_proto::Change>)>) -> gtk::Box {
+    use nyx_system_proto::{Change, Logo, LogoFormat};
+    let preview = gtk::Image::new();
+    preview.set_pixel_size(40);
+    preview_logo(&preview, &engine::logo::current());
+    let controls = widgets::hbox(8);
+    controls.append(&preview);
+    let choose = gtk::Button::with_label("Choose…");
+    choose.set_valign(gtk::Align::Center);
+    {
+        let (preview, stage) = (preview.clone(), stage.clone());
+        choose.connect_clicked(move |_| {
+            let (preview, stage) = (preview.clone(), stage.clone());
+            choose_logo(move |image| {
+                let logo = match &image {
+                    engine::logo::Image::Svg(t) => Logo { format: LogoFormat::Svg, data: t.clone() },
+                    engine::logo::Image::Png(b) => Logo { format: LogoFormat::Png, data: engine::logo::base64(b) },
+                };
+                let change = Change::Logo { value: Some(logo) };
+                if let Err(e) = change.validate() {
+                    return window::toast(&format!("That can't be the logo: {e:#}"));
+                }
+                preview_logo(&preview, &engine::logo::Logo { image, source: engine::logo::Source::System, path: None });
+                stage(Some(change));
+            });
+        });
+    }
+    controls.append(&choose);
+    let reset = gtk::Button::with_label("Nyx mark");
+    reset.set_valign(gtk::Align::Center);
+    reset.set_tooltip_text(Some("Go back to the Nyx mark"));
+    {
+        let has = current.is_some();
+        reset.connect_clicked(move |_| {
+            preview_logo(&preview, &engine::logo::builtin());
+            stage(has.then_some(Change::Logo { value: None }));
+        });
+    }
+    controls.append(&reset);
+    widgets::row("System logo", &format!("On the boot and sign-in screens and in apps. {LOGO_NOTE}"), Some(controls.upcast_ref()))
+}
+
 /// Back to the defaults.
 pub fn reset_group(g: &Group) {
     let b = widgets::confirm_button("Reset", "Click again to reset", |b| {

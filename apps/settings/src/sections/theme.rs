@@ -229,6 +229,10 @@ fn rest(page: &Page) {
     g.add(&r);
     icons_row(&g);
 
+    // On NyxOS the logo is a system setting, under Boot & Sign-in.
+    if crate::platform::PLATFORM != crate::platform::Platform::NyxOS {
+        super::themes::logo_group(page);
+    }
     super::themes::library_group(page);
     super::themes::install_group(page);
     super::themes::apps_group(page);

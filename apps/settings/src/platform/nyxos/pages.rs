@@ -330,7 +330,7 @@ pub fn boot(page: &Page) {
     let s = nyxos::settings();
     let pending = Pending::new("boot");
     let g = page.group("Boot and sign-in screens");
-    g.note("The theme the screens before you sign in use, for everyone. Unless set here, they follow the system theme.");
+    g.note("How the screens before you sign in look, for everyone. Unless set here, they follow the system theme.");
     let mut themes = vec![("".to_string(), "Same as the system theme".to_string())];
     themes.extend(nyx_theme::all().into_iter().map(|t| (t.id, t.name)));
     for (key, title, current) in [
@@ -348,6 +348,11 @@ pub fn boot(page: &Page) {
         widgets::keywords("plymouth greeter login screen boot splash theme");
         g.add(&r);
     }
+    let p = pending.clone();
+    let r = crate::sections::themes::system_logo_row(s.logo.as_ref(), Rc::new(move |change| p.set("logo", change)));
+    tag_system(&r);
+    widgets::keywords("logo brand mark emblem picture svg png boot sign-in");
+    g.add(&r);
     pending.place(page);
     let g = page.group("Recovery");
     let (r, _) = widgets::button_row(
