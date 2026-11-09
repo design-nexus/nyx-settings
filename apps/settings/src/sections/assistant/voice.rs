@@ -41,7 +41,7 @@ fn speech_model_row() -> gtk::Box {
     }
     let (r, _) = widgets::button_row(
         "Speech model",
-        "Not downloaded yet (about 650 MB). Until then the assistant uses Voxtype.",
+        "Not downloaded yet (about 650 MB). Until then the assistant can't hear you.",
         "Download",
         |b| {
             b.set_sensitive(false);
@@ -64,27 +64,19 @@ fn speech_model_row() -> gtk::Box {
 pub fn build(page: &Page) {
     let Some(cfg) = super::config_or_banner(page) else { return };
 
+    // Nyx Voice's streaming recognizer: words while you speak.
     let g = page.group("Hearing");
+    g.add(&speech_model_row());
     g.add(&choice(
         &cfg,
-        "stt.provider",
-        "Speech recognition",
-        "Restarts the assistant.",
-        &[("streaming", "Streaming (transcribes while you speak)"), ("voxtype", "Voxtype (after you stop)")],
+        "stt.device",
+        "Run recognition on",
+        "The graphics card is faster but shares its memory with the language model.",
+        &[("cpu", "Processor"), ("cuda", "Graphics card")],
     ));
-    if client::get_str(&cfg, "stt.provider") == "streaming" {
-        g.add(&speech_model_row());
-        g.add(&choice(
-            &cfg,
-            "stt.device",
-            "Run recognition on",
-            "The graphics card is faster but shares its memory with the language model.",
-            &[("cpu", "Processor"), ("cuda", "Graphics card")],
-        ));
-    }
     g.add(&device_row(&cfg, "audio.source", "Microphone", audio::sources()));
     g.add(&device_row(&cfg, "audio.sink", "Speaker", audio::hardware_sinks()));
-    widgets::keywords("stt asr speech recognition transcription microphone mic speaker output device voxtype");
+    widgets::keywords("stt asr speech recognition transcription microphone mic speaker output device nyx voice");
 
     let g = page.group("Talking over it");
     g.add(&switch(&cfg, "barge_in.enabled", "Interrupt by speaking", "Speaking while it talks stops or lowers its voice."));

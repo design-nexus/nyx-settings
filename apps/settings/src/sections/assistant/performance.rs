@@ -186,7 +186,7 @@ pub fn build(page: &Page) {
     let speech = match (yes(&stt["streaming"]), stt["load_ms"].as_u64()) {
         (true, Some(ms)) if ms > 0 => format!("Streaming · loaded in {ms} ms"),
         (true, _) => "Streaming · loading".to_string(),
-        _ => "Voxtype".to_string(),
+        _ => "Not available (no speech model)".to_string(),
     };
     g.add(&widgets::info_row("Speech recognition", &speech).0);
     let tts = &perf["tts"];

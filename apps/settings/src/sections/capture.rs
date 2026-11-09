@@ -303,9 +303,13 @@ fn weather(page: &Page) {
 // ----- Dictation -----
 
 fn dictation(page: &Page) {
-    if !cmd::present("omarchy-voxtype-install") {
+    if crate::platform::PLATFORM == crate::platform::Platform::NyxOS {
+        voice_dictation(page);
         return;
     }
+    // Omarchy's dictation (VoxType); the install script's name changed in Omarchy 4.5.
+    let install = ["omarchy-install-dictation-voxtype", "omarchy-voxtype-install"].into_iter().find(|s| cmd::present(s));
+    let Some(install) = install else { return };
     let g = page.collapsible("Dictation", false);
     let on = cmd::present("voxtype");
     let controls = widgets::hbox(8);
@@ -324,7 +328,7 @@ fn dictation(page: &Page) {
         }
     } else {
         let b = gtk::Button::with_label("Install…");
-        b.connect_clicked(|_| terminal("omarchy-voxtype-install"));
+        b.connect_clicked(move |_| terminal(install));
         controls.append(&b);
     }
     g.add(&widgets::row(
@@ -333,6 +337,74 @@ fn dictation(page: &Page) {
         Some(controls.upcast_ref()),
     ));
     widgets::keywords("voxtype dictation voice speech whisper microphone typing");
+}
+
+/// `~/.config/nyx-voice/config.toml`, Nyx Voice's settings.
+fn voice_config_path() -> std::path::PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config"))
+        .join("nyx-voice/config.toml")
+}
+
+fn voice_dictation_value(key: &str) -> Option<toml::Value> {
+    let text = std::fs::read_to_string(voice_config_path()).ok()?;
+    let t: toml::Table = toml::from_str(&text).ok()?;
+    t.get("dictation")?.get(key).cloned()
+}
+
+/// Change one `[dictation]` key, keeping the rest of the file. Nyx Voice reads it when it
+/// next starts (it starts on the next dictation once idle).
+fn set_voice_dictation(key: &str, value: toml::Value) {
+    let path = voice_config_path();
+    let mut t: toml::Table = std::fs::read_to_string(&path).ok().and_then(|s| toml::from_str(&s).ok()).unwrap_or_default();
+    let section = t.entry("dictation").or_insert_with(|| toml::Value::Table(Default::default()));
+    if let Some(table) = section.as_table_mut() {
+        table.insert(key.into(), value);
+    }
+    let saved = toml::to_string(&t).map_err(|e| e.to_string()).and_then(|text| {
+        std::fs::create_dir_all(path.parent().unwrap_or(&path)).map_err(|e| e.to_string())?;
+        std::fs::write(&path, text).map_err(|e| e.to_string())
+    });
+    match saved {
+        Ok(()) => {
+            let _ = Command::new("systemctl").args(["--user", "try-restart", "nyx-voiced.service"]).status();
+        }
+        Err(e) => window::toast(&format!("Couldn't save dictation settings: {e}")),
+    }
+}
+
+/// NyxOS: dictation is Nyx Voice's.
+fn voice_dictation(page: &Page) {
+    if !cmd::present("nyx-voice") {
+        return;
+    }
+    let g = page.collapsible("Dictation", false);
+    g.add(&widgets::info_row("Talk to type", "Hold F9 or Right Alt and speak, or press Super+Ctrl+X to start and stop. Runs on this computer.").0);
+    let output = voice_dictation_value("output").and_then(|v| v.as_str().map(String::from)).unwrap_or_else(|| "type".into());
+    let (r, _) = widgets::choice_row(
+        "Put the words",
+        "Typed where you're writing, or on the clipboard to paste.",
+        widgets::opts(&[("type", "Typed into the window"), ("clipboard", "On the clipboard")]),
+        &output,
+        |v| set_voice_dictation("output", toml::Value::String(v)),
+    );
+    g.add(&r);
+    let pause = voice_dictation_value("pause_media").and_then(|v| v.as_bool()).unwrap_or(true);
+    let (r, _) = widgets::switch_row("Pause music and videos while you talk", "They carry on when you stop.", pause, |on| {
+        set_voice_dictation("pause_media", toml::Value::Boolean(on))
+    });
+    g.add(&r);
+    let max = voice_dictation_value("max_seconds").and_then(|v| v.as_integer()).unwrap_or(60).to_string();
+    let (r, _) = widgets::choice_row(
+        "Longest dictation",
+        "It stops by itself after this long.",
+        widgets::opts(&[("30", "30 seconds"), ("60", "1 minute"), ("120", "2 minutes"), ("300", "5 minutes")]),
+        &max,
+        |v| set_voice_dictation("max_seconds", toml::Value::Integer(v.parse().unwrap_or(60))),
+    );
+    g.add(&r);
+    widgets::keywords("dictation voice speech microphone typing nyx voice f9");
 }
 
 // ----- Tools -----
