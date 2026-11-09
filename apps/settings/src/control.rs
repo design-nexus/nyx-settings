@@ -19,7 +19,7 @@ fn matches(s: &sections::Section, words: &[String]) -> bool {
 }
 
 pub fn handle(name: &str, args: Value) -> Result<Value, String> {
-    let shown = || sections::all().into_iter().filter(|s| (s.visible)());
+    let shown = || sections::all().into_iter().filter(|s| s.shown());
     match name {
         "settings.pages" => {
             let words: Vec<String> = args["query"].as_str().unwrap_or("").split_whitespace().map(str::to_lowercase).collect();

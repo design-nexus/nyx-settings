@@ -261,7 +261,7 @@ fn monitors(page: &Page) {
         page.banner("Couldn't read the displays from Hyprland.", true);
         return;
     }
-    let brightness = cmd::output(&["omarchy-brightness-display", "--no-osd"]).and_then(|s| s.trim().parse::<f64>().ok());
+    let brightness = crate::platform::brightness();
     arrangement(page, &monitors);
 
     for m in &monitors {
@@ -285,7 +285,12 @@ fn monitors(page: &Page) {
         if let Some(b) = brightness.filter(|_| m.get("focused").and_then(|f| f.as_bool()).unwrap_or(false)) {
             let n = name.clone();
             let (r, _) = widgets::slider_row("Brightness", "", (1.0, 100.0, 1.0), b, 0, "%", move |v| {
-                cmd::spawn(&["omarchy-brightness-display", "--no-osd", "--monitor", &n, &format!("{}%", v.round() as i64)]);
+                // Omarchy's script reaches external screens too (DDC); elsewhere the backlight.
+                if crate::capability::program("omarchy-brightness-display") {
+                    cmd::spawn(&["omarchy-brightness-display", "--no-osd", "--monitor", &n, &format!("{}%", v.round() as i64)]);
+                } else {
+                    crate::platform::set_brightness(v.round() as i64);
+                }
             });
             g.add(&r);
         }

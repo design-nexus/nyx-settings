@@ -78,6 +78,10 @@ pub struct Section {
     pub files: fn() -> Vec<PathBuf>,
     pub build: Build,
     pub visible: fn() -> bool,
+    /// Capabilities the page depends on (`crate::capability` ids): hidden when one isn't
+    /// installed or isn't on this computer, disabled with the reason when one can't be
+    /// used right now.
+    pub needs: &'static [&'static str],
 }
 
 impl Section {
@@ -86,6 +90,18 @@ impl Section {
             Build::Native(f) => f(page),
             Build::Extension(r) => ext::render::build(page, self.id, r.clone()),
         }
+    }
+
+    /// Whether the page shows in the sidebar, and whether it can do anything right now.
+    pub fn visibility(&self) -> crate::capability::Visibility {
+        if !(self.visible)() {
+            return crate::capability::Visibility::Hidden;
+        }
+        crate::capability::visibility(self.needs)
+    }
+
+    pub fn shown(&self) -> bool {
+        self.visibility() != crate::capability::Visibility::Hidden
     }
 
     pub fn config_files(&self) -> Vec<PathBuf> {
@@ -130,6 +146,7 @@ fn extension_sections(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Extension(Rc::new(r)),
             visible: always,
+            needs: &[],
         })
         .collect()
 }
@@ -168,6 +185,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(home::build),
             visible: always,
+            needs: &[],
         },
         // ----- Connections -----
         Section {
@@ -180,6 +198,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(connectivity::build_wifi),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "bluetooth",
@@ -191,6 +210,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(connectivity::build_bluetooth),
             visible: always,
+            needs: &["bus:system:org.bluez", "hw:bluetooth"],
         },
         Section {
             id: "network",
@@ -202,6 +222,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(network::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "mounts",
@@ -213,6 +234,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || vec![std::path::PathBuf::from("/etc/fstab")],
             build: Build::Native(mounts::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "sharing",
@@ -226,6 +248,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             },
             build: Build::Native(sharing::build),
             visible: always,
+            needs: &[],
         },
         // ----- Hardware -----
         Section {
@@ -238,6 +261,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || hypr(&["monitors.lua", "settings.lua"]),
             build: Build::Native(displays::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "audio",
@@ -249,6 +273,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: crate::backend::audio::config_files,
             build: Build::Native(audio::build),
             visible: always,
+            needs: &["daemon:audio"],
         },
         Section {
             id: "power",
@@ -260,6 +285,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(power::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "idle",
@@ -271,6 +297,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || vec![paths::shell_json()],
             build: Build::Native(idle::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "printers",
@@ -282,6 +309,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(printers::build),
             visible: always,
+            needs: &["program:lpstat"],
         },
         Section {
             id: "disks",
@@ -294,6 +322,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(disks::build),
             visible: always,
+            needs: &[],
         },
         // ----- Personalization -----
         Section {
@@ -307,6 +336,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || vec![paths::omarchy_colors(), nyx_theme::suite_file(), paths::app_dir().join("settings.toml")],
             build: Build::Native(theme::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "look",
@@ -318,6 +348,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || hypr(&["looknfeel.lua", "settings.lua"]),
             build: Build::Native(look::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "bar",
@@ -329,6 +360,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || vec![paths::shell_json(), paths::omarchy_config().join("shell.toml")],
             build: Build::Native(bar::build),
             visible: always,
+            needs: &["program:omarchy-shell"],
         },
         Section {
             id: "plugins",
@@ -340,6 +372,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || vec![paths::shell_json()],
             build: Build::Native(plugins::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "nightlight",
@@ -351,6 +384,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || hypr(&["hyprsunset.conf"]),
             build: Build::Native(nightlight::build),
             visible: always,
+            needs: &["program:hyprsunset"],
         },
         // ----- Desktop -----
         Section {
@@ -362,7 +396,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "dock launcher taskbar pinned apps hide previews",
             files: || vec![gtk::glib::user_config_dir().join("nyx/dock.toml")],
             build: Build::Native(desktop::build_dock),
-            visible: desktop::dock_installed,
+            visible: always,
+            needs: &["program:nyx-dock"],
         },
         Section {
             id: "switcher",
@@ -373,7 +408,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "switcher alt tab super tab windows apps overview keys thumbnails",
             files: || vec![gtk::glib::user_config_dir().join("nyx/switcher.toml")],
             build: Build::Native(switcher::build),
-            visible: switcher::installed,
+            visible: always,
+            needs: &["program:nyx-switcher"],
         },
         Section {
             id: "control-center",
@@ -384,7 +420,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "control center quick settings tiles status bar widget",
             files: || vec![gtk::glib::user_config_dir().join("nyx/control-center.toml")],
             build: Build::Native(desktop::build_control_center),
-            visible: desktop::control_center_installed,
+            visible: always,
+            needs: &["program:nyx-control-center"],
         },
         Section {
             id: "notifications",
@@ -395,7 +432,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "notifications notification center popups toasts dnd do not disturb history pinned inbox",
             files: Vec::new,
             build: Build::Native(desktop::build_notifications),
-            visible: desktop::notification_center_installed,
+            visible: always,
+            needs: &["program:nyx-notification-center"],
         },
         Section {
             id: "workspaces",
@@ -407,6 +445,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || hypr(&["looknfeel.lua", "settings.lua"]),
             build: Build::Native(workspaces::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "workspace-profiles",
@@ -418,6 +457,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || vec![gtk::glib::user_config_dir().join("nyx/desktop/profiles")],
             build: Build::Native(workspace_profiles::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "keybindings",
@@ -429,6 +469,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || hypr(&["bindings.lua", "settings.lua"]),
             build: Build::Native(keybindings::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "rules",
@@ -440,6 +481,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(rules::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "capture",
@@ -451,6 +493,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(capture::build),
             visible: always,
+            needs: &[],
         },
         // ----- Input -----
         Section {
@@ -463,6 +506,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || hypr(&["input.lua", "settings.lua"]),
             build: Build::Native(keyboard::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "mouse",
@@ -474,6 +518,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || hypr(&["input.lua", "settings.lua"]),
             build: Build::Native(mouse::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "trackpad",
@@ -485,6 +530,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || hypr(&["input.lua", "settings.lua"]),
             build: Build::Native(trackpad::build),
             visible: always,
+            needs: &["hw:touchpad"],
         },
         // ----- Accounts -----
         Section {
@@ -497,6 +543,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: accounts::files,
             build: Build::Native(accounts::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "sign-in",
@@ -508,6 +555,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(sign_in::build),
             visible: always,
+            needs: &["program:nyx-authctl"],
         },
         Section {
             id: "online-accounts",
@@ -519,6 +567,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(online_accounts::build),
             visible: always,
+            needs: &[],
         },
         // ----- Local AI -----
         Section {
@@ -530,7 +579,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "ai llm llama local model nyx ai core memory gpu vram unload update default openai api coding tools",
             files: ai_config,
             build: Build::Native(ai::runtime::build),
-            visible: ai::installed,
+            visible: always,
+            needs: &["program:nyx-ai"],
         },
         Section {
             id: "local-ai-models",
@@ -541,7 +591,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "ai model llm gguf hugging face download remove update llama local",
             files: ai_config,
             build: Build::Native(ai::models::build),
-            visible: ai::installed,
+            visible: always,
+            needs: &["program:nyx-ai"],
         },
         // ----- Assistant -----
         Section {
@@ -553,7 +604,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "assistant voice ai echo wake word conversation start stop autonomy",
             files: assistant_config,
             build: Build::Native(assistant::general::build),
-            visible: assistant::client::installed,
+            visible: always,
+            needs: &["program:nyx-assistant"],
         },
         Section {
             id: "assistant-appearance",
@@ -564,7 +616,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "assistant aura glow border full edge flow appearance monitor",
             files: assistant_config,
             build: Build::Native(assistant::appearance::build),
-            visible: assistant::client::installed,
+            visible: always,
+            needs: &["program:nyx-assistant"],
         },
         Section {
             id: "assistant-voice",
@@ -575,7 +628,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "assistant stt asr tts voice duplex barge interrupt microphone speaker kokoro",
             files: assistant_config,
             build: Build::Native(assistant::voice::build),
-            visible: assistant::client::installed,
+            visible: always,
+            needs: &["program:nyx-assistant"],
         },
         Section {
             id: "assistant-permissions",
@@ -586,7 +640,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "assistant permission allow ask deny files admin tool rule computer",
             files: assistant_config,
             build: Build::Native(assistant::permissions::build),
-            visible: assistant::client::installed,
+            visible: always,
+            needs: &["program:nyx-assistant"],
         },
         Section {
             id: "assistant-activity",
@@ -597,7 +652,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "assistant activity task approval audit log history",
             files: assistant_config,
             build: Build::Native(assistant::activity::build),
-            visible: assistant::client::installed,
+            visible: always,
+            needs: &["program:nyx-assistant"],
         },
         Section {
             id: "assistant-performance",
@@ -608,7 +664,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "assistant performance latency timing vram gpu",
             files: assistant_config,
             build: Build::Native(assistant::performance::build),
-            visible: assistant::client::installed,
+            visible: always,
+            needs: &["program:nyx-assistant"],
         },
         Section {
             id: "assistant-models",
@@ -619,7 +676,8 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "assistant model llm gguf hugging face download gemma qwen",
             files: assistant_config,
             build: Build::Native(assistant::models::build),
-            visible: assistant::client::installed,
+            visible: always,
+            needs: &["program:nyx-assistant"],
         },
         // ----- System -----
         Section {
@@ -632,6 +690,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(region::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "boot",
@@ -643,6 +702,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(boot::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "apps",
@@ -654,6 +714,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || vec![paths::config_home().join("mimeapps.list")],
             build: Build::Native(apps::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "software",
@@ -665,6 +726,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(software::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "services",
@@ -676,6 +738,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(services::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "extensions",
@@ -687,6 +750,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(extensions::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "nyx",
@@ -698,6 +762,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: || vec![nyx_theme::suite_file()],
             build: Build::Native(nyx::build),
             visible: always,
+            needs: &[],
         },
         Section {
             id: "about",
@@ -709,6 +774,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(about::build),
             visible: always,
+            needs: &[],
         },
     ];
     for section in extension_sections(fresh) {

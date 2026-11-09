@@ -10,10 +10,6 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-pub fn installed() -> bool {
-    cmd::present("nyx-switcher")
-}
-
 fn path() -> PathBuf {
     gtk::glib::user_config_dir().join("nyx/switcher.toml")
 }

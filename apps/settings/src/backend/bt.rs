@@ -52,12 +52,26 @@ pub fn devices() -> Vec<Device> {
     out
 }
 
+/// Omarchy's scripts also unblock the radio (rfkill); elsewhere BlueZ's own commands.
+fn omarchy(script: &str) -> bool {
+    crate::capability::program(script)
+}
+
 pub fn powered() -> bool {
-    cmd::run(&["omarchy-bluetooth-power", "is-on"]).is_ok()
+    if omarchy("omarchy-bluetooth-power") {
+        return cmd::run(&["omarchy-bluetooth-power", "is-on"]).is_ok();
+    }
+    cmd::output(&["bluetoothctl", "show"]).is_some_and(|t| t.lines().any(|l| l.trim() == "Powered: yes"))
 }
 
 pub fn set_power(on: bool) -> Result<String> {
-    cmd::run(&["omarchy-bluetooth-power", if on { "on" } else { "off" }])
+    if omarchy("omarchy-bluetooth-power") {
+        return cmd::run(&["omarchy-bluetooth-power", if on { "on" } else { "off" }]);
+    }
+    if on {
+        let _ = cmd::run(&["rfkill", "unblock", "bluetooth"]);
+    }
+    cmd::run(&["bluetoothctl", "power", if on { "on" } else { "off" }])
 }
 
 /// Look for nearby devices for a few seconds.
@@ -67,7 +81,19 @@ pub fn scan(seconds: u32) -> Result<String> {
 
 /// pair, connect, disconnect or forget.
 pub fn device(action: &str, address: &str) -> Result<String> {
-    cmd::run(&["omarchy-bluetooth-device", action, address])
+    if omarchy("omarchy-bluetooth-device") {
+        return cmd::run(&["omarchy-bluetooth-device", action, address]);
+    }
+    match action {
+        // Trusted, so it reconnects by itself next time, as Omarchy's script does.
+        "pair" => cmd::run(&["bluetoothctl", "--timeout", "20", "pair", address])
+            .and_then(|_| cmd::run(&["bluetoothctl", "trust", address]))
+            .and_then(|_| cmd::run(&["bluetoothctl", "--timeout", "10", "connect", address])),
+        "connect" => cmd::run(&["bluetoothctl", "--timeout", "10", "connect", address]),
+        "disconnect" => cmd::run(&["bluetoothctl", "disconnect", address]),
+        "forget" => cmd::run(&["bluetoothctl", "remove", address]),
+        other => cmd::run(&["bluetoothctl", other, address]),
+    }
 }
 
 #[cfg(test)]

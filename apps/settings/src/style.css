@@ -26,6 +26,11 @@
   padding: 0 7px;
 }
 
+/* A page that can't be used right now (its service is down): still there, dimmed. */
+.settings-navigation .nav-item.nav-unavailable {
+  opacity: 0.55;
+}
+
 .settings-navigation .nav-badge {
   font-size: 0.8em;
   padding: 0 7px;

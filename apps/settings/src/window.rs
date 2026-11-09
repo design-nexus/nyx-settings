@@ -2,6 +2,7 @@
 //! toggle, search, the page's config files), the navigation sidebar, a stack of
 //! section pages built the first time they're shown.
 
+use crate::capability::Visibility;
 use crate::sections::{self, Section};
 use crate::widgets::{self, SEARCH};
 use crate::{prefs, theme};
@@ -141,6 +142,7 @@ pub fn present(app: &gtk::Application, section: Option<&str>) {
 }
 
 fn build(app: &gtk::Application) {
+    crate::capability::start();
     let window =
         gtk::ApplicationWindow::builder().application(app).title("Settings").default_width(1120).default_height(800).build();
     window.add_css_class("settings-window");
@@ -363,7 +365,8 @@ fn fill_nav(list: &gtk::Box, sections: &[Section]) -> NavParts {
     let mut compact_items: Vec<gtk::Widget> = Vec::new();
     let mut last_group = "";
     for s in sections {
-        if !(s.visible)() || crate::platform::off_sidebar(s.id) {
+        let visibility = s.visibility();
+        if visibility == Visibility::Hidden || crate::platform::off_sidebar(s.id) {
             continue;
         }
         if s.group != last_group {
@@ -396,7 +399,7 @@ fn fill_nav(list: &gtk::Box, sections: &[Section]) -> NavParts {
             content.append(&t);
         }
         button.set_child(Some(&content));
-        button.set_tooltip_text(Some(s.description));
+        mark_nav(&button, s, &visibility);
         let id = s.id;
         button.connect_clicked(move |_| navigate(id));
         list.append(&button);
@@ -495,6 +498,7 @@ pub fn reload_sections(fresh: bool) {
         .filter(|id| sections.iter().find(|s| s.id == *id).is_none_or(|s| matches!(s.build, sections::Build::Extension(_))))
         .collect();
     for id in &stale {
+        PAGE_BODIES.with(|b| b.borrow_mut().remove(id));
         if let Some(p) = u.pages.remove(id) {
             SEARCH.with(|s| s.borrow_mut().retain(|item| item.section != *id));
             u.stack.remove(&p);
@@ -714,10 +718,45 @@ thread_local! {
 /// Check the page on screen, if it's one that shows live state; redraw it if that changed.
 fn watch_current() {
     let Some(ui) = ui() else { return };
-    let (id, visible) = {
+    let id = ui.borrow().current;
+    // Pages whose changes are announced are checked when they are.
+    if crate::live::sources_for(id).is_none() {
+        check_live(id);
+    }
+}
+
+thread_local! {
+    static LIVE_WATCHED: RefCell<std::collections::HashSet<&'static str>> = RefCell::new(Default::default());
+}
+
+/// From the first time a live page is shown, check it whenever what it shows is
+/// announced to have changed.
+fn watch_live(id: &'static str) {
+    let Some(sources) = crate::live::sources_for(id) else { return };
+    if !LIVE_WATCHED.with(|w| w.borrow_mut().insert(id)) {
+        return;
+    }
+    let (tx, rx) = async_channel::unbounded::<()>();
+    nyx_capability::watch(sources, move || {
+        let _ = tx.send_blocking(());
+    });
+    glib::spawn_future_local(async move {
+        while rx.recv().await.is_ok() {
+            check_live(id);
+        }
+    });
+}
+
+/// Redraw `id` if it's the page shown and what it shows has changed.
+fn check_live(id: &'static str) {
+    let Some(ui) = ui() else { return };
+    let (current, visible) = {
         let u = ui.borrow();
         (u.current, u.window.is_visible() && u.window.is_active())
     };
+    if current != id {
+        return;
+    }
     // Only for the window in use, and one check at a time.
     let Some(signature) = crate::live::signature_for(id) else { return };
     if !visible || CHECKING.with(|c| c.replace(true)) {
@@ -781,6 +820,112 @@ fn ensure_built(id: &'static str) {
     let stack = ui.borrow().stack.clone();
     stack.add_named(&page.root, Some(sid));
     ui.borrow_mut().pages.insert(sid, page.root);
+    PAGE_BODIES.with(|b| b.borrow_mut().insert(sid, (page.body, None)));
+    show_availability(&section);
+}
+
+thread_local! {
+    /// Each built page's body, and the banner saying why it can't be used, if it can't.
+    static PAGE_BODIES: RefCell<HashMap<&'static str, (gtk::Box, Option<gtk::Box>)>> = RefCell::new(HashMap::new());
+}
+
+/// A page whose capability is unavailable says why at the top, and its controls can't be
+/// used; one whose capability went while it was open stays, saying so, with its settings
+/// kept. Shown normally again when the capability comes back.
+fn show_availability(s: &Section) {
+    PAGE_BODIES.with(|b| {
+        let mut b = b.borrow_mut();
+        let Some((body, banner)) = b.get_mut(s.id) else { return };
+        if let Some(old) = banner.take() {
+            body.remove(&old);
+        }
+        let visibility = s.visibility();
+        let text = match &visibility {
+            Visibility::Shown => None,
+            Visibility::Disabled(why) => Some(format!("{} can't be used right now. {why}.", s.title)),
+            Visibility::Hidden => Some(match crate::capability::why_hidden(s.needs) {
+                Some(why) => format!("{} isn't available any more. {why}. Its settings are kept.", s.title),
+                None => format!("{} isn't available any more. Its settings are kept.", s.title),
+            }),
+        };
+        let mut child = body.first_child();
+        while let Some(c) = child {
+            c.set_sensitive(visibility == Visibility::Shown);
+            child = c.next_sibling();
+        }
+        if let Some(text) = text {
+            let new = widgets::banner(&text, true);
+            body.prepend(&new);
+            *banner = Some(new);
+        }
+    });
+}
+
+/// A sidebar entry: dimmed, with the reason, when its page can't be used right now.
+fn mark_nav(button: &gtk::Button, s: &Section, visibility: &Visibility) {
+    match visibility {
+        Visibility::Disabled(why) => {
+            button.add_css_class("nav-unavailable");
+            button.set_tooltip_text(Some(&format!("{}\n{why}", s.description)));
+        }
+        _ => {
+            button.remove_css_class("nav-unavailable");
+            button.set_tooltip_text(Some(s.description));
+        }
+    }
+}
+
+/// Something this computer can do came or went: the sidebar entries and pages that
+/// depend on it follow. The sidebar is filled again only when an entry comes or goes;
+/// the page shown stays shown (saying why) even if its entry went.
+pub fn capabilities_changed(changes: &[nyx_capability::Change]) {
+    let Some(ui) = ui() else { return };
+    let affected: Vec<Section> = {
+        let u = ui.borrow();
+        u.sections.iter().filter(|s| s.needs.iter().any(|n| changes.iter().any(|c| c.id == *n))).cloned().collect()
+    };
+    if affected.is_empty() {
+        return;
+    }
+    let comes_or_goes = {
+        let u = ui.borrow();
+        affected.iter().any(|s| s.shown() != u.nav_items.contains_key(s.id) && !crate::platform::off_sidebar(s.id))
+    };
+    if comes_or_goes {
+        refill_nav();
+    } else {
+        let u = ui.borrow();
+        for s in &affected {
+            if let Some(b) = u.nav_items.get(s.id) {
+                mark_nav(b, s, &s.visibility());
+            }
+        }
+    }
+    for s in &affected {
+        show_availability(s);
+    }
+}
+
+/// Fill the sidebar again from the sections as they are, keeping the pages built and the
+/// one shown.
+fn refill_nav() {
+    let Some(ui) = ui() else { return };
+    let mut u = ui.borrow_mut();
+    while let Some(c) = u.nav_list.first_child() {
+        u.nav_list.remove(&c);
+    }
+    let sections = u.sections.clone();
+    let (items, groups, compact_items) = fill_nav(&u.nav_list, &sections);
+    for w in &compact_items {
+        w.set_visible(!u.compact.get());
+    }
+    show_dividers(&u.nav_list, u.compact.get());
+    if let Some(b) = items.get(u.current) {
+        b.add_css_class("active");
+    }
+    u.nav_items = items;
+    u.nav_groups = groups;
+    u.compact_items = compact_items;
 }
 
 thread_local! {
@@ -820,7 +965,7 @@ pub fn navigate(id: &str) {
     };
     let resolved = {
         let u = ui.borrow();
-        let shown = |s: &&Section| (s.visible)();
+        let shown = |s: &&Section| s.shown();
         u.sections
             .iter()
             .filter(shown)
@@ -868,6 +1013,7 @@ pub fn navigate(id: &str) {
     }
     let window = u.window.clone();
     drop(u);
+    watch_live(id);
     prefs::update(|p| p.last_section = id.to_string());
     // A wider page may not fit beside the full sidebar.
     glib::idle_add_local_once(move || apply_width(&window));
@@ -927,7 +1073,7 @@ thread_local! {
 fn next_unbuilt() -> Option<&'static str> {
     let ui = ui()?;
     let u = ui.borrow();
-    u.sections.iter().filter(|s| (s.visible)()).map(|s| s.id).find(|id| !u.pages.contains_key(id))
+    u.sections.iter().filter(|s| s.shown()).map(|s| s.id).find(|id| !u.pages.contains_key(id))
 }
 
 fn filter(query: &str) {
@@ -970,6 +1116,7 @@ fn search_for(query: &str, fresh: bool) {
         let u = ui.borrow();
         u.sections
             .iter()
+            .filter(|s| u.nav_items.contains_key(s.id))
             .filter(|s| {
                 crate::search::matches(
                     &crate::search::normalise(&format!("{} {} {}", s.title, s.description, s.keywords)),
@@ -1020,7 +1167,8 @@ fn search_for(query: &str, fresh: bool) {
     let u = ui.borrow();
     // Results in the sidebar's order, for Up and Down.
     let mut ordered: Vec<(&'static str, gtk::Widget)> = Vec::new();
-    for s in &u.sections {
+    // Pages not in the sidebar (their capability went) aren't results.
+    for s in u.sections.iter().filter(|s| u.nav_items.contains_key(s.id)) {
         ordered.extend(hit_rows.iter().filter(|(sec, _)| sec == s.id).map(|(_, r)| (s.id, r.clone())));
     }
     HITS.with(|h| *h.borrow_mut() = ordered);

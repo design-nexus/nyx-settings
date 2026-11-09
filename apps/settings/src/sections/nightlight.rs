@@ -78,16 +78,42 @@ fn valid_time(t: &str) -> bool {
         && parts[1].parse::<u32>().is_ok_and(|m| m < 60)
 }
 
-pub fn build(page: &Page) {
-    let status =
-        cmd::output(&["omarchy-toggle-nightlight", "--status"]).and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
-    let on_now = status.as_ref().and_then(|v| v.get("enabled")).and_then(|v| v.as_bool()).unwrap_or(false);
+/// Omarchy's toggle where it's there; elsewhere hyprsunset itself.
+fn omarchy_toggle() -> bool {
+    crate::capability::program("omarchy-toggle-nightlight")
+}
 
+fn on_now() -> bool {
+    if omarchy_toggle() {
+        let status =
+            cmd::output(&["omarchy-toggle-nightlight", "--status"]).and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+        return status.as_ref().and_then(|v| v.get("enabled")).and_then(|v| v.as_bool()).unwrap_or(false);
+    }
+    // hyprsunset answers with the temperature it's showing; 6000 K and over is neutral.
+    cmd::output(&["hyprctl", "hyprsunset", "temperature"]).and_then(|t| t.trim().parse::<i64>().ok()).is_some_and(|k| k < 6000)
+}
+
+fn set_now(on: bool, temperature: i64) {
+    if omarchy_toggle() {
+        cmd::spawn(&["omarchy-toggle-nightlight"]);
+    } else if !on {
+        cmd::spawn(&["hyprctl", "hyprsunset", "identity"]);
+    } else if cmd::run(&["pgrep", "-x", "hyprsunset"]).is_ok() {
+        cmd::spawn(&["hyprctl", "hyprsunset", "temperature", &temperature.to_string()]);
+    } else {
+        cmd::spawn(&["uwsm", "app", "--", "hyprsunset", "-t", &temperature.to_string()]);
+    }
+}
+
+pub fn build(page: &Page) {
     let g = page.group("Now");
-    let (r, _) =
-        widgets::switch_row("Night light", "Warm the screen colors right away. Also in the Omarchy menu.", on_now, |_| {
-            cmd::spawn(&["omarchy-toggle-nightlight"])
-        });
+    let what = if omarchy_toggle() {
+        "Warm the screen colors right away. Also in the Omarchy menu."
+    } else {
+        "Warm the screen colors right away."
+    };
+    let warmth = read_schedule().temperature;
+    let (r, _) = widgets::switch_row("Night light", what, on_now(), move |on| set_now(on, warmth));
     g.add(&r);
 
     let sched = Rc::new(RefCell::new(read_schedule()));

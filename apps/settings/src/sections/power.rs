@@ -81,6 +81,8 @@ fn battery_lines(shell: &str) -> (String, String) {
 pub const READS: &[&[&str]] = &[&["powerprofilesctl", "list"], &["powerprofilesctl", "get"]];
 
 pub fn build(page: &Page) {
+    // The rows for a battery, screen brightness and a keyboard light come and go with them.
+    crate::capability::rebuild_on(&["hw:battery", "hw:backlight", "hw:keyboard-backlight"], "power");
     // ----- Profile -----
     let g = page.group("Power profile");
     let profiles = crate::platform::power_profiles();

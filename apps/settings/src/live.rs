@@ -1,9 +1,35 @@
 //! Pages that show the system as it is (Wi-Fi, Bluetooth, sound, services…) stay
-//! current while open: a cheap check runs in the background every few seconds,
-//! and the page is redrawn only when its answer changes.
+//! current while open: a cheap check runs in the background when what the page shows
+//! may have changed (NetworkManager, BlueZ, PipeWire, udev or systemd says so), or
+//! every few seconds for pages nothing announces changes for, and the page is redrawn
+//! only when its answer changes.
 
 use crate::backend::{audio, bt, net, streams, sysinfo};
 use crate::cmd;
+use nyx_capability::Source;
+
+fn lines(cmd: &[&str], matching: &[&str]) -> Source {
+    Source::Lines { cmd: cmd.iter().map(|s| s.to_string()).collect(), matching: matching.iter().map(|s| s.to_string()).collect() }
+}
+
+/// What announces a change to a watched page; `None`: it's checked on a timer.
+pub fn sources_for(id: &str) -> Option<Vec<Source>> {
+    Some(match id {
+        "wifi" => vec![lines(&["nmcli", "monitor"], &[])],
+        "bluetooth" => vec![lines(
+            &["dbus-monitor", "--system", "type='signal',sender='org.bluez'"],
+            &["member=InterfacesAdded", "member=InterfacesRemoved", "member=PropertiesChanged"],
+        )],
+        "audio" => vec![lines(&["pactl", "subscribe"], &["sink", "source", "card", "server"])],
+        "power" => vec![
+            Source::Udev("power_supply".into()),
+            lines(&["dbus-monitor", "--system", "type='signal',sender='net.hadess.PowerProfiles'"], &["member=PropertiesChanged"]),
+        ],
+        "services" => vec![Source::Units { system: true }, Source::Units { system: false }],
+        "displays" => vec![Source::Udev("drm".into())],
+        _ => return None,
+    })
+}
 
 /// How a page's state is summed up, for the pages that are watched.
 pub fn signature_for(id: &str) -> Option<fn() -> String> {

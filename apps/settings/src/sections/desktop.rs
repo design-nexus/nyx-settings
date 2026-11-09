@@ -50,7 +50,7 @@ fn bar_switch(id: &'static str, title: &str, desc: &str) -> gtk::Box {
 // ---------------------------------------------------------------- Dock
 
 pub fn dock_installed() -> bool {
-    cmd::present("nyx-dock")
+    crate::capability::program("nyx-dock")
 }
 
 /// Change one key in `dock.toml`, keeping the rest (the dock reloads it).
@@ -166,10 +166,6 @@ pub fn build_dock(page: &Page) {
 
 // ---------------------------------------------------------------- Control Center
 
-pub fn control_center_installed() -> bool {
-    cmd::present("nyx-control-center")
-}
-
 pub fn build_control_center(page: &Page) {
     let g = page.group("Control Center");
     g.add(&widgets::row(
@@ -216,10 +212,6 @@ pub fn build_control_center(page: &Page) {
 }
 
 // ---------------------------------------------------------------- Notifications
-
-pub fn notification_center_installed() -> bool {
-    cmd::present("nyx-notification-center")
-}
 
 pub fn build_notifications(page: &Page) {
     let g = page.group("Notification Center");

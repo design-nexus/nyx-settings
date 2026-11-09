@@ -1,6 +1,7 @@
 //! Settings — a control panel for Omarchy.
 
 mod backend;
+mod capability;
 mod charts;
 use nyx_ui::clamp;
 mod cmd;

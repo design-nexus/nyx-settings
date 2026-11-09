@@ -10,10 +10,6 @@ use serde_json::Value;
 
 pub const PROGRAM: &str = "nyx-ai";
 
-pub fn installed() -> bool {
-    cmd::present(PROGRAM)
-}
-
 /// Run `nyx-ai ARGS… --json`. The error is AI Core's own message.
 pub fn call(args: &[&str]) -> Result<Value, String> {
     let out = std::process::Command::new(PROGRAM)
