@@ -171,3 +171,19 @@ pub fn follow() {
 
 /// Pages with Shell Core's settings on them.
 const SHOWS_SHELL: [&str; 2] = ["displays", "workspaces"];
+
+#[cfg(test)]
+mod tests {
+    /// Against a running Shell Core:
+    /// `NYX_SHELL_SOCKET=… cargo test --bin nyx-settings shell_core_live -- --ignored`.
+    #[test]
+    #[ignore]
+    fn shell_core_live() {
+        let (config, errors) = super::config().unwrap();
+        assert!(config.pointer("/focus/restore").is_some(), "{config}");
+        assert!(errors.is_empty(), "{errors:?}");
+        // The test binary isn't nyx-settings, so Shell Core refuses its writes.
+        let refused = super::set("focus.restore", serde_json::json!(false)).unwrap_err();
+        assert!(refused.starts_with("Shell Core:"), "{refused}");
+    }
+}

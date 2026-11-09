@@ -116,4 +116,56 @@ pub fn build(page: &Page) {
     ));
     super::workspace_rules::build(page);
     super::own_titlebars::build(page);
+    shell(page);
+}
+
+/// Nyx Shell Core's own settings, through it (it owns them): shown when it's installed,
+/// saying why when it isn't running.
+fn shell(page: &Page) {
+    use crate::backend::shell_core;
+    if !crate::capability::state("daemon:shell-core").exists() {
+        return;
+    }
+    let g = page.group("Shell");
+    if !shell_core::available() {
+        let why = crate::capability::reason("daemon:shell-core").unwrap_or_else(|| "Shell Core isn't running".into());
+        g.note(&format!("{why}. Its settings show here when it is."));
+        return;
+    }
+    let (config, problems) = match shell_core::config() {
+        Ok(c) => c,
+        Err(e) => {
+            g.note(&gtk::glib::markup_escape_text(&e));
+            return;
+        }
+    };
+    for p in problems {
+        g.note(&gtk::glib::markup_escape_text(&format!("Shell Core set aside a setting it couldn't use: {p}")));
+    }
+    let restore = config.pointer("/focus/restore").and_then(serde_json::Value::as_bool).unwrap_or(true);
+    let (r, _) = crate::widgets::switch_row(
+        "Give focus back when a panel closes",
+        "The window you were in takes the keyboard again after the Control Center, Glimpse or another panel closes.",
+        restore,
+        |on| {
+            if let Err(e) = shell_core::set("focus.restore", serde_json::json!(on)) {
+                crate::window::toast(&e);
+            }
+        },
+    );
+    crate::widgets::keywords("focus restore keyboard panel overlay shell core");
+    g.add(&r);
+    let yours = nyx_config::Layers::standard()
+        .read(nyx_config::Layer::User, "shell")
+        .ok()
+        .is_some_and(|t| t.get("focus").and_then(|f| f.get("restore")).is_some());
+    if yours {
+        let (r, _) = crate::widgets::button_row("Focus after panels", "Back to NyxOS's default.", "Reset", |_| {
+            match shell_core::reset("focus.restore") {
+                Ok(()) => crate::window::rebuild("workspaces"),
+                Err(e) => crate::window::toast(&e),
+            }
+        });
+        g.add(&r);
+    }
 }
