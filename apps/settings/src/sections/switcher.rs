@@ -1,4 +1,5 @@
-//! Switcher: Nyx Switcher's `~/.config/nyx/switcher.toml`. The switcher reads it each
+//! Switcher: Nyx Switcher's settings (`~/.config/nyx/switcher.toml` over NyxOS's
+//! defaults). The switcher reads them each
 //! time it opens; a changed key is bound in Hyprland by `nyx-switcher --integrate`,
 //! which refuses a key another binding uses (its message is shown).
 
@@ -7,48 +8,23 @@ use crate::{cmd, window};
 use gtk::glib;
 use gtk::prelude::*;
 use std::cell::RefCell;
-use std::path::PathBuf;
 use std::rc::Rc;
 
-fn path() -> PathBuf {
-    gtk::glib::user_config_dir().join("nyx/switcher.toml")
-}
-
+/// What the switcher uses: NyxOS's defaults and an administrator's under the user's file.
 fn read() -> toml::Table {
-    std::fs::read_to_string(path()).ok().and_then(|t| toml::from_str(&t).ok()).unwrap_or_default()
+    nyx_config::Layers::standard().merged("switcher").unwrap_or_default()
 }
 
-/// Change one key (in `[keys]` when `table` is given), keeping the rest.
+/// Change one key (in `[keys]` when `table` is given) in the user's file, keeping the rest.
 fn set(table: Option<&str>, key: &str, value: toml::Value) -> bool {
-    let path = path();
-    let mut t: toml::Table = match std::fs::read_to_string(&path) {
-        Ok(text) => match toml::from_str(&text) {
-            Ok(t) => t,
-            Err(e) => {
-                window::toast(&format!("switcher.toml can't be read: {e}"));
-                return false;
-            }
-        },
-        Err(_) => toml::Table::new(),
+    let key = match table {
+        Some(name) => format!("{name}.{key}"),
+        None => key.to_string(),
     };
-    match table {
-        Some(name) => {
-            let sub = t.entry(name).or_insert_with(|| toml::Value::Table(toml::Table::new()));
-            if let Some(sub) = sub.as_table_mut() {
-                sub.insert(key.into(), value);
-            }
-        }
-        None => {
-            t.insert(key.into(), value);
-        }
-    }
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    match toml::to_string(&t).map_err(anyhow::Error::from).and_then(|s| cmd::atomic_write(&path, s)) {
+    match nyx_config::Layers::standard().set(nyx_config::Layer::User, "switcher", &key, value) {
         Ok(()) => true,
         Err(e) => {
-            window::toast(&format!("Couldn't save: {e}"));
+            window::toast(&format!("Couldn't save: {e:#}"));
             false
         }
     }

@@ -14,6 +14,26 @@ fn config(name: &str) -> PathBuf {
     gtk::glib::user_config_dir().join("nyx").join(name)
 }
 
+/// The shell components' settings are NyxOS configuration domains: NyxOS's defaults, an
+/// administrator's, then the user's file with only what they changed. Each component
+/// owns its domain's format and schema; Settings reads them merged and sets or resets
+/// one key at a time in the user's file.
+fn layers() -> nyx_config::Layers {
+    nyx_config::Layers::standard()
+}
+
+fn merged(domain: &str) -> toml::Table {
+    layers().merged(domain).unwrap_or_default()
+}
+
+fn set_key(domain: &str, key: &str, value: toml::Value) -> Result<(), String> {
+    layers().set(nyx_config::Layer::User, domain, key, value).map_err(|e| format!("{e:#}"))
+}
+
+fn reset_key(domain: &str, key: &str) -> Result<(), String> {
+    layers().reset(nyx_config::Layer::User, domain, key).map_err(|e| format!("{e:#}"))
+}
+
 /// Run a command in the background; say so if it fails.
 fn run(args: &[&str], done: impl FnOnce() + 'static) {
     let label = args[0].to_string();
@@ -53,27 +73,21 @@ pub fn dock_installed() -> bool {
     crate::capability::program("nyx-dock")
 }
 
-/// Change one key in `dock.toml`, keeping the rest (the dock reloads it).
+/// Change one of the dock's settings (it follows its layers). Not before the dock's first
+/// start, which picks the first pins when it finds no file of the user's.
 pub fn set_dock(key: &str, value: toml::Value) {
-    let path = config("dock.toml");
-    let Ok(text) = std::fs::read_to_string(&path) else { return };
-    let mut t: toml::Table = match toml::from_str(&text) {
-        Ok(t) => t,
-        Err(e) => {
-            window::toast(&format!("dock.toml can't be read: {e}"));
-            return;
-        }
-    };
-    t.insert(key.into(), value);
-    match toml::to_string(&t) {
-        Ok(s) => {
-            if let Err(e) = cmd::atomic_write(&path, s) {
-                window::toast(&format!("Couldn't save: {e}"));
-            }
-        }
-        Err(e) => window::toast(&format!("Couldn't save: {e}")),
+    if !config("dock.toml").exists() {
+        return;
+    }
+    if let Err(e) = set_key("dock", key, value) {
+        window::toast(&format!("Couldn't save: {e}"));
     }
 }
+
+/// The dock's look and behaviour, which "Back to the defaults" hands back (pins and
+/// folders stay).
+const DOCK_LOOK: &[&str] =
+    &["position", "icon_size", "hide", "hide_delay_ms", "running", "previews", "preview_delay_ms", "trash", "folder_counts", "apps", "app_names"];
 
 pub fn build_dock(page: &Page) {
     let g = page.group("Dock");
@@ -92,12 +106,12 @@ pub fn build_dock(page: &Page) {
     g.add(&r);
     widgets::keywords("dock launcher taskbar omarchy replace");
 
-    let file: Option<toml::Table> = std::fs::read_to_string(config("dock.toml")).ok().and_then(|t| toml::from_str(&t).ok());
     let g = page.group("Look and behaviour");
-    let Some(t) = file else {
+    if !config("dock.toml").exists() {
         g.note("These appear once the Nyx Dock has started for the first time.");
         return;
-    };
+    }
+    let t = merged("dock");
     let s = |k: &str, d: &str| t.get(k).and_then(|v| v.as_str()).unwrap_or(d).to_string();
     let b = |k: &str, d: bool| t.get(k).and_then(|v| v.as_bool()).unwrap_or(d);
     let opts = |o: &[(&str, &str)]| o.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect::<Vec<_>>();
@@ -157,6 +171,15 @@ pub fn build_dock(page: &Page) {
     widgets::keywords(
         "position size hide autohide previews thumbnails trash apps launcher running monitor screen folder count badge",
     );
+    let reset = widgets::confirm_button("Reset", "Click again to reset", |_| {
+        let failed: Vec<String> = DOCK_LOOK.iter().filter_map(|k| reset_key("dock", k).err()).collect();
+        match failed.first() {
+            None => window::toast("The dock looks as it does by default again"),
+            Some(e) => window::toast(&format!("Couldn't reset: {e}")),
+        }
+        gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(300), || window::rebuild("dock"));
+    });
+    g.add(&widgets::row("Back to the defaults", "Position, size, hiding and the rest as NyxOS sets them. Pinned apps and folders stay.", Some(reset.upcast_ref())));
     g.note(
         "Right-click the dock for these settings and to add a folder (or drag a folder onto it). \
          Right-click a folder for how it looks and opens: stack, fan, grid or list, and its count. \
@@ -173,24 +196,19 @@ pub fn build_control_center(page: &Page) {
         "<tt>Super D</tt>, or the bar button. Change the tiles with the pencil at the top of the panel.",
         None,
     ));
-    let path = config("control-center.toml");
-    let file: toml::Table = std::fs::read_to_string(&path).ok().and_then(|t| toml::from_str(&t).ok()).unwrap_or_default();
+    let file = merged("control-center");
     let remember = file.get("remember_page").and_then(|v| v.as_bool()).unwrap_or(true);
-    let p2 = path.clone();
     let (r, _) = widgets::switch_row("Open on the last page", "Off: it always opens on the first page.", remember, move |on| {
-        let mut t: toml::Table = std::fs::read_to_string(&p2).ok().and_then(|t| toml::from_str(&t).ok()).unwrap_or_default();
-        t.insert("remember_page".into(), toml::Value::Boolean(on));
-        match toml::to_string(&t).map_err(anyhow::Error::from).and_then(|s| cmd::atomic_write(&p2, s)) {
+        match set_key("control-center", "remember_page", toml::Value::Boolean(on)) {
             // It reads its layout when it starts; it's hidden, so a restart is unseen.
             Ok(()) => run(&["systemctl", "--user", "try-restart", "nyx-control-center.service"], || {}),
             Err(e) => window::toast(&format!("Couldn't save: {e}")),
         }
     });
     g.add(&r);
+    // The user's own layout goes; NyxOS's (or the Control Center's own) shows through.
     let reset = widgets::confirm_button("Restore", "Click again to restore", move |_| {
-        let mut t: toml::Table = std::fs::read_to_string(&path).ok().and_then(|t| toml::from_str(&t).ok()).unwrap_or_default();
-        t.remove("pages");
-        match toml::to_string(&t).map_err(anyhow::Error::from).and_then(|s| cmd::atomic_write(&path, s)) {
+        match reset_key("control-center", "pages") {
             Ok(()) => run(&["systemctl", "--user", "try-restart", "nyx-control-center.service"], || {
                 window::toast("The Control Center has its standard tiles again")
             }),
