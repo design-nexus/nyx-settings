@@ -221,8 +221,10 @@ Settings never parses or rewrites your own config files:
   `require` line is added the first time you change something. Each row has a
   reset button that hands the value back to your own config or Omarchy's
   default.
-- **Saved state**: `~/.config/settings/state.json`. The generated file is always
-  rebuilt from this.
+- **Saved state**: `~/.config/nyx-settings/state.json`. The generated file is always
+  rebuilt from this. How NyxOS's defaults, your changes, remembered devices and
+  what this computer can do fit together is in
+  [docs/configuration.md](https://github.com/design-nexus/nyx-settings/blob/main/docs/configuration.md).
 - **Keyboard backlight timeout**: a small user service, `settings-kbd-idle`, that
   asks the compositor when there's been no input (the Wayland idle-notify
   protocol). It exists only while a timeout is set.
@@ -236,7 +238,7 @@ Settings never parses or rewrites your own config files:
   `~/.config/omarchy/hooks/theme-set.d/50-settings-theme`, puts them back after
   each theme change. It also tells extensions that ask, so the ASUS extension
   can restore your keyboard lighting.
-- **Extensions** live in `~/.local/share/settings/extensions/<id>` (a git
+- **Extensions** live in `~/.local/share/nyx-settings/extensions/<id>` (a git
   checkout each). Settings runs each one's helper program and draws the page;
   each can be turned off without removing it (its pages are hidden), and
   `nyx-settings --ext list|install|update|enable|disable|remove` does the same from
@@ -255,7 +257,7 @@ other end of the loop.
 
 ## Custom themes
 
-Drop a TOML file in `~/.config/settings/themes/`:
+Drop a TOML file in `~/.config/nyx/themes/`:
 
 ```toml
 name = "My Theme"
