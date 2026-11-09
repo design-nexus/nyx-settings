@@ -306,8 +306,68 @@ pub fn persistent_upto(g: &Gestures) -> u32 {
     if g.enabled { g.loop_count.clamp(2, 10) } else { 0 }
 }
 
+/// The gestures NyxOS ships (`[[gestures]]` in `/etc/nyxos/defaults/hyprland.toml`), as
+/// fingers and direction; one tied to a Nyx app counts only when the app is installed.
+/// Empty on Omarchy.
+pub fn shipped() -> Vec<(u8, String)> {
+    let dir = std::env::var_os("NYX_CONFIG_DEFAULTS").map(std::path::PathBuf::from).unwrap_or_else(|| "/etc/nyxos/defaults".into());
+    let Ok(text) = std::fs::read_to_string(dir.join("hyprland.toml")) else { return Vec::new() };
+    let Ok(table) = text.parse::<toml::Table>() else { return Vec::new() };
+    let Some(list) = table.get("gestures").and_then(toml::Value::as_array) else { return Vec::new() };
+    list.iter()
+        .filter_map(|g| {
+            let fingers = u8::try_from(g.get("fingers")?.as_integer()?).ok()?;
+            let direction = g.get("direction")?.as_str()?.to_string();
+            let installed = g.get("app").and_then(toml::Value::as_str).is_none_or(|app| crate::cmd::present(&format!("nyx-{app}")));
+            installed.then_some((fingers, direction))
+        })
+        .collect()
+}
+
+/// Whether Hyprland would refuse `ours` because `theirs` (on the same fingers) is set.
+fn shadows(theirs: &str, ours: &str) -> bool {
+    let axis = |d: &str| match d {
+        "left" | "right" | "horizontal" => Some("horizontal"),
+        "up" | "down" | "vertical" => Some("vertical"),
+        _ => None,
+    };
+    theirs == ours
+        || (theirs == "horizontal" || theirs == "vertical" || ours == "horizontal" || ours == "vertical")
+            && axis(theirs).is_some()
+            && axis(theirs) == axis(ours)
+}
+
+/// Unset each shipped gesture one of `lines` would be shadowed by, before the first of them.
+fn unset_shipped(lines: &mut Vec<String>, shipped: &[(u8, String)]) {
+    let ours: Vec<(u8, String)> = lines
+        .iter()
+        .filter_map(|l| {
+            let rest = l.strip_prefix("hl.gesture({ fingers = ")?;
+            let (fingers, rest) = rest.split_once(", direction = \"")?;
+            let (direction, _) = rest.split_once('"')?;
+            Some((fingers.parse().ok()?, direction.to_string()))
+        })
+        .collect();
+    let mut unset: Vec<String> = Vec::new();
+    for (f, d) in shipped {
+        let line = format!("hl.gesture({{ fingers = {f}, direction = \"{d}\", action = \"unset\" }})");
+        if ours.iter().any(|(of, od)| of == f && shadows(d, od)) && !unset.contains(&line) {
+            unset.push(line);
+        }
+    }
+    if let Some(at) = lines.iter().position(|l| l.starts_with("hl.gesture(")) {
+        lines.splice(at..at, unset);
+    }
+}
+
 /// Lua lines for every configured gesture, plus the gesture options.
 pub fn lua(g: &Gestures) -> Vec<String> {
+    let mut out = lua_over(g);
+    unset_shipped(&mut out, &shipped());
+    out
+}
+
+fn lua_over(g: &Gestures) -> Vec<String> {
     let mut out = Vec::new();
     if !g.enabled {
         return out;
@@ -404,6 +464,42 @@ pub fn disable_foreign() -> anyhow::Result<usize> {
         n += count;
     }
     Ok(n)
+}
+
+#[cfg(test)]
+mod shipped_tests {
+    use super::*;
+
+    #[test]
+    fn shipped_gestures_on_the_same_fingers_and_axis_are_unset_first() {
+        let mut lines = vec![
+            "local x = 1".to_string(),
+            "hl.gesture({ fingers = 3, direction = \"horizontal\", action = \"workspace\" })".to_string(),
+            "hl.gesture({ fingers = 4, direction = \"left\", action = \"close\" })".to_string(),
+            "hl.gesture({ fingers = 4, direction = \"pinchout\", action = \"float\" })".to_string(),
+        ];
+        let shipped = vec![
+            (3, "horizontal".to_string()),
+            (3, "up".to_string()),
+            (4, "left".to_string()),
+            (4, "pinchin".to_string()),
+        ];
+        unset_shipped(&mut lines, &shipped);
+        assert_eq!(lines[0], "local x = 1");
+        assert_eq!(lines[1], "hl.gesture({ fingers = 3, direction = \"horizontal\", action = \"unset\" })");
+        assert_eq!(lines[2], "hl.gesture({ fingers = 4, direction = \"left\", action = \"unset\" })");
+        assert!(lines[3].contains("\"workspace\""));
+        assert_eq!(lines.len(), 6, "nothing unset that Settings doesn't replace");
+    }
+
+    #[test]
+    fn an_axis_shadows_its_directions() {
+        assert!(shadows("horizontal", "left"));
+        assert!(shadows("right", "horizontal"));
+        assert!(!shadows("left", "right"));
+        assert!(!shadows("horizontal", "up"));
+        assert!(!shadows("pinchin", "pinchout"));
+    }
 }
 
 #[cfg(test)]
