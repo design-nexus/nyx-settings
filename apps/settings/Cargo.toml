@@ -37,3 +37,6 @@ nyx-pim = { git = "https://github.com/design-nexus/nyx-core.git", rev = "4378e24
 nyx-capability = { git = "https://github.com/design-nexus/nyx-core.git", rev = "b41397c99e57c457aa2f9a0c7c3242eef4399cf7", features = ["glib"] }
 nyx-devices = { git = "https://github.com/design-nexus/nyx-core.git", rev = "b41397c99e57c457aa2f9a0c7c3242eef4399cf7" }
 nyx-config = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "2c051e628af5582516ece1a8790882328194c26b" }
+
+[dev-dependencies]
+tempfile = "3"

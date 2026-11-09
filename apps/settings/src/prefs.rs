@@ -1,4 +1,5 @@
-//! This app's own preferences (`~/.config/settings/settings.toml`).
+//! This app's own preferences (`~/.config/nyx-settings/settings.toml`), versioned by
+//! `schema`. One that can't be read is kept as `settings.toml.broken-<time>`.
 
 pub use nyx_theme::ThemeMode;
 
@@ -17,6 +18,8 @@ pub enum TempUnit {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Prefs {
+    /// The file's format.
+    pub schema: u32,
     pub mode: ThemeMode,
     pub theme: String,
     pub density: String,
@@ -46,6 +49,7 @@ pub struct Prefs {
 impl Default for Prefs {
     fn default() -> Self {
         Self {
+            schema: SCHEMA,
             mode: ThemeMode::Omarchy,
             theme: nyx_theme::DEFAULT_THEME.into(),
             density: "comfortable".into(),
@@ -73,8 +77,19 @@ pub fn read() -> Prefs {
     load()
 }
 
+const SCHEMA: u32 = 1;
+
 fn load() -> Prefs {
-    std::fs::read_to_string(paths::prefs_file()).ok().and_then(|text| toml::from_str(&text).ok()).unwrap_or_default()
+    let path = paths::prefs_file();
+    let Ok(text) = std::fs::read_to_string(&path) else { return Prefs::default() };
+    match toml::from_str(&text) {
+        Ok(p) => p,
+        Err(_) => {
+            let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+            let _ = std::fs::rename(&path, path.with_file_name(format!("settings.toml.broken-{secs}")));
+            Prefs::default()
+        }
+    }
 }
 
 /// Take what's on disk now (after restoring a backup), replacing this thread's copy.

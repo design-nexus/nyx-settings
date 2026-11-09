@@ -1,5 +1,10 @@
-//! Everything Settings has changed, persisted in `~/.config/settings/state.json`.
+//! Everything Settings has changed, persisted in `~/.config/nyx-settings/state.json`.
 //! The managed Lua file is always regenerated from this, never parsed back.
+//!
+//! Versioned by `schema`: 2 keeps displays by their identity (see [`Monitor`]). A file
+//! from before is copied to `state.json.v1.bak` first; its displays kept by port move
+//! over as each is seen. A file that can't be read is kept as `state.json.broken-<time>`
+//! rather than lost.
 
 use super::gestures::Gestures;
 use serde::{Deserialize, Serialize};
@@ -88,6 +93,8 @@ impl WorkspaceRule {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(default)]
 pub struct State {
+    /// The file's format: [`SCHEMA`] when written by this version.
+    pub schema: u32,
     /// Hyprland options by dotted path, e.g. `input.touchpad.natural_scroll`.
     pub options: BTreeMap<String, Value>,
     /// Per-device overrides (`hl.device`), keyed by device name.
@@ -177,10 +184,29 @@ fn renamed_class(class: &str) -> String {
         .replace("design_nexus\\.nyx\\.Tasks", "design_nexus\\.nyx\\.Activity")
 }
 
+pub const SCHEMA: u32 = 2;
+
 impl State {
     pub fn load(path: &std::path::Path) -> Self {
-        let mut state: Self = std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        let Ok(text) = std::fs::read_to_string(path) else { return State { schema: SCHEMA, ..Default::default() } };
+        let mut state: Self = match serde_json::from_str(&text) {
+            Ok(s) => s,
+            Err(e) => {
+                let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+                let kept = path.with_file_name(format!("state.json.broken-{secs}"));
+                let _ = std::fs::rename(path, &kept);
+                eprintln!("nyx-settings: {} couldn't be read ({e}); kept as {}", path.display(), kept.display());
+                return State { schema: SCHEMA, ..Default::default() };
+            }
+        };
         state.rename_old_programs();
+        if state.schema < SCHEMA {
+            let backup = path.with_file_name(format!("state.json.v{}.bak", state.schema.max(1)));
+            if !backup.exists() {
+                let _ = std::fs::copy(path, &backup);
+            }
+            state.schema = SCHEMA;
+        }
         state
     }
 
@@ -231,5 +257,48 @@ mod rename_tests {
         assert_eq!(renamed_class("firefox"), "firefox");
         assert_eq!(renamed_class("^io\\.github\\.design_nexus\\.nyx\\.Tasks$"), "^io\\.github\\.design_nexus\\.nyx\\.Activity$");
         assert_eq!(renamed_class("io.github.design_nexus.Tasks"), "io.github.design_nexus.nyx.Activity");
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+
+    /// The shape of the reference laptop's state.json (Handoff 09's capture), before schema 2.
+    const KENS: &str = r#"{
+  "options": { "input.repeat_delay": 350, "misc.vrr": 1 },
+  "devices": {},
+  "gestures": { "enabled": true, "loop_workspaces": true, "loop_count": 5 },
+  "binds": [
+    { "keys": "SUPER + CTRL + Escape", "description": "Task Manager", "command": "nyx-activity" },
+    { "keys": "SUPER + ALT + Escape", "description": "Settings", "command": "nyx-settings" }
+  ],
+  "unbinds": ["SUPER + CTRL + Escape", "SUPER + ALT + Escape"],
+  "monitors": { "eDP-2": { "mode": "2560x1600@60.00", "position": "0x0", "scale": 1.6, "transform": 0, "disabled": false } },
+  "persistent_workspaces": 5
+}"#;
+
+    #[test]
+    fn a_file_from_before_is_kept_and_upgraded() {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join("state.json");
+        std::fs::write(&path, KENS).unwrap();
+        let s = State::load(&path);
+        assert_eq!(s.schema, SCHEMA);
+        assert_eq!(s.options["input.repeat_delay"], serde_json::json!(350));
+        assert_eq!(s.monitors["eDP-2"].scale, Some(1.6), "kept by port until the display is seen");
+        assert_eq!(s.binds.len(), 2);
+        assert_eq!(std::fs::read_to_string(d.path().join("state.json.v1.bak")).unwrap(), KENS);
+    }
+
+    #[test]
+    fn a_broken_file_is_kept_aside() {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join("state.json");
+        std::fs::write(&path, "{ not json").unwrap();
+        let s = State::load(&path);
+        assert!(s.options.is_empty());
+        assert!(!path.exists());
+        assert!(std::fs::read_dir(d.path()).unwrap().flatten().any(|e| e.file_name().to_string_lossy().starts_with("state.json.broken-")));
     }
 }
