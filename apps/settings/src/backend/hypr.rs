@@ -47,7 +47,12 @@ pub fn generate(state: &State, self_cmd: &str) -> String {
         out.push_str(&format!("hl.device({{ {} }})\n", parts.join(", ")));
     }
 
-    for (output, m) in &state.monitors {
+    // By identity first, then by port: Hyprland uses the last rule that matches, so a
+    // port's own rule (two identical screens) wins over the model's.
+    let mut monitors: Vec<(&String, &crate::backend::state::Monitor)> = state.monitors.iter().collect();
+    monitors.sort_by_key(|(_, m)| m.desc.is_none());
+    for (key, m) in monitors {
+        let output = m.output(key);
         let mut parts = vec![format!("output = {}", quote(output))];
         if m.disabled {
             parts.push("disabled = true".into());

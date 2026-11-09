@@ -310,7 +310,8 @@ pub fn persistent_upto(g: &Gestures) -> u32 {
 /// fingers and direction; one tied to a Nyx app counts only when the app is installed.
 /// Empty on Omarchy.
 pub fn shipped() -> Vec<(u8, String)> {
-    let dir = std::env::var_os("NYX_CONFIG_DEFAULTS").map(std::path::PathBuf::from).unwrap_or_else(|| "/etc/nyxos/defaults".into());
+    let dir =
+        std::env::var_os("NYX_CONFIG_DEFAULTS").map(std::path::PathBuf::from).unwrap_or_else(|| "/etc/nyxos/defaults".into());
     let Ok(text) = std::fs::read_to_string(dir.join("hyprland.toml")) else { return Vec::new() };
     let Ok(table) = text.parse::<toml::Table>() else { return Vec::new() };
     let Some(list) = table.get("gestures").and_then(toml::Value::as_array) else { return Vec::new() };
@@ -318,7 +319,8 @@ pub fn shipped() -> Vec<(u8, String)> {
         .filter_map(|g| {
             let fingers = u8::try_from(g.get("fingers")?.as_integer()?).ok()?;
             let direction = g.get("direction")?.as_str()?.to_string();
-            let installed = g.get("app").and_then(toml::Value::as_str).is_none_or(|app| crate::cmd::present(&format!("nyx-{app}")));
+            let installed =
+                g.get("app").and_then(toml::Value::as_str).is_none_or(|app| crate::cmd::present(&format!("nyx-{app}")));
             installed.then_some((fingers, direction))
         })
         .collect()
@@ -478,12 +480,8 @@ mod shipped_tests {
             "hl.gesture({ fingers = 4, direction = \"left\", action = \"close\" })".to_string(),
             "hl.gesture({ fingers = 4, direction = \"pinchout\", action = \"float\" })".to_string(),
         ];
-        let shipped = vec![
-            (3, "horizontal".to_string()),
-            (3, "up".to_string()),
-            (4, "left".to_string()),
-            (4, "pinchin".to_string()),
-        ];
+        let shipped =
+            vec![(3, "horizontal".to_string()), (3, "up".to_string()), (4, "left".to_string()), (4, "pinchin".to_string())];
         unset_shipped(&mut lines, &shipped);
         assert_eq!(lines[0], "local x = 1");
         assert_eq!(lines[1], "hl.gesture({ fingers = 3, direction = \"horizontal\", action = \"unset\" })");
@@ -549,7 +547,9 @@ mod tests {
     #[test]
     fn loop_prefers_native_wrap() {
         let lines = lua(&looping());
-        let check = lines.iter().position(|l| l.contains("local settings_native_wrap = hl.get_config(\"gestures.workspace_swipe_wrap\") ~= nil"));
+        let check = lines
+            .iter()
+            .position(|l| l.contains("local settings_native_wrap = hl.get_config(\"gestures.workspace_swipe_wrap\") ~= nil"));
         let rules = lines.iter().position(|l| l.contains("workspace = \"1\""));
         assert!(check.is_some() && check < rules, "checked before anything uses it");
         let r = lines.iter().find(|l| l.contains("settings-loop-start")).unwrap();

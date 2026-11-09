@@ -23,7 +23,10 @@ pub fn sources_for(id: &str) -> Option<Vec<Source>> {
         "audio" => vec![lines(&["pactl", "subscribe"], &["sink", "source", "card", "server"])],
         "power" => vec![
             Source::Udev("power_supply".into()),
-            lines(&["dbus-monitor", "--system", "type='signal',sender='net.hadess.PowerProfiles'"], &["member=PropertiesChanged"]),
+            lines(
+                &["dbus-monitor", "--system", "type='signal',sender='net.hadess.PowerProfiles'"],
+                &["member=PropertiesChanged"],
+            ),
         ],
         "services" => vec![Source::Units { system: true }, Source::Units { system: false }],
         "displays" => vec![Source::Udev("drm".into())],

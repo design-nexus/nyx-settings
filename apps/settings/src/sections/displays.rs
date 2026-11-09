@@ -1,6 +1,7 @@
 use super::arrange;
-use crate::backend::state::Monitor;
-use crate::backend::{hypr, store};
+use crate::backend::devices::{self, LiveMonitor};
+use crate::backend::state::{Monitor, State};
+use crate::backend::{hypr, shell_core, store};
 use crate::widgets::{self, Page, opts};
 use crate::{cmd, window};
 use gtk::glib;
@@ -90,13 +91,26 @@ fn confirm_or_revert(previous: BTreeMap<String, Monitor>) {
     dialog.present();
 }
 
+/// The entry for the display on `connector`: kept by the display's identity (so it
+/// follows it to another port), starting from how it runs now. One kept by port from
+/// before moves over.
+fn entry<'a>(s: &'a mut State, connector: &str, live: &[LiveMonitor], current: Option<Monitor>) -> &'a mut Monitor {
+    let this = live.iter().find(|m| m.connector == connector);
+    let key = this.map(|m| devices::monitor_key(m, live)).unwrap_or_else(|| connector.to_string());
+    let old = (key != connector).then(|| s.monitors.remove(connector)).flatten();
+    let m = s.monitors.entry(key.clone()).or_insert_with(|| old.unwrap_or_else(|| current.unwrap_or_default()));
+    if let Some(t) = this {
+        devices::describe(m, t, &key);
+        devices::remember_monitor(t, &key);
+    }
+    m
+}
+
 fn change(output: &str, f: impl FnOnce(&mut Monitor)) {
     let previous = store::read(|s| s.monitors.clone());
     let current = live_monitor(output);
-    store::update(true, |s| {
-        let m = s.monitors.entry(output.to_string()).or_insert_with(|| current.unwrap_or_default());
-        f(m);
-    });
+    let live = devices::live_monitors();
+    store::update(true, |s| f(entry(s, output, &live, current)));
     store::flush();
     confirm_or_revert(previous);
 }
@@ -116,6 +130,7 @@ fn live_monitor(name: &str) -> Option<Monitor> {
         scale: m.get("scale").and_then(|v| v.as_f64()),
         transform: m.get("transform").and_then(|v| v.as_i64()),
         disabled: m.get("disabled").and_then(|v| v.as_bool()).unwrap_or(false),
+        ..Default::default()
     })
 }
 
@@ -235,11 +250,11 @@ fn arrangement(page: &Page, monitors: &[Value]) {
     g.note("Drag a display to where it sits on your desk. It snaps to the edge of the one next to it.");
     let canvas = arrange::canvas(rects, |positions| {
         let previous = store::read(|s| s.monitors.clone());
-        let live: Vec<(String, Option<Monitor>)> = positions.iter().map(|(n, _, _)| (n.clone(), live_monitor(n))).collect();
+        let current: Vec<(String, Option<Monitor>)> = positions.iter().map(|(n, _, _)| (n.clone(), live_monitor(n))).collect();
+        let live = devices::live_monitors();
         store::update(true, move |s| {
-            for ((name, x, y), (_, current)) in positions.iter().zip(live) {
-                let m = s.monitors.entry(name.clone()).or_insert_with(|| current.unwrap_or_default());
-                m.position = Some(format!("{x}x{y}"));
+            for ((name, x, y), (_, current)) in positions.iter().zip(current) {
+                entry(s, name, &live, current).position = Some(format!("{x}x{y}"));
             }
         });
         store::flush();
@@ -262,13 +277,27 @@ fn monitors(page: &Page) {
         return;
     }
     let brightness = crate::platform::brightness();
+    let live: Vec<LiveMonitor> = monitors.iter().filter_map(LiveMonitor::from_json).collect();
+    // Settings kept by port from before follow the display now.
+    let mut kept = store::read(|s| s.monitors.clone());
+    if devices::adopt_monitors(&mut kept, &live) {
+        store::update(true, move |s| s.monitors = kept);
+    }
     arrangement(page, &monitors);
 
     for m in &monitors {
         let name = m.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let desc = m.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let this = live.iter().find(|l| l.connector == name).cloned();
+        let key = this.as_ref().map(|t| devices::monitor_key(t, &live)).unwrap_or_else(|| name.clone());
         let g = page.group(&name);
         g.note(&glib::markup_escape_text(&desc));
+        if this.as_ref().is_some_and(|t| devices::ambiguous(t, &live)) {
+            g.note("Another connected display looks just the same (neither reports a serial number), so this one's settings are kept for this port.");
+        }
+        if let Some(problem) = store::read(|s| s.monitors.get(&key).cloned()).and_then(|saved| not_applied(&saved, m)) {
+            g.note(&problem);
+        }
 
         if !m.get("disabled").and_then(Value::as_bool).unwrap_or(false) {
             for (title, field) in [("VRR active", "vrr"), ("Hardware cursors in use", "hardwareCursorsInUse")] {
@@ -385,18 +414,37 @@ fn monitors(page: &Page) {
             g.add(&r);
         }
 
-        let managed = store::read(|s| s.monitors.contains_key(&name));
+        // Shell Core's own switch for this screen: the bar, dock and widgets on it.
+        if let Some(t) = this.as_ref().filter(|t| shell_core::available() && t.identified()) {
+            let id = t.id().key().to_string();
+            let on = shell_core::screen(&id).and_then(|v| v.get("enabled").and_then(serde_json::Value::as_bool)).unwrap_or(true);
+            let (r, _) = widgets::switch_row(
+                "Desktop on this display",
+                "The bar, dock and widgets. Off for a TV or a projector.",
+                on,
+                move |on| {
+                    if let Err(e) = shell_core::set_screen(&id, on) {
+                        window::toast(&e);
+                    }
+                },
+            );
+            widgets::keywords("bar dock widgets shell screen projector tv");
+            g.add(&r);
+        }
+
+        let managed = store::read(|s| s.monitors.contains_key(&key) || s.monitors.contains_key(&name));
         if managed {
-            let n = name.clone();
+            let (n, k) = (name.clone(), key.clone());
             let (r, _) = widgets::button_row(
                 "Settings manages this display",
-                "Hand it back to <tt>monitors.lua</tt>.",
+                "Hand it back to NyxOS's or your own display settings.",
                 "Reset",
                 move |_| {
                     let previous = store::read(|s| s.monitors.clone());
-                    let n = n.clone();
+                    let (n, k) = (n.clone(), k.clone());
                     store::update(true, move |s| {
                         s.monitors.remove(&n);
+                        s.monitors.remove(&k);
                     });
                     store::flush();
                     confirm_or_revert(previous);
@@ -405,4 +453,112 @@ fn monitors(page: &Page) {
             g.add(&r);
         }
     }
+    remembered(page, &live);
+}
+
+/// Displays set up here that aren't connected: their settings, changeable until they
+/// come back, and Forget.
+fn remembered(page: &Page, live: &[LiveMonitor]) {
+    let list = devices::remembered_monitors(live);
+    if list.is_empty() {
+        return;
+    }
+    let g = page.collapsible("Remembered displays", false);
+    g.note("Displays you set up that aren't connected now. Their settings come back when they're plugged in again, on any port; you can change them here in the meantime.");
+    widgets::keywords("remembered disconnected unplugged previous external monitor forget");
+    for (key, m, profile) in list {
+        let body = widgets::vbox(8);
+        let scale = m.scale.unwrap_or(1.0);
+        let mut scale_opts: Vec<(String, String)> = SCALES.iter().map(|s| (format!("{s}"), scale_label(*s))).collect();
+        let current = SCALES.iter().find(|s| (*s - scale).abs() < 0.01).map(|s| format!("{s}")).unwrap_or_else(|| {
+            scale_opts.push((format!("{scale}"), scale_label(scale)));
+            format!("{scale}")
+        });
+        let k = key.clone();
+        let (r, _) = widgets::choice_row("Scale", "", scale_opts, &current, move |v| {
+            let v: f64 = v.parse().unwrap_or(1.0);
+            offline(&k, move |m| m.scale = Some(v));
+        });
+        body.append(&r);
+        let k = key.clone();
+        let (r, _) = widgets::entry_row(
+            "Position",
+            "Where it sits beside the others, like <tt>2560x0</tt> or <tt>auto-right</tt>.",
+            m.position.as_deref().unwrap_or("auto"),
+            "auto",
+            move |p| offline(&k, move |m| m.position = Some(p.trim().to_string())),
+        );
+        body.append(&r);
+        let k = key.clone();
+        let (r, _) = widgets::switch_row("Use this display", "", !m.disabled, move |on| offline(&k, move |m| m.disabled = !on));
+        body.append(&r);
+        let forget = gtk::Button::with_label("Forget this display");
+        forget.set_halign(gtk::Align::Start);
+        let label = m.label.clone().unwrap_or_else(|| key.clone());
+        let k = key.clone();
+        forget.connect_clicked(move |_| {
+            let k = k.clone();
+            crate::dialog::ask(
+                &format!("Forget {label}?"),
+                "Its scale, position and other settings go, here, in the dock and in the shell. It'll be like a new display next time it's plugged in.",
+                Vec::new(),
+                "Forget",
+                None,
+                move |_, _| {
+                    match devices::forget(&nyx_devices::DeviceId::new(nyx_devices::Category::Monitor, &k)) {
+                        Ok(()) => window::toast("Display forgotten"),
+                        Err(e) => window::toast(&format!("Couldn't forget all of it: {e}")),
+                    }
+                    window::rebuild("displays");
+                    None
+                },
+            );
+        });
+        body.append(&forget);
+        let title = m.label.clone().unwrap_or_else(|| key.clone());
+        g.add(&widgets::stacked_row(&title, &devices::last_seen(profile.as_ref()), body.upcast_ref()));
+    }
+}
+
+/// What of a display's saved settings Hyprland isn't using (a mode it doesn't offer, a
+/// scale it adjusted), so the page can say so instead of showing it as applied.
+fn not_applied(saved: &Monitor, live: &Value) -> Option<String> {
+    if saved.disabled || live.get("disabled").and_then(Value::as_bool).unwrap_or(false) {
+        return None;
+    }
+    let mut out = Vec::new();
+    if let Some(want) = saved.scale {
+        let have = live.get("scale").and_then(Value::as_f64).unwrap_or(want);
+        if (have - want).abs() > 0.01 {
+            out.push(format!("the scale is {} rather than the saved {}", scale_label(have), scale_label(want)));
+        }
+    }
+    if let Some(mode) = saved.mode.as_deref().filter(|m| *m != "preferred") {
+        let size = mode.split('@').next().unwrap_or(mode);
+        let have = format!(
+            "{}x{}",
+            live.get("width").and_then(Value::as_i64).unwrap_or(0),
+            live.get("height").and_then(Value::as_i64).unwrap_or(0)
+        );
+        if size != have {
+            out.push(format!("it runs at {} rather than the saved {}", have.replace('x', " × "), size.replace('x', " × ")));
+        }
+    }
+    (!out.is_empty()).then(|| {
+        format!(
+            "Not all of this display's saved settings took effect: {}. Hyprland may not support them on this screen.",
+            out.join(", and ")
+        )
+    })
+}
+
+/// Change a display that isn't connected: saved for when it is (nothing to try now).
+fn offline(key: &str, f: impl FnOnce(&mut Monitor) + 'static) {
+    let key = key.to_string();
+    store::update(true, move |s| {
+        if let Some(m) = s.monitors.get_mut(&key) {
+            f(m);
+        }
+    });
+    store::flush();
 }

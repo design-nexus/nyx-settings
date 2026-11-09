@@ -1,5 +1,5 @@
 use crate::backend::audio::{self, Eq};
-use crate::backend::{store, streams};
+use crate::backend::{devices, store, streams};
 use crate::widgets::{self, Page};
 use crate::{cmd, window};
 use gtk::glib;
@@ -211,6 +211,9 @@ pub fn build(page: &Page) {
     });
     widgets::keywords("speakers headphones hdmi output device");
     g.add(&r);
+    if let Some(dev) = sinks.iter().find(|s| s.name == current_out) {
+        g.add(&prefer_row(&dev.name, "output", &dev.description));
+    }
 
     let max = store::read(|s| s.max_volume).unwrap_or(100);
     let vol_sink = audio::volume_sink();
@@ -565,6 +568,10 @@ pub fn build(page: &Page) {
         cmd::spawn(&["pactl", "set-default-source", &name]);
     });
     g.add(&r);
+    let current_in = audio::default_source();
+    if let Some(dev) = sources.iter().find(|s| s.name == current_in) {
+        g.add(&prefer_row(&dev.name, "input", &dev.description));
+    }
     let src_vol = cmd::output(&["pactl", "get-source-volume", "@DEFAULT_SOURCE@"])
         .and_then(|t| t.split_whitespace().find(|w| w.ends_with('%')).and_then(|w| w.trim_end_matches('%').parse::<f64>().ok()))
         .unwrap_or(100.0);
@@ -574,6 +581,7 @@ pub fn build(page: &Page) {
     g.add(&r);
 
     apps_group(page);
+    remembered(page, &sinks, &sources);
 
     // ----- More -----
     let g = page.collapsible("More", false);
@@ -685,4 +693,57 @@ fn apps_group(page: &Page) {
         }
         glib::ControlFlow::Continue
     });
+}
+
+// ----- Remembered devices -----
+
+/// "Use whenever it's connected": WirePlumber gives it priority each time it appears.
+fn prefer_row(node: &str, kind: &'static str, description: &str) -> gtk::Box {
+    let on = devices::load_audio().devices.get(node).is_some_and(|d| d.prefer);
+    let (n, d) = (node.to_string(), description.to_string());
+    let what = if kind == "input" { "Switch to this microphone" } else { "Switch to this output" };
+    let (r, _) = widgets::switch_row(
+        "Use whenever it's connected",
+        &format!("{what} each time it's plugged in or turned on."),
+        on,
+        move |on| {
+            if let Err(e) = devices::set_prefer(&n, kind, &d, on) {
+                window::toast(&format!("Couldn't save that: {e}"));
+            }
+        },
+    );
+    widgets::keywords("prefer priority automatic switch connect headset usb bluetooth");
+    r
+}
+
+fn remembered(page: &Page, sinks: &[audio::Device], sources: &[audio::Device]) {
+    let outs = devices::remembered_audio("output", &sinks.iter().map(|d| d.name.clone()).collect::<Vec<_>>());
+    let ins = devices::remembered_audio("input", &sources.iter().map(|d| d.name.clone()).collect::<Vec<_>>());
+    if outs.is_empty() && ins.is_empty() {
+        return;
+    }
+    let g = page.collapsible("Remembered devices", false);
+    g.note("Sound devices with their own settings that aren't connected now. Their settings apply again when they're back.");
+    widgets::keywords("remembered disconnected headset speaker microphone forget");
+    for (kind, list) in [("output", outs), ("input", ins)] {
+        for (node, dev, profile) in list {
+            let body = widgets::vbox(8);
+            body.append(&prefer_row(&node, kind, &dev.name));
+            let forget = gtk::Button::with_label("Forget this device");
+            forget.set_halign(gtk::Align::Start);
+            let n = node.clone();
+            forget.connect_clicked(move |_| {
+                let category =
+                    if kind == "input" { nyx_devices::Category::AudioInput } else { nyx_devices::Category::AudioOutput };
+                match devices::forget(&nyx_devices::DeviceId::new(category, &n)) {
+                    Ok(()) => window::toast("Device forgotten"),
+                    Err(e) => window::toast(&format!("Couldn't forget all of it: {e}")),
+                }
+                window::rebuild("audio");
+            });
+            body.append(&forget);
+            let title = if dev.name.is_empty() { node.clone() } else { dev.name.clone() };
+            g.add(&widgets::stacked_row(&title, &devices::last_seen(profile.as_ref()), body.upcast_ref()));
+        }
+    }
 }

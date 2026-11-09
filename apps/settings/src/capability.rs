@@ -97,6 +97,8 @@ pub fn start() {
     let bg = r.clone();
     std::thread::Builder::new().name("capabilities".into()).spawn(move || bg.start()).ok();
     r.subscribe_local(changed);
+    crate::backend::shell_core::follow();
+    crate::backend::devices::sync_monitors();
 }
 
 pub fn state(id: &str) -> State {
@@ -218,6 +220,9 @@ fn changed(changes: &[Change]) {
             }
         }
     });
+    if changes.iter().any(|c| c.id == "daemon:shell-core") {
+        crate::backend::shell_core::follow();
+    }
     crate::window::capabilities_changed(changes);
 }
 

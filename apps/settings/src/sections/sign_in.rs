@@ -254,7 +254,8 @@ fn fingerprint_row(h: &gtk::Box, fp: &Value) {
     let r = widgets::row("Fingerprint", &desc, Some(controls.upcast_ref()));
     // No reader and nothing set up: nothing to do here until one is plugged in.
     crate::capability::rebuild_on(&["hw:fingerprint"], "sign-in");
-    let configured = fp["readers"].as_array().is_some_and(|rs| rs.iter().any(|r| r["fingers"].as_array().is_some_and(|f| !f.is_empty())));
+    let configured =
+        fp["readers"].as_array().is_some_and(|rs| rs.iter().any(|r| r["fingers"].as_array().is_some_and(|f| !f.is_empty())));
     if !configured && !matches!(fp["state"].as_str(), Some("ready" | "not-installed" | "error")) {
         crate::capability::bind(&r, &["hw:fingerprint"]);
     }

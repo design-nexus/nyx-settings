@@ -10,9 +10,9 @@ use std::rc::Rc;
 pub mod about;
 pub mod account_icons;
 pub mod accounts;
+pub mod ai;
 pub mod apps;
 pub mod arrange;
-pub mod ai;
 pub mod assistant;
 pub mod audio;
 pub mod bar;
@@ -786,4 +786,3 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
 }
 
 pub(crate) mod native_accounts;
-

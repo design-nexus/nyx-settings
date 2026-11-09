@@ -24,6 +24,11 @@ pub struct Rule {
     pub value: String,
 }
 
+/// A display's settings. Kept by the display's own identity (make, model and serial,
+/// `nyx_desktop::Monitor::stable_id`) with `desc` naming it to Hyprland, so they follow it
+/// to another port and come back when it's plugged in again; or by connector (`DP-1`)
+/// for screens that report no identity, two identical ones without a serial, and entries
+/// from before Settings knew displays by identity.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(default)]
 pub struct Monitor {
@@ -32,6 +37,19 @@ pub struct Monitor {
     pub scale: Option<f64>,
     pub transform: Option<i64>,
     pub disabled: bool,
+    /// Hyprland's `desc:` selector for it, when kept by identity.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub desc: Option<String>,
+    /// What to call it while it's not connected.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+impl Monitor {
+    /// The `output` of its Hyprland rule.
+    pub fn output<'a>(&'a self, key: &'a str) -> &'a str {
+        self.desc.as_deref().unwrap_or(key)
+    }
 }
 
 /// What Settings sets for one workspace (1–10). Unset fields leave Hyprland's

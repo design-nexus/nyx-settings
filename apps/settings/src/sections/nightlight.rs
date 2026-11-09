@@ -85,8 +85,8 @@ fn omarchy_toggle() -> bool {
 
 fn on_now() -> bool {
     if omarchy_toggle() {
-        let status =
-            cmd::output(&["omarchy-toggle-nightlight", "--status"]).and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+        let status = cmd::output(&["omarchy-toggle-nightlight", "--status"])
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
         return status.as_ref().and_then(|v| v.get("enabled")).and_then(|v| v.as_bool()).unwrap_or(false);
     }
     // hyprsunset answers with the temperature it's showing; 6000 K and over is neutral.

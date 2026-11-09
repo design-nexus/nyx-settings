@@ -354,7 +354,9 @@ fn fill_devices(list: &gtk::Box) {
             }
             if d.paired {
                 let (a, refill) = (d.address.clone(), refill.clone());
-                let forget = widgets::confirm_button("Forget", "Click again to forget", move |b| {
+                // Removes the pairing itself (the device has to be paired again), so it's
+                // called that, apart from Disconnect.
+                let forget = widgets::confirm_button("Unpair", "Click again to unpair", move |b| {
                     b.set_sensitive(false);
                     let (a, refill) = (a.clone(), refill.clone());
                     cmd::background(
