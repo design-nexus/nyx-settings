@@ -16,8 +16,8 @@ nyxos = []
 nyx-cloud = { git = "https://github.com/design-nexus/nyx-cloud.git", rev = "ba6385f60597a9ca6ebd5fb63836a1ea3dfa0f49" }
 nyx-system-proto = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "88962d876b30df66e3c5db3c70f28876b7e39db2" }
 nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "4378e243aeb09733843996663cd9a5a7f0cbb821" }
-nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "40db521bab468d54f18f65c6aabd7fc8533d6a4d" }
-nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "40db521bab468d54f18f65c6aabd7fc8533d6a4d" }
+nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "78a1910cabe3535f588b3dc7004c378295297ec3" }
+nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "78a1910cabe3535f588b3dc7004c378295297ec3" }
 nyx-share-client = { git = "https://github.com/design-nexus/nyx-share.git", rev = "53a5cacbc46a4269ba40a0fb17c1ee07f12e5177" }
 anyhow = "1.0.104"
 async-channel = "2"
