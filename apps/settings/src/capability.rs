@@ -11,7 +11,7 @@
 
 use gtk::glib;
 use gtk::prelude::*;
-use nyx_capability::providers::{Audio, BusNames, Fingerprint, Hardware, Programs, Services, ShellCore};
+use nyx_capability::providers::{Audio, BusNames, Connect, Fingerprint, Hardware, Programs, Services, ShellCore};
 use nyx_capability::{Change, Provider, Registry, State};
 use std::cell::RefCell;
 use std::sync::OnceLock;
@@ -22,6 +22,7 @@ const PROGRAMS: &[&str] = &[
     "nyx-switcher",
     "nyx-control-center",
     "nyx-notification-center",
+    "nyx-clipboardd",
     "nyx-ai",
     "nyx-assistant",
     "nyx-authctl",
@@ -78,6 +79,7 @@ pub fn registry() -> &'static Registry {
             Box::new(Programs::new(PROGRAMS.iter().copied())),
             Box::new(Hardware::default()),
             Box::new(ShellCore),
+            Box::new(Connect),
             Box::new(BusNames::new(BUS.iter().copied())),
             Box::new(Services::new(UNITS.iter().copied())),
             Box::new(Audio),
@@ -91,7 +93,7 @@ pub fn registry() -> &'static Registry {
 /// watching. Changes arrive on the main loop.
 pub fn start() {
     let r = registry();
-    for quick in ["programs", "hardware", "shell-core"] {
+    for quick in ["programs", "hardware", "shell-core", "connect"] {
         r.refresh(quick);
     }
     let bg = r.clone();

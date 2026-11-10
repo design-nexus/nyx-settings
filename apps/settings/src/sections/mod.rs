@@ -21,6 +21,7 @@ pub mod boot;
 pub mod capture;
 pub mod cleanup;
 pub mod cloud;
+pub mod connect;
 pub mod connectivity;
 pub mod desktop;
 pub mod disks;
@@ -211,6 +212,18 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             build: Build::Native(connectivity::build_bluetooth),
             visible: always,
             needs: &["bus:system:org.bluez", "hw:bluetooth"],
+        },
+        Section {
+            id: "devices",
+            title: "Connected Devices",
+            icon: "phone-symbolic",
+            group: "Connections",
+            description: "Pair phones and tablets through Flux, and choose what each may do.",
+            keywords: "connected devices phone tablet android iphone flux kde connect pair unpair forget remembered clipboard sync notifications ring battery files",
+            files: Vec::new,
+            build: Build::Native(connect::build),
+            visible: always,
+            needs: &["daemon:flux"],
         },
         Section {
             id: "network",

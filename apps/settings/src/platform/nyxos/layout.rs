@@ -28,7 +28,7 @@ pub fn group(id: &str, group: &'static str) -> &'static str {
         "bar" | "plugins" | "dock" | "switcher" | "control-center" | "notifications" | "workspaces" | "workspace-profiles"
         | "rules" | "capture" => "Desktop",
         "keyboard" | "mouse" | "trackpad" | "keybindings" => "Input",
-        "wifi" | "bluetooth" | "network" | "sharing" => "Network",
+        "wifi" | "bluetooth" | "devices" | "network" | "sharing" => "Network",
         "audio" => "Sound",
         "power" => "Power",
         "sign-in" | "idle" => "Security",

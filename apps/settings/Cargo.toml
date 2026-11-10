@@ -32,10 +32,12 @@ nyx-accounts-native = { package = "nyx-accounts-service", git = "https://github.
 
 nyx-desktop = { git = "https://github.com/design-nexus/nyx-core.git", rev = "4378e243aeb09733843996663cd9a5a7f0cbb821" }
 nyx-pim = { git = "https://github.com/design-nexus/nyx-core.git", rev = "4378e243aeb09733843996663cd9a5a7f0cbb821" }
-# Newer than the rest of nyx-core above: neither depends on another nyx-core crate, so the
+# Newer than the rest of nyx-core above: none depends on another nyx-core crate, so the
 # app still carries one nyx-core and one nyx-desktop.
-nyx-capability = { git = "https://github.com/design-nexus/nyx-core.git", rev = "b41397c99e57c457aa2f9a0c7c3242eef4399cf7", features = ["glib"] }
-nyx-devices = { git = "https://github.com/design-nexus/nyx-core.git", rev = "b41397c99e57c457aa2f9a0c7c3242eef4399cf7" }
+nyx-capability = { git = "https://github.com/design-nexus/nyx-core.git", rev = "43d7c2e7684be8274c764619c5ac3886ed6b9438", features = ["glib"] }
+nyx-devices = { git = "https://github.com/design-nexus/nyx-core.git", rev = "43d7c2e7684be8274c764619c5ac3886ed6b9438" }
+# Flux's fluxd as Nyx's device model (Nyx Connect), for Connected Devices.
+nyx-connect = { git = "https://github.com/design-nexus/nyx-core.git", rev = "43d7c2e7684be8274c764619c5ac3886ed6b9438" }
 nyx-config = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "2c051e628af5582516ece1a8790882328194c26b" }
 
 [dev-dependencies]

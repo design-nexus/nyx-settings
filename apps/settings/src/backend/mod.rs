@@ -6,6 +6,7 @@ pub mod backup;
 pub mod bt;
 pub mod chroma;
 pub mod cleanup;
+pub mod connect;
 pub mod devices;
 pub mod gestures;
 pub mod helper_version;

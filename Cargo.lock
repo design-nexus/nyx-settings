@@ -1620,7 +1620,7 @@ dependencies = [
 [[package]]
 name = "nyx-capability"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-core.git?rev=b41397c99e57c457aa2f9a0c7c3242eef4399cf7#b41397c99e57c457aa2f9a0c7c3242eef4399cf7"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=43d7c2e7684be8274c764619c5ac3886ed6b9438#43d7c2e7684be8274c764619c5ac3886ed6b9438"
 dependencies = [
  "async-channel",
  "glib",
@@ -1658,6 +1658,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nyx-connect"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=43d7c2e7684be8274c764619c5ac3886ed6b9438#43d7c2e7684be8274c764619c5ac3886ed6b9438"
+dependencies = [
+ "nyx-devices",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
 name = "nyx-core"
 version = "0.1.0"
 source = "git+https://github.com/design-nexus/nyx-core.git?rev=4378e243aeb09733843996663cd9a5a7f0cbb821#4378e243aeb09733843996663cd9a5a7f0cbb821"
@@ -1687,7 +1698,7 @@ dependencies = [
 [[package]]
 name = "nyx-devices"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-core.git?rev=b41397c99e57c457aa2f9a0c7c3242eef4399cf7#b41397c99e57c457aa2f9a0c7c3242eef4399cf7"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=43d7c2e7684be8274c764619c5ac3886ed6b9438#43d7c2e7684be8274c764619c5ac3886ed6b9438"
 dependencies = [
  "serde",
  "serde_json",
@@ -1741,6 +1752,7 @@ dependencies = [
  "nyx-capability",
  "nyx-cloud",
  "nyx-config",
+ "nyx-connect",
  "nyx-core",
  "nyx-desktop",
  "nyx-devices",
