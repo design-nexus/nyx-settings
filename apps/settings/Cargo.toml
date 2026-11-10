@@ -30,7 +30,8 @@ wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 
 nyx-accounts-native = { package = "nyx-accounts-service", git = "https://github.com/design-nexus/nyx-accounts.git", rev = "afdc1482cb910746f942556090870d3ec083dd34" }
 
-nyx-desktop = { git = "https://github.com/design-nexus/nyx-core.git", rev = "4378e243aeb09733843996663cd9a5a7f0cbb821" }
+# Newer than nyx-core above for virtual monitors (nyx-desktop depends on no other nyx-core crate).
+nyx-desktop = { git = "https://github.com/design-nexus/nyx-core.git", rev = "1b052a7636cbb1ea171ae425d3e0e2498b914713" }
 nyx-pim = { git = "https://github.com/design-nexus/nyx-core.git", rev = "4378e243aeb09733843996663cd9a5a7f0cbb821" }
 # Newer than the rest of nyx-core above: none depends on another nyx-core crate, so the
 # app still carries one nyx-core and one nyx-desktop.

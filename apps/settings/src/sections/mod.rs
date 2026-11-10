@@ -53,6 +53,7 @@ pub mod switcher;
 pub mod theme;
 pub mod themes;
 pub mod trackpad;
+pub mod virtual_monitors;
 pub mod vpn_accounts;
 pub mod workspace_profiles;
 pub mod workspace_rules;

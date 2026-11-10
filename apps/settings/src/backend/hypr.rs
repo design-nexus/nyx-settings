@@ -162,6 +162,13 @@ pub fn generate(state: &State, self_cmd: &str) -> String {
         out.push_str("\n-- Keybindings\n");
         out.push_str(&binds);
     }
+    // Virtual monitors keep their own file (shared with `nyx display virtual`); it's
+    // loaded from here once there is one, last, like the rest of this file.
+    if nyx_desktop::virtual_monitors::Paths::default_paths().is_ok_and(|p| p.lua.exists()) {
+        out.push_str("\n-- Virtual monitors\n");
+        out.push_str(nyx_desktop::virtual_monitors::REQUIRE_LINE);
+        out.push('\n');
+    }
     out
 }
 

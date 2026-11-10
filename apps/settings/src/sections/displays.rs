@@ -19,6 +19,21 @@ fn scale_label(s: f64) -> String {
 
 /// After a display change, ask to keep it; put the old layout back if nobody answers.
 fn confirm_or_revert(previous: BTreeMap<String, Monitor>) {
+    keep_or_revert(
+        15,
+        || {},
+        move || {
+            let p = previous.clone();
+            store::update(true, move |s| s.monitors = p);
+            store::flush();
+            glib::timeout_add_local_once(std::time::Duration::from_millis(900), || window::rebuild("displays"));
+        },
+    );
+}
+
+/// Ask whether to keep a change that was just made. `revert` runs on Revert, Escape, or
+/// when nobody answers within `seconds`; `keep` on Keep.
+pub(super) fn keep_or_revert(seconds: u32, keep: impl Fn() + 'static, revert: impl Fn() + 'static) {
     let Some(win) = window::window() else { return };
     let dialog = gtk::Window::builder().transient_for(&win).modal(true).title("Keep these display settings?").build();
     dialog.add_css_class("settings-window");
@@ -26,40 +41,40 @@ fn confirm_or_revert(previous: BTreeMap<String, Monitor>) {
     let card = widgets::vbox(14);
     card.add_css_class("dialog-card");
     card.append(&widgets::label("Keep these display settings?", "section-title"));
-    let msg = widgets::label("Reverting in 15 seconds.", "dim");
+    let msg = widgets::label(&format!("Reverting in {seconds} seconds."), "dim");
     card.append(&msg);
     let buttons = widgets::hbox(8);
     buttons.set_halign(gtk::Align::End);
-    let revert = gtk::Button::with_label("Revert");
-    let keep = gtk::Button::with_label("Keep");
-    keep.add_css_class("suggested-action");
-    buttons.append(&revert);
-    buttons.append(&keep);
+    let revert_button = gtk::Button::with_label("Revert");
+    let keep_button = gtk::Button::with_label("Keep");
+    keep_button.add_css_class("suggested-action");
+    buttons.append(&revert_button);
+    buttons.append(&keep_button);
     card.append(&buttons);
     dialog.set_child(Some(&card));
 
     let done = Rc::new(Cell::new(false));
+    let revert = Rc::new(revert);
     let do_revert = {
         let dialog = dialog.clone();
         let done = done.clone();
-        let previous = previous.clone();
         move || {
             if done.replace(true) {
                 return;
             }
-            let p = previous.clone();
-            store::update(true, move |s| s.monitors = p);
-            store::flush();
+            revert();
             dialog.close();
-            glib::timeout_add_local_once(std::time::Duration::from_millis(900), || window::rebuild("displays"));
         }
     };
     let r1 = do_revert.clone();
-    revert.connect_clicked(move |_| r1());
+    revert_button.connect_clicked(move |_| r1());
     let d2 = dialog.clone();
     let done2 = done.clone();
-    keep.connect_clicked(move |_| {
-        done2.set(true);
+    keep_button.connect_clicked(move |_| {
+        if done2.replace(true) {
+            return;
+        }
+        keep();
         d2.close();
     });
     let keys = gtk::EventControllerKey::new();
@@ -72,7 +87,7 @@ fn confirm_or_revert(previous: BTreeMap<String, Monitor>) {
         glib::Propagation::Proceed
     });
     dialog.add_controller(keys);
-    let left = Rc::new(Cell::new(15));
+    let left = Rc::new(Cell::new(seconds as i32));
     let r2 = do_revert.clone();
     let done3 = done.clone();
     glib::timeout_add_seconds_local(1, move || {
@@ -271,7 +286,14 @@ fn arrangement(page: &Page, monitors: &[Value]) {
 }
 
 fn monitors(page: &Page) {
-    let monitors: Vec<Value> = hypr::json(&["monitors", "all"]).and_then(|v| v.as_array().cloned()).unwrap_or_default();
+    // A split screen's regions are its virtual monitors, set up under Virtual monitors;
+    // the screen itself (the host) is listed like any other.
+    let monitors: Vec<Value> = hypr::json(&["monitors", "all"])
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|m| super::virtual_monitors::role(m) != "region")
+        .collect();
     if monitors.is_empty() {
         page.banner("Couldn't read the displays from Hyprland.", true);
         return;
@@ -284,6 +306,7 @@ fn monitors(page: &Page) {
         store::update(true, move |s| s.monitors = kept);
     }
     arrangement(page, &monitors);
+    super::virtual_monitors::build(page, &monitors);
 
     for m in &monitors {
         let name = m.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();

@@ -15,6 +15,7 @@ pub fn tools() -> Value {
         {"name": "settings.capabilities", "description": "What this computer can do now: installed programs, services, hardware, each available or why not.", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}}},
         {"name": "settings.value", "description": "A setting of a NyxOS configuration domain (dock, control-center, switcher, bar, shell, idle, appearance, notifications): the value in effect, NyxOS's default, and the person's own value if they set one.", "inputSchema": {"type": "object", "properties": {"domain": {"type": "string"}, "key": {"type": "string"}}, "required": ["domain", "key"]}},
         {"name": "settings.devices", "description": "Devices with their own settings that Settings remembers (displays, mice, sound devices), and when each was last seen.", "inputSchema": {"type": "object", "properties": {}}},
+        {"name": "settings.virtual_monitors", "description": "Virtual monitors (one wide screen split into two or three): whether they're on, each split screen's layout and regions as Hyprland has them now, and the saved layouts. Changing them is for the person, on the Displays page or with `nyx display virtual`.", "inputSchema": {"type": "object", "properties": {}}},
     ])
 }
 
@@ -67,8 +68,32 @@ pub fn handle(name: &str, args: Value) -> Result<Value, String> {
                 .collect();
             Ok(json!({"devices": devices}))
         }
+        "settings.virtual_monitors" => virtual_monitors(),
         _ => Err(format!("unknown tool {name}")),
     }
+}
+
+fn virtual_monitors() -> Result<Value, String> {
+    use nyx_desktop::virtual_monitors as vm;
+    let saved = vm::Paths::default_paths().and_then(|p| vm::Settings::load(&p)).map_err(|e| format!("{e:#}"))?;
+    let live = nyx_desktop::hypr::Instance::find().ok().and_then(|h| vm::status(&h).ok());
+    let screens: Vec<Value> = saved
+        .displays
+        .iter()
+        .map(|d| json!({"id": d.id, "port": d.connector, "split": d.enabled, "layout": d.layout.preset.as_str(), "proportions": d.layout.proportions().unwrap_or_default(), "profile": d.profile, "workspaces": d.workspaces}))
+        .collect();
+    let now: Vec<Value> = live
+        .iter()
+        .flat_map(|s| &s.groups)
+        .map(|g| json!({"screen": g.host, "state": g.state, "regions": g.regions.iter().map(|r| json!({"name": r.name, "width": r.width, "active_workspace": r.active_workspace})).collect::<Vec<_>>()}))
+        .collect();
+    Ok(json!({
+        "supported": live.is_some(),
+        "on": saved.enabled && live.as_ref().is_some_and(|s| s.available),
+        "screens": screens,
+        "now": now,
+        "saved_layouts": saved.profiles.keys().collect::<Vec<_>>(),
+    }))
 }
 
 /// Where a setting comes from, layer by layer (the files are readable by everyone).

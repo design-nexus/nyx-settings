@@ -26,7 +26,7 @@ die() { printf '\033[31m==>\033[0m %s\n' "$*" >&2; exit 1; }
 app_info() {
   dir=$1 pkg="nyx-$1" bins="nyx-$1" deps="" ids="" old_bins="" old_desktops="" old_icons="" defaults=false
   case $1 in
-    settings) ids="Settings" old_bins="settings settings-helper"; bins="nyx-settings nyx-settings-helper" ;;
+    settings) ids="Settings" old_bins="settings settings-helper"; bins="nyx-settings nyx-settings-helper nyx-display" ;;
     glimpse) ids="Glimpse" bins="nyx-glimpse nyx-glimpsed nyx-glimpse-settings" deps="bubblewrap" ;;
     contacts) ids="Contacts" defaults=true ;;
     git) ids="Git" deps="gtksourceview5 libsecret git-lfs" ;;
