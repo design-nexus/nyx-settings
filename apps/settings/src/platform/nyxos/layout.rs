@@ -34,7 +34,7 @@ pub fn group(id: &str, group: &'static str) -> &'static str {
         "sign-in" | "idle" => "Security",
         "apps" | "software" | "extensions" => "Apps & Defaults",
         "disks" | "mounts" => "Storage & Backup",
-        "region" | "boot" | "services" | "printers" | "about" => "System",
+        "region" | "boot" | "services" | "printers" | "updates" | "about" => "System",
         _ => match group {
             "" => "",
             "Connections" => "Network",
@@ -57,7 +57,6 @@ pub fn apply(list: &mut [Section]) {
         s.title = match s.id {
             "online-accounts" => "Accounts",
             "accounts" => "Users",
-            "software" => "Software & Updates",
             "boot" => "Boot & Sign-in",
             "idle" => "Lock Screen",
             _ => s.title,

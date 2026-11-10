@@ -171,24 +171,24 @@ pub fn tag_system(row: &gtk::Box) {
     widgets::tag_row(row, "System");
 }
 
-/// Home: the generation in the badge; updates are on Software & Updates.
+/// Home: the generation in the badge; updates are on Updates.
 pub fn home_updates(page: &Page, hero: &Hero) {
     let current = generations().into_iter().find(|g| g.current).map(|g| g.number);
     hero.count.set_text(&current.map(|n| n.to_string()).unwrap_or_default());
     hero.caption.set_text("Generation");
-    hero.badge.set_tooltip_text(Some("Software & Updates"));
-    hero.badge.connect_clicked(|_| window::navigate("software"));
+    hero.badge.set_tooltip_text(Some("Updates"));
+    hero.badge.connect_clicked(|_| window::navigate("updates"));
     let g = page.group("Updates");
     let (r, _) = widgets::button_row(
         &version(),
-        "NyxOS, its apps and the software for everyone update together. Software & Updates has the update and earlier generations.",
+        "The system, your apps and tools, and firmware, each the way it's installed. Updates has what's new, the update settings and earlier generations.",
         "Open",
-        |_| window::navigate("software"),
+        |_| window::navigate("updates"),
     );
     g.add(&r);
 }
 
-/// About: NyxOS's version and generation; updates and going back are on Software & Updates.
+/// About: NyxOS's version and generation; updates and going back are on Updates.
 pub fn about(page: &Page) {
     let g = page.group("NyxOS");
     let (r, _) = widgets::info_row("Version", &version());
@@ -197,12 +197,10 @@ pub fn about(page: &Page) {
         let (r, _) = widgets::info_row("Generation", &current.number.to_string());
         g.add(&r);
     }
-    let (r, _) = widgets::button_row(
-        "Updates and generations",
-        "Update NyxOS, or go back to an earlier generation.",
-        "Software & Updates",
-        |_| window::navigate("software"),
-    );
+    let (r, _) =
+        widgets::button_row("Updates and generations", "Update NyxOS, or go back to an earlier generation.", "Updates", |_| {
+            window::navigate("updates")
+        });
     widgets::keywords("update upgrade rollback generation version nixos");
     g.add(&r);
 }

@@ -40,6 +40,17 @@ pub fn colour_group(group: &str) -> &str {
 }
 
 /// Home's updates: Omarchy's packages, or NyxOS's generation.
+/// System › Updates is NyxOS's (on Omarchy, Software has the updates).
+pub fn has_updates() -> bool {
+    PLATFORM == Platform::NyxOS
+}
+
+pub fn updates(page: &Page) {
+    if PLATFORM == Platform::NyxOS {
+        nyxos::updates::page(page);
+    }
+}
+
 pub fn home_updates(page: &Page, hero: Rc<Hero>) {
     match PLATFORM {
         Platform::NyxOS => nyxos::home_updates(page, &hero),

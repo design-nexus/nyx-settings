@@ -743,6 +743,18 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             needs: &[],
         },
         Section {
+            id: "updates",
+            title: "Updates",
+            icon: "software-update-available-symbolic",
+            group: "System",
+            description: "The system, your apps and tools, and firmware: what's new, updating it, the update settings, the history and going back.",
+            keywords: "updates update upgrade automatic auto firmware fwupd history rollback generations channel coding agents tools",
+            files: Vec::new,
+            build: Build::Native(crate::platform::updates),
+            visible: crate::platform::has_updates,
+            needs: &[],
+        },
+        Section {
             id: "services",
             title: "Services",
             icon: "applications-system-symbolic",

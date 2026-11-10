@@ -1683,6 +1683,21 @@ dependencies = [
 [[package]]
 name = "nyx-desktop"
 version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=1b052a7636cbb1ea171ae425d3e0e2498b914713#1b052a7636cbb1ea171ae425d3e0e2498b914713"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "gio",
+ "gio-unix",
+ "glib",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
+name = "nyx-desktop"
+version = "0.1.0"
 source = "git+https://github.com/design-nexus/nyx-core.git?rev=4378e243aeb09733843996663cd9a5a7f0cbb821#4378e243aeb09733843996663cd9a5a7f0cbb821"
 dependencies = [
  "anyhow",
@@ -1754,7 +1769,7 @@ dependencies = [
  "nyx-config",
  "nyx-connect",
  "nyx-core",
- "nyx-desktop",
+ "nyx-desktop 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=1b052a7636cbb1ea171ae425d3e0e2498b914713)",
  "nyx-devices",
  "nyx-pim",
  "nyx-share-client",
@@ -1840,7 +1855,7 @@ source = "git+https://github.com/design-nexus/nyx-design.git?rev=78a1910cabe3535
 dependencies = [
  "gtk4",
  "nyx-core",
- "nyx-desktop",
+ "nyx-desktop 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=4378e243aeb09733843996663cd9a5a7f0cbb821)",
  "nyx-theme",
 ]
 

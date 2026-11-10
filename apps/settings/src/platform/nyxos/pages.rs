@@ -251,58 +251,110 @@ pub fn services(page: &Page) {
     crate::sections::services::user_and_system_lists(page);
 }
 
-fn date(secs: i64) -> String {
-    gtk::glib::DateTime::from_unix_local(secs)
-        .and_then(|d| d.format("%e %b %Y, %H:%M"))
-        .map(|s| s.trim().to_string())
-        .unwrap_or_default()
+/// `nyx-system catalog installed --json`.
+#[derive(Debug, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Installed {
+    #[serde(default)]
+    for_you: Vec<Mine>,
+    /// Per-user software installed for everyone.
+    #[serde(default)]
+    movable: Vec<Movable>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct Movable {
+    id: String,
+    name: String,
+    #[serde(default)]
+    packages: Vec<String>,
+    #[serde(default)]
+    nyx: Vec<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct Mine {
+    id: String,
+    name: String,
+    version: Option<String>,
+    from: String,
 }
 
 pub fn software(page: &Page) {
     let s = nyxos::settings();
-    nyxos::updates::group(page);
-    nyxos::updates::history(page);
     let g = page.group("Store");
     let (r, _) = widgets::button_row(
         "Nyx Store",
-        "Nyx Store installs apps from the NyxOS catalog, nixpkgs and Flathub, and updates Flathub apps.",
+        "Nyx Store installs apps from the NyxOS catalog, nixpkgs and Flathub. Apps and tools are yours; what the system has to provide (services, drivers) is for everyone.",
         "Open Store",
         |_| {
             let _ = std::process::Command::new("nyx-store").spawn();
         },
     );
     g.add(&r);
-
-    let g = page.group("Generations");
-    let list = nyxos::generations();
-    g.note("Every system change makes a new generation. Going back undoes the last change, software and system settings with it; your files stay. Earlier ones are also in the boot menu.");
-    let previous = list.iter().find(|x| !x.current && list.iter().any(|c| c.current && c.number > x.number)).map(|x| x.number);
-    for g8 in list.iter().take(8) {
-        let r = widgets::row(&format!("Generation {}", g8.number), &date(g8.created), None);
-        if g8.current {
-            widgets::tag_row(&r, "Current");
-        }
-        g.add(&r);
-    }
-    if let Some(n) = previous {
-        let back = widgets::confirm_button("Go Back", &format!("Go back to generation {n}?"), |b| {
-            b.set_sensitive(false);
-            nyxos::rollback(|_| window::rebuild("software"));
+    let (r, _) =
+        widgets::button_row("Updates", "What's new for the system, your apps and tools, and firmware.", "Open Updates", |_| {
+            window::navigate("updates")
         });
-        back.set_sensitive(!nyxos::busy());
-        g.add(&widgets::row(
-            &format!("Go back to generation {n}"),
-            "Switches to it now; it stays until the next change.",
-            Some(back.upcast_ref()),
-        ));
-        widgets::keywords("rollback undo previous generation revert");
+    g.add(&r);
+
+    let installed: Installed = cmd::read(&["nyx-system", "catalog", "installed", "--json"])
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    let g = page.group("Installed for you");
+    g.note("Your own apps and tools, in your Nix profile: installing, updating and removing them needs no password, and other accounts have their own.");
+    if installed.for_you.is_empty() {
+        g.note("Nothing yet. Nyx Store, Nyx Welcome and nyx install add software here.");
     }
+    for m in &installed.for_you {
+        let (id, name) = (m.id.clone(), m.name.clone());
+        let remove = widgets::confirm_button("Remove", &format!("Remove {name}?"), move |b| {
+            b.set_sensitive(false);
+            let what = name.clone();
+            cmd::run_async(&["nyx-system", "catalog", "remove", "--or-profile", "--yes", &id], move |r| {
+                window::toast(&match r {
+                    Ok(_) => format!("Removed {what}"),
+                    Err(e) => format!("{what} couldn't be removed: {e:#}"),
+                });
+                window::rebuild("software");
+            });
+        });
+        let desc = match &m.version {
+            Some(v) => format!("{v} · {}", m.from),
+            None => m.from.clone(),
+        };
+        g.add(&widgets::row(&m.name, &desc, Some(remove.upcast_ref())));
+    }
+    widgets::keywords("installed my apps profile remove uninstall");
 
     let g = page.group("Installed for everyone");
     if s.packages.is_empty() && s.nyx_apps.is_empty() {
-        g.note("Nothing beyond what NyxOS includes. Nyx Store and Nyx Welcome add software here.");
+        g.note("Nothing beyond what NyxOS includes. Software that needs the system (services, drivers) is added here.");
     }
-    for attr in &s.packages {
+    if !installed.movable.is_empty() {
+        g.note("Some apps here were installed for everyone before NyxOS installed apps per person. Moving one puts it in your own profile and removes it for everyone, in one rebuild; others on this computer install their own.");
+    }
+    for m in &installed.movable {
+        let (id, what, name) = (m.id.clone(), m.name.clone(), &m.name);
+        let mv = widgets::confirm_button("Move to My Account", &format!("Move {name}? Others lose it."), move |b| {
+            b.set_sensitive(false);
+            window::toast(&format!("Moving {what} to your account…"));
+            let what = what.clone();
+            cmd::run_async(&["nyx-system", "catalog", "move", "--yes", &id], move |r| {
+                window::toast(&match r {
+                    Ok(_) => format!("{what} is yours now"),
+                    Err(e) => format!("{what} couldn't be moved: {e:#}"),
+                });
+                window::rebuild("software");
+            });
+        });
+        mv.set_sensitive(!nyxos::busy());
+        g.add(&widgets::row(name, "For everyone; can be yours", Some(mv.upcast_ref())));
+    }
+    widgets::keywords("move my account per user everyone system wide");
+    let moving = |attr: &str| installed.movable.iter().any(|m| m.packages.iter().any(|p| p == attr));
+    for attr in s.packages.iter().filter(|a| !moving(a)) {
         let a = attr.clone();
         let remove = widgets::confirm_button("Remove", &format!("Remove {attr} for everyone?"), move |b| {
             b.set_sensitive(false);
@@ -314,7 +366,7 @@ pub fn software(page: &Page) {
         }
         g.add(&r);
     }
-    for (app, on) in &s.nyx_apps {
+    for (app, on) in s.nyx_apps.iter().filter(|(app, _)| !installed.movable.iter().any(|m| m.nyx.contains(*app))) {
         let a = app.clone();
         let reset = widgets::confirm_button("Reset", &format!("Give nyx-{app} back to NyxOS's default?"), move |b| {
             b.set_sensitive(false);
@@ -323,7 +375,6 @@ pub fn software(page: &Page) {
         let r = widgets::row(&format!("Nyx {app}"), if *on { "Turned on" } else { "Turned off" }, Some(reset.upcast_ref()));
         g.add(&r);
     }
-    nyxos::updates::settings(page);
 }
 
 pub fn boot(page: &Page) {
@@ -358,8 +409,8 @@ pub fn boot(page: &Page) {
     let (r, _) = widgets::button_row(
         "Earlier generations",
         "The boot menu lists the system's earlier generations, to start one that worked if a change didn't.",
-        "Software & Updates",
-        |_| window::navigate("software"),
+        "Updates",
+        |_| window::navigate("updates"),
     );
     g.add(&r);
 }
