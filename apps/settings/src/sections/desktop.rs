@@ -87,11 +87,12 @@ pub fn set_dock(key: &str, value: toml::Value) {
 /// The dock's look and behaviour, which "Back to the defaults" hands back (pins and
 /// folders stay).
 const DOCK_LOOK: &[&str] =
-    &["position", "icon_size", "hide", "hide_delay_ms", "running", "previews", "preview_delay_ms", "trash", "folder_counts", "apps", "app_names"];
+    &["position", "icon_size", "hide", "hide_delay_ms", "running", "previews", "preview_delay_ms", "trash", "folder_counts", "apps", "app_names", "apps_search_bar"];
 
 pub fn build_dock(page: &Page) {
     let g = page.group("Dock");
-    let on = service_enabled("nyx-dock.service");
+    // The GTK dock or its Quickshell interface (`nyx-dock --ui qml`, run by its backend).
+    let on = service_enabled("nyx-dock.service") || service_enabled("nyx-dock-backend.service");
     let (r, _) = widgets::switch_row(
         "Use Nyx Dock",
         "Show the Nyx Dock instead of Omarchy's, now and at login. Off gives Omarchy's dock back.",
@@ -168,8 +169,15 @@ pub fn build_dock(page: &Page) {
             set_dock("apps", toml::Value::Boolean(on))
         });
     g.add(&r);
+    let (r, _) = widgets::switch_row(
+        "Apps search bar",
+        "Always show the search bar in the Apps panel. Off: it appears when you start typing.",
+        b("apps_search_bar", false),
+        |on| set_dock("apps_search_bar", toml::Value::Boolean(on)),
+    );
+    g.add(&r);
     widgets::keywords(
-        "position size hide autohide previews thumbnails trash apps launcher running monitor screen folder count badge",
+        "position size hide autohide previews thumbnails trash apps launcher search running monitor screen folder count badge",
     );
     let reset = widgets::confirm_button("Reset", "Click again to reset", |_| {
         let failed: Vec<String> = DOCK_LOOK.iter().filter_map(|k| reset_key("dock", k).err()).collect();
