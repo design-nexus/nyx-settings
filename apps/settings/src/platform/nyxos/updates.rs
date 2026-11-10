@@ -49,6 +49,9 @@ struct Target {
     available: Option<String>,
     #[serde(default)]
     needs_channel: bool,
+    /// Whether a newer version could be known (otherwise it's checked when it updates).
+    #[serde(default = "yes")]
+    checkable: bool,
     /// `app` (reopen it) or `computer` (restart).
     #[serde(default)]
     restart: String,
@@ -157,6 +160,10 @@ pub fn update(what: &[&str], working: &str) {
         }
         window::rebuild("updates");
     });
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// How a target is updated, in a few words (nyx-update's `how`).
@@ -381,8 +388,9 @@ fn target_row(t: &Target) -> gtk::Box {
     let state = match (&t.installed, &t.available) {
         (Some(a), Some(b)) => format!("{a} → {b}"),
         (None, Some(b)) => format!("→ {b}"),
-        (Some(a), None) => format!("{a}, up to date"),
-        (None, None) => "Checked as it updates".into(),
+        (Some(a), None) if t.checkable => format!("{a}, up to date"),
+        (Some(a), None) => format!("{a}, checked when it updates"),
+        (None, None) => "Checked when it updates".into(),
     };
     let desc = match how(t) {
         "" => state,
