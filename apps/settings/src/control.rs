@@ -19,6 +19,192 @@ pub fn tools() -> Value {
     ])
 }
 
+/// API 2 for `nyx settings …`, `nyx devices …`, Glimpse and Nyx Assistant: Settings' own
+/// tools (all read-only; `settings.open` only shows a page), and the phones paired
+/// through Flux (Nyx Connect): listing them, ringing one, sending the clipboard to one
+/// (which asks first: it leaves this computer), and their page. Pairing and access stay
+/// on the page. D-Bus starts Settings without its window for a call.
+pub fn description(app_id: &str) -> Value {
+    let x = [
+        ("settings.pages", json!({"risk": "read_only", "aliases": ["find"], "positional": ["query"], "result": "object"})),
+        ("settings.open", json!({"risk": "writes", "confirmation": "never", "aliases": ["show"], "positional": ["page"], "suggest": {"page": "settings.page_names"}, "result": "object"})),
+        ("settings.capabilities", json!({"risk": "read_only", "positional": ["query"], "result": "object"})),
+        ("settings.value", json!({"risk": "read_only", "positional": ["domain", "key"], "result": "object"})),
+        ("settings.devices", json!({"risk": "read_only", "result": "object"})),
+        ("settings.virtual_monitors", json!({"risk": "read_only", "result": "object"})),
+    ];
+    let mut list = tools();
+    for t in list.as_array_mut().into_iter().flatten() {
+        if let Some((_, m)) = x.iter().find(|(n, _)| t["name"] == *n) {
+            t["x-nyx"] = m.clone();
+        }
+        let title = match t["name"].as_str().unwrap_or("") {
+            "settings.pages" => "Settings pages",
+            "settings.open" => "Show a page",
+            "settings.capabilities" => "What this computer can do",
+            "settings.value" => "Where a setting comes from",
+            "settings.devices" => "Remembered devices",
+            "settings.virtual_monitors" => "Virtual monitors",
+            _ => "",
+        };
+        if !title.is_empty() {
+            t["annotations"] = json!({ "title": title });
+        }
+    }
+    let device = json!({"type": "string", "minLength": 1, "description": "a paired device, by name or ID"});
+    let one = json!({"type": "object", "properties": {"device": device}, "required": ["device"], "additionalProperties": false});
+    let none = json!({"type": "object", "properties": {}, "additionalProperties": false});
+    if let Some(a) = list.as_array_mut() {
+        a.extend([
+            json!({"name": "settings.page_names", "description": "Settings pages whose title starts with a prefix, for completing a page.",
+                   "inputSchema": {"type": "object", "properties": {"prefix": {"type": "string"}, "limit": {"type": "integer"}}, "additionalProperties": false},
+                   "annotations": {"title": "Page names", "readOnlyHint": true}, "x-nyx": {"risk": "read_only", "result": "object"}}),
+            json!({"name": "devices.list", "description": "Phones and other devices paired through Flux: connected or not, battery, what each can do now. A prefix keeps those whose name starts with it.",
+                   "inputSchema": {"type": "object", "properties": {"prefix": {"type": "string"}, "limit": {"type": "integer"}}, "additionalProperties": false},
+                   "annotations": {"title": "Devices", "readOnlyHint": true}, "x-nyx": {"risk": "read_only", "aliases": ["phones"], "positional": ["prefix"], "result": "list"}}),
+            json!({"name": "devices.ring", "description": "Ring a connected phone, to find it.", "inputSchema": one, "annotations": {"title": "Ring"},
+                   "x-nyx": {"risk": "writes", "aliases": ["find"], "positional": ["device"], "suggest": {"device": "devices.list"}, "result": "message"}}),
+            json!({"name": "devices.send", "description": "Send what's on this computer's clipboard to a connected device.", "inputSchema": one, "annotations": {"title": "Send the clipboard"},
+                   "x-nyx": {"risk": "external", "aliases": ["clipboard"], "positional": ["device"], "suggest": {"device": "devices.list"}, "result": "message"}}),
+            json!({"name": "devices.open", "description": "Open Settings › Devices (pairing, access).", "inputSchema": none, "annotations": {"title": "Open Devices"},
+                   "x-nyx": {"risk": "writes", "confirmation": "never", "result": "none"}}),
+        ]);
+    }
+    json!({
+        "tools": list,
+        "nyx": {"api": 2, "app": app_id, "name": "Settings", "icon": crate::APP_ID, "namespaces": ["settings", "devices"],
+                "bus_name": app_id, "activation": "dbus", "default": "settings.pages", "open": {"action": "settings.open"},
+                "topics": [{"name": "devices"}],
+                "panel": {"id": "devices", "topics": ["devices"], "size": {"min": [420, 300], "preferred": [500, 380]}}}
+    })
+}
+
+thread_local! {
+    static SERVICE: std::cell::RefCell<Option<nyx_core::control::Service>> = const { std::cell::RefCell::new(None) };
+    static TIMER: std::cell::RefCell<Option<gtk::glib::SourceId>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Register the interface (from `connect_startup`; primary instance only). The
+/// `devices` topic is read from Flux every 5 s only while something watches it.
+pub fn serve(app: &gtk::Application) {
+    use gtk::prelude::*;
+    let id = app.application_id().map(|s| s.to_string()).unwrap_or_else(|| crate::APP_ID.to_string());
+    let window_app = app.clone();
+    let Some(service) = nyx_core::control::serve_with(app, description(&id), move |request, answer| {
+        let failed = |e: String| nyx_actions::Error::new(nyx_actions::ErrorKind::Failed, e);
+        match request.action.as_str() {
+            "settings.open" | "devices.open" => {
+                let want = if request.action == "devices.open" { "devices".to_string() } else { request.arguments["page"].as_str().unwrap_or("").trim().to_lowercase() };
+                let page = sections::all().into_iter().filter(|s| s.shown()).find(|s| want.is_empty() || s.id == want || s.title.to_lowercase() == want);
+                match page {
+                    Some(p) => {
+                        window::present(&window_app, Some(p.id));
+                        answer(Ok(json!({"showing": p.title})))
+                    }
+                    None => answer(Err(failed("no Settings page of that name; settings pages lists them".into()))),
+                }
+            }
+            "settings.page_names" => {
+                let prefix = request.arguments["prefix"].as_str().unwrap_or("").to_lowercase();
+                let items: Vec<Value> = sections::all()
+                    .into_iter()
+                    .filter(|s| s.shown() && s.title.to_lowercase().starts_with(&prefix))
+                    .map(|s| json!({"value": s.title, "label": s.title, "detail": s.group}))
+                    .collect();
+                answer(Ok(json!({"items": items})))
+            }
+            "devices.list" => {
+                let prefix = request.arguments["prefix"].as_str().unwrap_or("").to_lowercase();
+                nyx_core::cmd::background(devices, move |found| answer(found.map(|v| keep(v, &prefix)).map_err(failed)));
+            }
+            "devices.ring" | "devices.send" => {
+                let ring = request.action == "devices.ring";
+                let wanted = request.arguments["device"].as_str().unwrap_or("").trim().to_string();
+                nyx_core::cmd::background(
+                    move || -> Result<String, String> {
+                        let client = nyx_connect::Client::new();
+                        let snapshot = client.state().map_err(|e| e.message)?;
+                        let all: Vec<_> = snapshot.paired().collect();
+                        let lower = wanted.to_lowercase();
+                        let d = all
+                            .iter()
+                            .find(|d| d.id == wanted || d.display_name(&snapshot.devices).to_lowercase() == lower)
+                            .ok_or_else(|| format!("No paired device called “{wanted}”; devices list shows them"))?;
+                        let name = d.display_name(&snapshot.devices);
+                        if !d.online {
+                            return Err(format!("{name} isn't connected"));
+                        }
+                        if ring {
+                            client.ring(&d.id).map_err(|e| e.message)?;
+                            Ok(format!("Ringing {name}"))
+                        } else {
+                            client.send_clipboard(&d.id, "").map_err(|e| e.message)?;
+                            Ok(format!("Sent the clipboard to {name}"))
+                        }
+                    },
+                    move |done| answer(done.map(|m| json!({ "message": m })).map_err(failed)),
+                );
+            }
+            _ => answer(handle(&request.action, request.arguments).map_err(failed)),
+        }
+    }) else {
+        return;
+    };
+    service.on_watch(|_, on| {
+        TIMER.with(|t| {
+            if let Some(id) = t.borrow_mut().take() {
+                id.remove();
+            }
+            if on {
+                publish();
+                *t.borrow_mut() = Some(gtk::glib::timeout_add_seconds_local(5, || {
+                    publish();
+                    gtk::glib::ControlFlow::Continue
+                }));
+            }
+        });
+    });
+    SERVICE.with(|s| *s.borrow_mut() = Some(service));
+}
+
+/// The paired devices, connected first, as `devices.list` and the topic show them.
+fn devices() -> Result<Value, String> {
+    use nyx_connect::{Access, Feature};
+    let s = nyx_connect::Client::new().state().map_err(|e| e.message)?;
+    let mut items: Vec<Value> = s
+        .paired()
+        .map(|d| {
+            let name = d.display_name(&s.devices);
+            let battery = d.battery.filter(|_| d.online).map(|b| b.charge);
+            let subtitle = match (d.online, battery) {
+                (true, Some(b)) => format!("Connected · {b}%{}", if d.battery.is_some_and(|b| b.charging) { ", charging" } else { "" }),
+                (true, None) => "Connected".to_string(),
+                _ => "Not connected".to_string(),
+            };
+            json!({"title": name, "value": name, "id": d.id, "subtitle": subtitle, "icon": d.icon(), "connected": d.online, "battery": battery,
+                   "can_ring": d.online && d.has(Feature::Ring),
+                   "can_send": d.online && d.has(Feature::Clipboard) && s.allowed(&d.id, Access::Clipboard)})
+        })
+        .collect();
+    items.sort_by_key(|v| (v["connected"] != true, v["title"].as_str().unwrap_or("").to_lowercase()));
+    Ok(json!({ "items": items }))
+}
+
+fn keep(mut v: Value, prefix: &str) -> Value {
+    if let Some(items) = v["items"].as_array_mut() {
+        items.retain(|i| i["title"].as_str().unwrap_or("").to_lowercase().starts_with(prefix));
+    }
+    v
+}
+
+fn publish() {
+    let Some(service) = SERVICE.with(|s| s.borrow().clone()) else { return };
+    if !service.watched("devices") {
+        return;
+    }
+    nyx_core::cmd::background(devices, move |found| service.publish("devices", found.unwrap_or_else(|e| json!({"error": e}))));
+}
+
 fn matches(s: &sections::Section, words: &[String]) -> bool {
     let hay = format!("{} {} {} {} {}", s.id, s.title, s.group, s.description, s.keywords).to_lowercase();
     words.iter().all(|w| hay.contains(w))
@@ -117,4 +303,15 @@ fn explain(domain: &str, key: &str) -> Result<Value, String> {
     };
     let j = |v: &Option<toml::Value>| v.as_ref().and_then(|v| serde_json::to_value(v).ok()).unwrap_or(Value::Null);
     Ok(json!({"value": j(&user.clone().or(default.clone())), "source": source, "default": j(&default), "yours": j(&user)}))
+}
+
+#[cfg(test)]
+mod description_tests {
+    #[test]
+    fn the_description_is_api_2() {
+        let d = nyx_actions::Description::from_value(&super::description(crate::APP_ID), None).unwrap();
+        assert!(d.action("devices.send").unwrap().asks(), "sending leaves this computer");
+        assert!(!d.action("devices.ring").unwrap().asks());
+        assert!(d.actions.iter().filter(|a| a.id.starts_with("settings.") && a.id != "settings.open").all(|a| a.risk == nyx_actions::Risk::ReadOnly));
+    }
 }

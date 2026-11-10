@@ -208,23 +208,39 @@ fn main() -> glib::ExitCode {
         return glib::ExitCode::SUCCESS;
     }
 
+    // D-Bus starts Settings with --gapplication-service for a call from nyx, Glimpse or
+    // Nyx Assistant: no window, and it quits once idle. GLib won't parse the flag for
+    // apps that handle their own command line.
+    let id = std::env::var("NYX_SETTINGS_APP_ID").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| APP_ID.to_string());
+    nyx_core::control::describe_if_asked(&control::description(&id));
+    let mut args = args;
+    let service = args.iter().any(|a| a == "--gapplication-service");
+    args.retain(|a| a != "--gapplication-service");
     let mut flags = gio::ApplicationFlags::HANDLES_COMMAND_LINE;
+    if service {
+        flags |= gio::ApplicationFlags::IS_SERVICE;
+    }
     // Snapshots render in their own process, so they never hand off to an open window.
     if std::env::var_os("SETTINGS_SNAPSHOT").is_some() {
         flags |= gio::ApplicationFlags::NON_UNIQUE;
     }
-    // NYX_SETTINGS_APP_ID runs a test copy under its own ID, beside the real one.
-    let id = std::env::var("NYX_SETTINGS_APP_ID").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| APP_ID.to_string());
+    // NYX_SETTINGS_APP_ID (above) runs a test copy under its own ID, beside the real one.
     // Windows without an application, like dialogs, take their Wayland app ID from this.
     glib::set_prgname(Some(id.as_str()));
     let app = gtk::Application::builder().application_id(id.as_str()).flags(flags).build();
-    // Nyx Assistant lists and shows pages through this; it changes nothing (primary instance only).
-    app.connect_startup(|app| nyx_core::control::serve(app, control::tools(), control::handle));
+    // nyx, Glimpse and Nyx Assistant list and show pages and work paired devices through
+    // this; it changes no setting (primary instance only).
+    app.connect_startup(move |app| {
+        control::serve(app);
+        if service {
+            app.set_inactivity_timeout(10_000);
+        }
+    });
     app.connect_command_line(|app, cl| {
         let argv: Vec<String> = cl.arguments().iter().map(|a| a.to_string_lossy().to_string()).collect();
         let section = argv.iter().position(|a| a == "--section").and_then(|i| argv.get(i + 1)).cloned();
         window::present(app, section.as_deref().map(|id| if id == "cloud-storage" { "online-accounts" } else { id }));
         glib::ExitCode::SUCCESS
     });
-    app.run()
+    app.run_with_args(&args)
 }
