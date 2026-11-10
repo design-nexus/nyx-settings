@@ -1683,7 +1683,7 @@ dependencies = [
 [[package]]
 name = "nyx-desktop"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-core.git?rev=1b052a7636cbb1ea171ae425d3e0e2498b914713#1b052a7636cbb1ea171ae425d3e0e2498b914713"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=04c93f7670075f5b4cf8150fcafe3f485b6dc693#04c93f7670075f5b4cf8150fcafe3f485b6dc693"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1769,7 +1769,7 @@ dependencies = [
  "nyx-config",
  "nyx-connect",
  "nyx-core",
- "nyx-desktop 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=1b052a7636cbb1ea171ae425d3e0e2498b914713)",
+ "nyx-desktop 0.1.0 (git+https://github.com/design-nexus/nyx-core.git?rev=04c93f7670075f5b4cf8150fcafe3f485b6dc693)",
  "nyx-devices",
  "nyx-pim",
  "nyx-share-client",
