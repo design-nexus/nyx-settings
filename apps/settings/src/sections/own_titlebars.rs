@@ -9,7 +9,7 @@ use gtk::gio;
 use gtk::prelude::*;
 
 /// (desktop id, name) of every app the launcher shows, by name.
-fn installed_apps() -> Vec<(String, String)> {
+pub(super) fn installed_apps() -> Vec<(String, String)> {
     let mut apps: Vec<(String, String)> = gio::AppInfo::all()
         .into_iter()
         .filter(|a| a.should_show())

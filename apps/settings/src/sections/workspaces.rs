@@ -115,7 +115,11 @@ pub fn build(page: &Page) {
         Sketch::MiddlePaste,
     ));
     super::workspace_rules::build(page);
-    super::own_titlebars::build(page);
+    super::window_controls::build(page);
+    // Omarchy's titlebar and the Dock's hover buttons: what NyxOS's decorations replace.
+    if !crate::backend::window_controls::decorations() {
+        super::own_titlebars::build(page);
+    }
     shell(page);
 }
 

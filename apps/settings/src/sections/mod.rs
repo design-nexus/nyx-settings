@@ -40,6 +40,7 @@ pub mod nyx;
 pub mod online_accounts;
 pub mod online_presets;
 pub mod own_titlebars;
+pub mod window_controls;
 pub mod plugins;
 pub mod power;
 pub mod printers;

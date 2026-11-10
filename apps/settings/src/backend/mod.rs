@@ -33,3 +33,4 @@ pub mod themehook;
 pub mod titlebars;
 pub mod udisks;
 pub mod updates;
+pub mod window_controls;
