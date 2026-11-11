@@ -699,7 +699,8 @@ mod tests {
         g.four.apps.insert("pinchout".into(), "firefox.desktop; rm -rf ~".into());
         assert!(line(&lua(&g), 4, "pinchout").is_empty(), "not a desktop entry id");
         g.four.apps.insert("pinchout".into(), "org.mozilla.firefox.desktop".into());
-        assert!(line(&lua(&g), 4, "pinchout").contains("uwsm-app -- org.mozilla.firefox.desktop"));
+        let launcher = sys("uwsm-app --", "uwsm app --");
+        assert!(line(&lua(&g), 4, "pinchout").contains(&format!("{launcher} org.mozilla.firefox.desktop")));
     }
 
     #[test]
