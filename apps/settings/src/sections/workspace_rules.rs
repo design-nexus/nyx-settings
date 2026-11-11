@@ -196,7 +196,12 @@ fn edit(id: Option<u32>, refresh: Refresh) {
         Field::choice(ws_options, &id.unwrap_or(1).to_string()),
         Field::text_with("Name (optional), e.g. Web", r.name.as_deref().unwrap_or("")),
         Field::choice(
-            MODES.iter().map(|(a, b)| (a.to_string(), format!("Layout: {b}"))).collect(),
+            MODES
+                .iter()
+                // Floating is Omarchy's own mode; NyxOS has Hyprland's layouts only.
+                .filter(|(a, _)| *a != "floating" || crate::platform::PLATFORM == crate::platform::Platform::Omarchy)
+                .map(|(a, b)| (a.to_string(), format!("Layout: {b}")))
+                .collect(),
             r.mode.as_deref().unwrap_or(""),
         ),
         Field::choice(GAPS.iter().map(|(a, b, _)| (a.to_string(), format!("Gaps: {b}"))).collect(), gaps_now),

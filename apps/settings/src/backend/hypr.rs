@@ -88,12 +88,16 @@ pub fn generate(state: &State, self_cmd: &str) -> String {
 
     if !state.autostart.is_empty() {
         out.push_str("\n-- Started with the session (once; reloads don't start another)\n");
+        // Omarchy's o.shell_succeeds where it's loaded; NyxOS's config has no `o`.
+        out.push_str(
+            "local function nyx_runs(c) if o and o.shell_succeeds then return o.shell_succeeds(c) end return os.execute(c .. \" >/dev/null 2>&1\") == true end\n",
+        );
         for (process, command) in &state.autostart {
             if !crate::backend::rules::valid_process(process) {
                 continue;
             }
             out.push_str(&format!(
-                "if not o.shell_succeeds({}) then hl.exec_cmd({}) end\n",
+                "if not nyx_runs({}) then hl.exec_cmd({}) end\n",
                 quote(&format!("pgrep -x {process}")),
                 quote(command)
             ));
@@ -229,7 +233,11 @@ fn workspace_lines(state: &State) -> Vec<String> {
         if let Some(mode) =
             rule.and_then(|r| r.mode.as_deref()).filter(|m| ["dwindle", "master", "scrolling", "floating"].contains(m))
         {
-            out.push(format!("o.workspace_mode({{ workspace = {}, mode = {} }})", quote(&id.to_string()), quote(mode)));
+            // Omarchy's modes where its helpers are loaded; elsewhere Hyprland's own layout
+            // (floating needs Omarchy).
+            let (ws, m) = (quote(&id.to_string()), quote(mode));
+            let fallback = if mode == "floating" { String::new() } else { format!(" else hl.workspace_rule({{ workspace = {ws}, layout = {m} }})") };
+            out.push(format!("if o and o.workspace_mode then o.workspace_mode({{ workspace = {ws}, mode = {m} }}){fallback} end"));
         }
     }
     out
@@ -423,7 +431,10 @@ mod tests {
         assert!(lines[2].starts_with("hl.workspace_rule({ workspace = \"3\", monitor = \"DP-1\", default_name = "));
         assert!(lines[2].contains("gaps_in = 0, gaps_out = 0") && lines[2].contains("no_border = true"));
         assert!(!lines[2].contains("persistent"));
-        assert_eq!(lines[3], "o.workspace_mode({ workspace = \"3\", mode = \"scrolling\" })");
+        assert_eq!(
+            lines[3],
+            "if o and o.workspace_mode then o.workspace_mode({ workspace = \"3\", mode = \"scrolling\" }) else hl.workspace_rule({ workspace = \"3\", layout = \"scrolling\" }) end"
+        );
         assert_eq!(lines[4], "hl.workspace_rule({ workspace = \"4\" })");
         assert_eq!(lines.len(), 5);
     }
