@@ -1,5 +1,5 @@
-//! Nyx Bar: its size, the status icons as one pill or separate, the calendar's layout
-//! and the workspaces' look. Read through every layer (NyxOS's defaults, then the
+//! Bar (Nyx Bar): its size, the status icons as one pill or separate, the clock (date
+//! style, 12/24-hour, seconds, the calendar's layout) and the workspaces' look. Read through every layer (NyxOS's defaults, then the
 //! user's file); written into `~/.config/nyx/bar.toml` with `toml_edit`, keeping the
 //! layout and comments the bar wrote there. The bar follows the file as it changes.
 
@@ -45,7 +45,7 @@ pub fn set_size(doc: &mut DocumentMut, size: &str) {
 }
 
 /// One plugin's setting, in `[plugins."<id>"]`.
-pub fn set_plugin(doc: &mut DocumentMut, plugin: &str, key: &str, value: &str) {
+pub fn set_plugin(doc: &mut DocumentMut, plugin: &str, key: &str, value: impl Into<Value>) {
     if !doc.contains_table("plugins") {
         let mut t = toml_edit::Table::new();
         t.set_implicit(true);
@@ -150,7 +150,42 @@ pub fn build(page: &Page) {
         None => g.note("The status icons aren't in the bar's right section, so they can't be grouped here."),
     }
 
-    let g = page.group("Calendar and workspaces");
+    let g = page.group("Clock");
+    let (r, _) = widgets::choice_row(
+        "Date",
+        "How the date beside the time reads.",
+        opts(&[("short", "Wed Nov 11"), ("long", "Wednesday, November 11"), ("numeric", "Numbers (11/11)"), ("iso", "2026-11-11"), ("none", "No date")]),
+        &plugin("nyx.clock", "date", "short"),
+        |v| {
+            let mut doc = read_user();
+            set_plugin(&mut doc, "nyx.clock", "date", v.as_str());
+            write_user(&doc);
+        },
+    );
+    g.add(&r);
+    let (r, _) = widgets::choice_row(
+        "Time",
+        "A 12- or 24-hour clock, in the bar, its calendar and reminders. Automatic follows your region.",
+        opts(&[("auto", "Automatic"), ("12", "12-hour (5:08 PM)"), ("24", "24-hour (17:08)")]),
+        &plugin("nyx.clock", "hours", "auto"),
+        |v| {
+            let mut doc = read_user();
+            set_plugin(&mut doc, "nyx.clock", "hours", v.as_str());
+            write_user(&doc);
+        },
+    );
+    g.add(&r);
+    let seconds = merged.get("plugins").and_then(|p| p.get("nyx.clock")).and_then(|p| p.get("seconds")).and_then(|v| v.as_bool()).unwrap_or(false);
+    let (r, _) = widgets::switch_row("Seconds", "Seconds in the bar's time.", seconds, |on| {
+        let mut doc = read_user();
+        set_plugin(&mut doc, "nyx.clock", "seconds", on);
+        write_user(&doc);
+    });
+    g.add(&r);
+    let own = plugin("nyx.clock", "format", "");
+    if !own.trim().is_empty() {
+        g.note(&format!("Your own format, <tt>{}</tt>, is in use in place of these; remove <tt>format</tt> from the clock's settings to use them.", gtk::glib::markup_escape_text(&own)));
+    }
     let (r, _) = widgets::choice_row(
         "Calendar",
         "What a click on the clock opens: the month with your events and reminders beside it, or the month alone.",
@@ -158,11 +193,12 @@ pub fn build(page: &Page) {
         &plugin("nyx.clock", "layout", "wide"),
         |v| {
             let mut doc = read_user();
-            set_plugin(&mut doc, "nyx.clock", "layout", &v);
+            set_plugin(&mut doc, "nyx.clock", "layout", v.as_str());
             write_user(&doc);
         },
     );
     g.add(&r);
+    let g = page.group("Workspaces");
     let (r, _) = widgets::choice_row(
         "Workspaces",
         "How the workspaces look: pills (the current one holds its windows' icons), numbers, app icons, dots or an underline.",
@@ -170,7 +206,7 @@ pub fn build(page: &Page) {
         &plugin("nyx.workspaces", "look", "pills"),
         |v| {
             let mut doc = read_user();
-            set_plugin(&mut doc, "nyx.workspaces", "look", &v);
+            set_plugin(&mut doc, "nyx.workspaces", "look", v.as_str());
             write_user(&doc);
         },
     );
@@ -189,12 +225,12 @@ pub fn build(page: &Page) {
         b.add_css_class("destructive-action");
         g.add(&widgets::row(
             "Reset to NyxOS's arrangement",
-            "Puts every item back where NyxOS places it. Size, calendar and workspaces stay as they are.",
+            "Puts every item back where NyxOS places it. Size, clock and workspaces stay as they are.",
             Some(b.upcast_ref()),
         ));
     }
     page.group("Items").note("Which items show at all: <tt>nyx plugin list</tt>, <tt>nyx plugin configure</tt>.");
-    widgets::keywords("nyx bar top panel height size compact cozy spacious status pill calendar clock workspaces look arrange order move left center right section divider reset");
+    widgets::keywords("bar top panel height size compact cozy spacious status pill calendar clock date time 12-hour 24-hour military seconds workspaces look arrange order move left center right section divider reset");
 }
 
 #[cfg(test)]

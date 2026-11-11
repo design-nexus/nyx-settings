@@ -64,6 +64,12 @@ pub struct Info {
     pub user_sets_layout: bool,
     #[serde(default)]
     names: HashMap<String, String>,
+    /// What each entry shows, from its plugin's manifest ("Dots while an app uses…").
+    #[serde(default)]
+    descriptions: HashMap<String, String>,
+    /// Entries whose plugin runs and part is on; `None` from an older nyx-bar.
+    #[serde(default)]
+    on: Option<Vec<String>>,
     #[serde(default)]
     pub unplaced: Vec<String>,
 }
@@ -79,6 +85,20 @@ impl Info {
 
     fn entry_name(&self, e: &Entry) -> String {
         e.items().iter().map(|i| self.name(i)).collect::<Vec<_>>().join(" · ")
+    }
+
+    fn description(&self, e: &Entry) -> String {
+        let all: Vec<&str> = e.items().iter().filter_map(|i| self.descriptions.get(i)).map(String::as_str).filter(|d| !d.is_empty()).collect();
+        if all.len() == 1 { all[0].to_string() } else { String::new() }
+    }
+
+    /// Whether an entry shows anything on the bar: a plugin that's off (Keep awake until
+    /// it's turned on) keeps its place in the layout but has nothing to arrange.
+    fn is_on(&self, e: &Entry) -> bool {
+        match &self.on {
+            None => true,
+            Some(on) => !e.is_item() || e.items().iter().any(|i| on.contains(i)),
+        }
     }
 }
 
@@ -255,11 +275,17 @@ fn row(ed: &Ed, s: usize, i: usize, e: &Entry, len: usize, next_is_item: bool) -
         }
     }
     text.append(&title);
-    let ids = widgets::label(&e.items().join("  "), "dim");
-    ids.add_css_class("mono");
-    ids.add_css_class("bar-item-id");
+    // What it shows (some only now and then: while recording, with updates waiting).
+    let about = info.description(e);
+    if e.is_item() && !about.is_empty() {
+        let d = widgets::label(&about, "dim");
+        d.add_css_class("bar-item-id");
+        d.set_wrap(true);
+        d.set_xalign(0.0);
+        text.append(&d);
+    }
     if e.is_item() {
-        text.append(&ids);
+        text.set_tooltip_text(Some(&e.items().join("  ")));
     }
     row.append(&text);
 
@@ -377,7 +403,8 @@ fn section_card(ed: &Ed, s: usize, entries: &[Entry]) -> gtk::Box {
     let card = widgets::vbox(4);
     card.add_css_class("bar-section");
     let top = widgets::hbox(8);
-    let head = widgets::label(&format!("{} · {}", section_title(s).to_uppercase(), entries.iter().filter(|e| e.is_item()).count()), "bar-section-title");
+    let info = ed.info.borrow().clone();
+    let head = widgets::label(&format!("{} · {}", section_title(s).to_uppercase(), entries.iter().filter(|e| e.is_item() && info.is_on(e)).count()), "bar-section-title");
     head.set_hexpand(true);
     top.append(&head);
     let divider = gtk::Button::with_label("+ Divider");
@@ -391,6 +418,9 @@ fn section_card(ed: &Ed, s: usize, entries: &[Entry]) -> gtk::Box {
     card.append(&top);
     let list = widgets::vbox(4);
     for (i, e) in entries.iter().enumerate() {
+        if !info.is_on(e) {
+            continue;
+        }
         let next_is_item = entries.get(i + 1).is_some_and(Entry::is_item);
         list.append(&row(ed, s, i, e, entries.len(), next_is_item));
     }
@@ -426,7 +456,7 @@ fn refresh(ed: &Ed) {
         ed.root.remove(&c);
     }
     let Some(info) = read_info() else {
-        ed.root.append(&widgets::label("Nyx Bar didn't say its layout (nyx-bar --layout-json).", "dim"));
+        ed.root.append(&widgets::label("The bar didn't say its layout (nyx-bar --layout-json).", "dim"));
         return;
     };
     *ed.info.borrow_mut() = info.clone();
