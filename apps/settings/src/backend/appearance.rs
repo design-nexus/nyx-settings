@@ -3,6 +3,8 @@
 //! up through its gtk3 platform theme.
 
 use crate::{cmd, paths};
+use gtk::gio;
+use gtk::gio::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -27,12 +29,21 @@ pub fn save(c: &Config) -> anyhow::Result<()> {
     cmd::atomic_write(&config_file(), &toml::to_string_pretty(c)?)
 }
 
+/// The interface settings through GIO, not the `gsettings` command (NyxOS doesn't ship
+/// it). None when the schema isn't installed, where `Settings::new` would abort.
+fn interface() -> Option<gio::Settings> {
+    gio::SettingsSchemaSource::default()?.lookup(IFACE, true)?;
+    Some(gio::Settings::new(IFACE))
+}
+
 fn gsettings_get(key: &str) -> Option<String> {
-    cmd::output(&["gsettings", "get", IFACE, key]).map(|s| s.trim().trim_matches('\'').to_string())
+    Some(interface()?.string(key).to_string())
 }
 
 fn gsettings_set(key: &str, value: &str) -> anyhow::Result<()> {
-    cmd::run(&["gsettings", "set", IFACE, key, value])?;
+    let settings = interface().ok_or_else(|| anyhow::anyhow!("the {IFACE} schema isn't installed"))?;
+    settings.set_string(key, value)?;
+    gio::Settings::sync();
     Ok(())
 }
 
@@ -155,7 +166,7 @@ fn all_icon_themes() -> Vec<String> {
 }
 
 pub fn interface_font() -> String {
-    gsettings_get("font-name").unwrap_or_else(|| "Adwaita Sans 11".into())
+    gsettings_get("font-name").unwrap_or_else(|| "Inter 11".into())
 }
 
 pub fn set_interface_font(desc: &str) -> anyhow::Result<()> {
