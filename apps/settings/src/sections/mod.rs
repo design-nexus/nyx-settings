@@ -37,6 +37,7 @@ pub mod mouse;
 pub mod network;
 pub mod nightlight;
 pub mod nyx;
+pub mod nyxbar;
 pub mod online_accounts;
 pub mod online_presets;
 pub mod own_titlebars;
@@ -376,6 +377,18 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             build: Build::Native(bar::build),
             visible: always,
             needs: &["program:omarchy-shell"],
+        },
+        Section {
+            id: "nyx-bar",
+            title: "Nyx Bar",
+            icon: "preferences-desktop-display-symbolic",
+            group: "Personalization",
+            description: "Nyx Bar's size, its status icons, the calendar and the workspaces.",
+            keywords: "nyx bar top panel height size compact cozy spacious status pill calendar clock workspaces",
+            files: || vec![gtk::glib::user_config_dir().join("nyx/bar.toml")],
+            build: Build::Native(nyxbar::build),
+            visible: always,
+            needs: &["program:nyx-bar"],
         },
         Section {
             id: "plugins",
