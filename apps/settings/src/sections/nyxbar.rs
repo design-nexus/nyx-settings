@@ -5,6 +5,7 @@
 
 use crate::widgets::{self, Page};
 use crate::window;
+use gtk::prelude::*;
 use std::path::PathBuf;
 use toml_edit::{Array, DocumentMut, Item, Value};
 
@@ -12,11 +13,11 @@ fn path() -> PathBuf {
     gtk::glib::user_config_dir().join("nyx/bar.toml")
 }
 
-fn read_user() -> DocumentMut {
+pub(crate) fn read_user() -> DocumentMut {
     std::fs::read_to_string(path()).ok().and_then(|t| t.parse().ok()).unwrap_or_default()
 }
 
-fn write_user(doc: &DocumentMut) {
+pub(crate) fn write_user(doc: &DocumentMut) {
     let p = path();
     let r = (|| -> std::io::Result<()> {
         std::fs::create_dir_all(p.parent().unwrap_or(&p))?;
@@ -114,15 +115,31 @@ pub fn build(page: &Page) {
     });
     g.add(&r);
 
-    let doc = read_user();
-    match status_grouped(&doc) {
+    // The layout in use, through every layer: the user's file may set none of it.
+    let info = super::nyxbarlayout::read_info();
+    let in_use = || {
+        let mut doc = read_user();
+        if status_grouped(&doc).is_none()
+            && let Some(info) = super::nyxbarlayout::read_info()
+        {
+            super::nyxbarlayout::write_sections(&mut doc, &info.layout());
+        }
+        doc
+    };
+    let mut shown = read_user();
+    if status_grouped(&shown).is_none()
+        && let Some(info) = &info
+    {
+        super::nyxbarlayout::write_sections(&mut shown, &info.layout());
+    }
+    match status_grouped(&shown) {
         Some(grouped) => {
             let (r, _) = widgets::switch_row(
                 "Status icons in one pill",
                 "Network, Bluetooth, sound and battery together, opening Control Center. Off: each on its own.",
                 grouped,
-                |on| {
-                    let mut doc = read_user();
+                move |on| {
+                    let mut doc = in_use();
                     if set_status_grouped(&mut doc, on) {
                         write_user(&doc);
                     }
@@ -158,8 +175,26 @@ pub fn build(page: &Page) {
         },
     );
     g.add(&r);
-    page.group("Items").note("Which items show and their order: <tt>nyx plugin list</tt>, <tt>nyx plugin configure</tt>.");
-    widgets::keywords("nyx bar top panel height size compact cozy spacious status pill calendar clock workspaces look");
+    let g = page.plain_group("Arrangement");
+    g.note("Drag an item to reorder it or move it to another section, or use the arrows and the ⋯ menu. A pill is items sharing one background; Other plugins is where plugins the layout doesn't place go.");
+    g.add(&super::nyxbarlayout::editor());
+    if info.as_ref().is_some_and(|i| i.user_sets_layout) {
+        // Two clicks: this throws away the user's arrangement.
+        let b = widgets::confirm_button("Reset", "Click again to reset", |_| {
+            let mut doc = read_user();
+            super::nyxbarlayout::reset(&mut doc);
+            write_user(&doc);
+            gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(300), || window::rebuild("nyx-bar"));
+        });
+        b.add_css_class("destructive-action");
+        g.add(&widgets::row(
+            "Reset to NyxOS's arrangement",
+            "Puts every item back where NyxOS places it. Size, calendar and workspaces stay as they are.",
+            Some(b.upcast_ref()),
+        ));
+    }
+    page.group("Items").note("Which items show at all: <tt>nyx plugin list</tt>, <tt>nyx plugin configure</tt>.");
+    widgets::keywords("nyx bar top panel height size compact cozy spacious status pill calendar clock workspaces look arrange order move left center right section divider reset");
 }
 
 #[cfg(test)]

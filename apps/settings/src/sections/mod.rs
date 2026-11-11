@@ -38,6 +38,7 @@ pub mod network;
 pub mod nightlight;
 pub mod nyx;
 pub mod nyxbar;
+pub mod nyxbarlayout;
 pub mod online_accounts;
 pub mod online_presets;
 pub mod own_titlebars;

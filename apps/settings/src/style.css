@@ -387,6 +387,16 @@ window.settings-window button.swatch-button.selected {
   font-weight: 500;
 }
 
+/* Nyx Bar: a pill (items on one background) and a divider row. */
+.bar-item.pill {
+  background: mix(@theme_card, @theme_accent, 0.08);
+}
+
+.bar-item.divider-row {
+  background: transparent;
+  border: 1px dashed alpha(@theme_text, 0.15);
+}
+
 .bar-item-id {
   font-size: 0.846em;
 }
