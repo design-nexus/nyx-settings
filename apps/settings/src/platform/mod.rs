@@ -329,6 +329,27 @@ pub fn lock_command() -> &'static [&'static str] {
     }
 }
 
+/// The session's end: `logout`, `reboot` or `shutdown`.
+pub fn session_command(what: &str) -> &'static [&'static str] {
+    match (PLATFORM, what) {
+        (Platform::NyxOS, "logout") => &["uwsm", "stop"],
+        (Platform::NyxOS, "reboot") => &["systemctl", "reboot"],
+        (Platform::NyxOS, _) => &["systemctl", "poweroff"],
+        (Platform::Omarchy, "logout") => &["omarchy-system-logout"],
+        (Platform::Omarchy, "reboot") => &["omarchy-system-reboot"],
+        (Platform::Omarchy, _) => &["omarchy-system-shutdown"],
+    }
+}
+
+/// Run `command` (a shell line) in a terminal window: Omarchy's floating one, or the
+/// default terminal (`xdg-terminal-exec`).
+pub fn in_terminal(command: &str) {
+    match PLATFORM {
+        Platform::NyxOS => crate::cmd::spawn(&["xdg-terminal-exec", "sh", "-c", command]),
+        Platform::Omarchy => crate::cmd::spawn(&["omarchy-launch-floating-terminal-with-presentation", command]),
+    }
+}
+
 #[cfg(test)]
 mod power_tests {
     #[test]

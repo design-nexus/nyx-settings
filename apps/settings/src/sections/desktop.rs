@@ -226,15 +226,19 @@ pub fn build_control_center(page: &Page) {
     g.add(&widgets::row("Standard layout", "Put back the standard tiles and pages.", Some(reset.upcast_ref())));
     widgets::keywords("control center quick settings tiles layout pages reset super d");
 
-    let g = page.group("In the bar");
-    g.add(&bar_switch(
-        "design-nexus.status",
-        "Nyx Status",
-        "The weather, CPU and memory, and the network, Bluetooth, sound and battery at a glance.",
-    ));
-    g.add(&bar_switch("design-nexus.control-center", "Control Center button", "One icon that opens and closes the panel."));
-    g.note("What Nyx Status shows is set under Bar Plugins.");
-    widgets::keywords("bar status widget weather cpu memory battery button");
+    // Omarchy's bar takes these as its plugins; Nyx Bar's items (NyxOS) are its own
+    // plugins, under Bar Plugins.
+    if crate::platform::PLATFORM == crate::platform::Platform::Omarchy {
+        let g = page.group("In the bar");
+        g.add(&bar_switch(
+            "design-nexus.status",
+            "Nyx Status",
+            "The weather, CPU and memory, and the network, Bluetooth, sound and battery at a glance.",
+        ));
+        g.add(&bar_switch("design-nexus.control-center", "Control Center button", "One icon that opens and closes the panel."));
+        g.note("What Nyx Status shows is set under Bar Plugins.");
+        widgets::keywords("bar status widget weather cpu memory battery button");
+    }
 }
 
 // ---------------------------------------------------------------- Notifications
@@ -253,6 +257,9 @@ pub fn build_notifications(page: &Page) {
         return;
     };
     let nyx = notifyd::mode().as_deref() == Some("nyx");
+    // Only Omarchy has another notification service to hand pop-ups to; NyxOS's are always
+    // the Notification Center's, and its bar's bell is a Nyx Bar plugin.
+    let omarchy = crate::platform::PLATFORM == crate::platform::Platform::Omarchy;
     let (r, _) = widgets::choice_row(
         "Pop-ups",
         "Who receives notifications and shows them as they arrive. History is kept either way.",
@@ -267,12 +274,14 @@ pub fn build_notifications(page: &Page) {
             });
         },
     );
-    g.add(&r);
-    g.add(&bar_switch(
-        "design-nexus.notification-center",
-        "Bell in the bar",
-        "Shows unread notifications; right-click for Do not disturb.",
-    ));
+    if omarchy {
+        g.add(&r);
+        g.add(&bar_switch(
+            "design-nexus.notification-center",
+            "Bell in the bar",
+            "Shows unread notifications; right-click for Do not disturb.",
+        ));
+    }
     widgets::keywords("notification center popups toasts omarchy inbox bell super n");
 
     let state = Rc::new(RefCell::new(settings));

@@ -41,7 +41,7 @@ const NOTABLE: &[(&str, &str)] = &[
 ];
 
 pub fn terminal(command: &str) {
-    cmd::spawn(&["omarchy-launch-floating-terminal-with-presentation", command]);
+    crate::platform::in_terminal(command);
 }
 
 /// Run a helper request off the main thread, then say how it went and redraw.

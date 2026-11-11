@@ -37,6 +37,11 @@ pub const ACTIONS: &[(&str, &str)] = &[
     ("command", "Run a command…"),
 ];
 
+/// Omarchy's command for a gesture, or NyxOS's own (the ones its Hyprland binds use).
+fn sys(omarchy: &'static str, nyxos: &'static str) -> &'static str {
+    if crate::platform::PLATFORM == crate::platform::Platform::NyxOS { nyxos } else { omarchy }
+}
+
 /// Actions that only make sense on the horizontal axis.
 pub fn horizontal_only(id: &str) -> bool {
     id == "workspace-follow"
@@ -213,19 +218,19 @@ fn action_body(action: &str, arg: Option<&str>, loop_count: Option<u32>) -> Opti
         "next-workspace" => format!("action = {}", dispatch("hl.dsp.focus({ workspace = \"e+1\" })")),
         "previous-workspace" => format!("action = {}", dispatch("hl.dsp.focus({ workspace = \"e-1\" })")),
         "last-workspace" => format!("action = {}", dispatch("hl.dsp.focus({ workspace = \"previous\" })")),
-        "menu" => format!("action = {}", exec("omarchy-menu toggle root")),
-        "apps" => format!("action = {}", exec("omarchy-menu toggle apps")),
-        "notifications" => format!("action = {}", exec("omarchy-shell notifications showHistory")),
-        "screenshot" => format!("action = {}", exec("omarchy-capture-screenshot")),
-        "volume-up" => format!("action = {}", exec("omarchy-audio-output-volume raise")),
-        "volume-down" => format!("action = {}", exec("omarchy-audio-output-volume lower")),
-        "brightness-up" => format!("action = {}", exec("omarchy-brightness-display +5%")),
-        "brightness-down" => format!("action = {}", exec("omarchy-brightness-display 5%-")),
-        "lock" => format!("action = {}", exec("omarchy-system-lock")),
+        "menu" => format!("action = {}", exec(sys("omarchy-menu toggle root", "nyx-glimpse --toggle"))),
+        "apps" => format!("action = {}", exec(sys("omarchy-menu toggle apps", "nyx-glimpse --toggle"))),
+        "notifications" => format!("action = {}", exec(sys("omarchy-shell notifications showHistory", "nyx-notification-center --toggle"))),
+        "screenshot" => format!("action = {}", exec(sys("omarchy-capture-screenshot", "nyx-capture --capture"))),
+        "volume-up" => format!("action = {}", exec(sys("omarchy-audio-output-volume raise", "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"))),
+        "volume-down" => format!("action = {}", exec(sys("omarchy-audio-output-volume lower", "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"))),
+        "brightness-up" => format!("action = {}", exec(sys("omarchy-brightness-display +5%", "brightnessctl set 5%+"))),
+        "brightness-down" => format!("action = {}", exec(sys("omarchy-brightness-display 5%-", "brightnessctl set 5%-"))),
+        "lock" => format!("action = {}", exec(sys("omarchy-system-lock", "loginctl lock-session"))),
         "glimpse" => format!("action = {}", exec("nyx-glimpse --toggle")),
         "app" => {
             let id = arg.map(str::trim).filter(|id| valid_app_id(id))?;
-            format!("action = {}", exec(&format!("uwsm-app -- {id}")))
+            format!("action = {}", exec(&format!("{} {id}", sys("uwsm-app --", "uwsm app --"))))
         }
         "command" => {
             let cmd = arg.map(str::trim).filter(|c| !c.is_empty())?;

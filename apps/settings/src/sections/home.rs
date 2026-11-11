@@ -717,14 +717,17 @@ fn quick_actions(page: &Page) {
             }
         });
     });
-    row.insert(&snap, -1);
+    // Omarchy's snapshots; NyxOS rolls back to an earlier system (Updates) instead.
+    if crate::platform::PLATFORM == crate::platform::Platform::Omarchy {
+        row.insert(&snap, -1);
+    }
     let lock = gtk::Button::with_label("Lock");
-    lock.connect_clicked(|_| cmd::spawn(&["omarchy-system-lock"]));
+    lock.connect_clicked(|_| cmd::spawn(crate::platform::lock_command()));
     row.insert(&lock, -1);
-    let restart = widgets::confirm_button("Restart", "Click again to restart", |_| cmd::spawn(&["omarchy-system-reboot"]));
+    let restart = widgets::confirm_button("Restart", "Click again to restart", |_| cmd::spawn(crate::platform::session_command("reboot")));
     restart.add_css_class("destructive-action");
     row.insert(&restart, -1);
-    let off = widgets::confirm_button("Shut down", "Click again to shut down", |_| cmd::spawn(&["omarchy-system-shutdown"]));
+    let off = widgets::confirm_button("Shut down", "Click again to shut down", |_| cmd::spawn(crate::platform::session_command("shutdown")));
     off.add_css_class("destructive-action");
     row.insert(&off, -1);
     g.add(&row);

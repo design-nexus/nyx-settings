@@ -189,17 +189,15 @@ pub fn build(page: &Page) {
     if cmd::run(&["omarchy-toggle-enabled", "suspend-off"]).is_err() {
         now.append(&widgets::command_button("Suspend", &["systemctl", "suspend"]));
     }
-    if cmd::run(&["omarchy-hibernation-available"]).is_ok() {
+    if crate::platform::hibernation_available() {
         now.append(&widgets::command_button("Hibernate", &["systemctl", "hibernate"]));
     }
     g.add(&widgets::row("Lock or sleep", "", Some(now.upcast_ref())));
     let end = widgets::hbox(8);
-    for (label, confirm, command) in [
-        ("Log out", "Click again to log out", "omarchy-system-logout"),
-        ("Restart", "Click again to restart", "omarchy-system-reboot"),
-        ("Shut down", "Click again to shut down", "omarchy-system-shutdown"),
-    ] {
-        let b = widgets::confirm_button(label, confirm, move |_| cmd::spawn(&[command]));
+    for (label, confirm, what) in
+        [("Log out", "Click again to log out", "logout"), ("Restart", "Click again to restart", "reboot"), ("Shut down", "Click again to shut down", "shutdown")]
+    {
+        let b = widgets::confirm_button(label, confirm, move |_| cmd::spawn(crate::platform::session_command(what)));
         b.add_css_class("destructive-action");
         end.append(&b);
     }

@@ -200,12 +200,18 @@ fn omarchy_group(page: &Page) {
 }
 
 fn rest(page: &Page) {
+    // Omarchy's wallpapers and fonts, through its own commands; on NyxOS the wallpaper
+    // comes with the theme (nyx-themed) and fonts are the theme's.
+    let omarchy = crate::platform::PLATFORM == crate::platform::Platform::Omarchy;
+
     // ----- Wallpaper -----
-    let g = page.group("Wallpaper");
-    let buttons = widgets::hbox(8);
-    buttons.append(&widgets::command_button("Next wallpaper", &["omarchy-theme-bg-next"]));
-    buttons.append(&widgets::command_button("Choose…", &["omarchy-menu", "toggle", "background"]));
-    g.add(&widgets::row("Background", "Cycle through the current theme's wallpapers or pick one.", Some(buttons.upcast_ref())));
+    if omarchy {
+        let g = page.group("Wallpaper");
+        let buttons = widgets::hbox(8);
+        buttons.append(&widgets::command_button("Next wallpaper", &["omarchy-theme-bg-next"]));
+        buttons.append(&widgets::command_button("Choose…", &["omarchy-menu", "toggle", "background"]));
+        g.add(&widgets::row("Background", "Cycle through the current theme's wallpapers or pick one.", Some(buttons.upcast_ref())));
+    }
 
     // ----- Fonts and icons -----
     let g = page.group("Fonts & icons");
@@ -218,15 +224,17 @@ fn rest(page: &Page) {
         .collect();
     let current_font = cmd::output(&["omarchy-font-current"]).unwrap_or_default();
     g.add(&interface_font_row());
-    let (r, _) =
-        widgets::choice_row("Monospace font", "Used by terminals, the bar and the lock screen.", fonts, &current_font, |font| {
-            cmd::run_async(&["omarchy-font-set", &font], move |r| {
-                if let Err(e) = r {
-                    crate::window::toast(&format!("Couldn't set font: {e}"));
-                }
+    if omarchy {
+        let (r, _) =
+            widgets::choice_row("Monospace font", "Used by terminals, the bar and the lock screen.", fonts, &current_font, |font| {
+                cmd::run_async(&["omarchy-font-set", &font], move |r| {
+                    if let Err(e) = r {
+                        crate::window::toast(&format!("Couldn't set font: {e}"));
+                    }
+                });
             });
-        });
-    g.add(&r);
+        g.add(&r);
+    }
     icons_row(&g);
 
     // On NyxOS the logo is a system setting, under Boot & Sign-in.
