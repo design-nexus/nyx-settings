@@ -176,10 +176,23 @@ fn valid_app_id(id: &str) -> bool {
     id.ends_with(".desktop") && id.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
 }
 
+/// Workspace gestures still switch while an app holds the keyboard (a VM screen
+/// inhibits system shortcuts, and Hyprland skips gestures too unless told).
+const PAST_INHIBIT: &str = ", disable_inhibit = true";
+
+fn moves_workspace(action: &str) -> bool {
+    matches!(action, "workspace-follow" | "next-workspace" | "previous-workspace" | "last-workspace")
+}
+
 /// The `action = …` part (plus any extra fields) for one action id, or None.
 /// `arg` is the command for `command` and the desktop entry id for `app`.
 /// `loop_count` makes next/previous workspace wrap around 1..N.
 fn action_lua(action: &str, arg: Option<&str>, loop_count: Option<u32>) -> Option<String> {
+    let body = action_body(action, arg, loop_count)?;
+    Some(if moves_workspace(action) { body + PAST_INHIBIT } else { body })
+}
+
+fn action_body(action: &str, arg: Option<&str>, loop_count: Option<u32>) -> Option<String> {
     if let Some(n) = loop_count {
         match action {
             "next-workspace" => return Some(format!("action = function() {STEP_FN}(1, {n}) end")),
@@ -281,7 +294,7 @@ fn set_lines(fingers: u8, set: &FingerSet, loop_count: Option<u32>, out: &mut Ve
     let mut follow_invert = None;
     let follow = set.action("left") == "workspace-follow" || set.action("right") == "workspace-follow";
     if follow {
-        out.push(format!("hl.gesture({{ fingers = {fingers}, direction = \"horizontal\", action = \"workspace\" }})"));
+        out.push(format!("hl.gesture({{ fingers = {fingers}, direction = \"horizontal\", action = \"workspace\"{PAST_INHIBIT} }})"));
         follow_invert = Some(set.reverse_horizontal);
     }
     for dir in DIRECTIONS {
@@ -636,6 +649,18 @@ mod tests {
         assert!(next.contains("direction = \"right\""), "{next}");
         let full = lines.iter().find(|l| l.contains("fingers = 4") && l.contains("fullscreen")).unwrap();
         assert!(full.contains("direction = \"down\""), "{full}");
+    }
+
+    #[test]
+    fn only_workspace_gestures_get_past_an_inhibitor() {
+        for g in [looping(), Gestures { enabled: true, ..Gestures::default() }] {
+            let lines = lua(&g);
+            assert!(line(&lines, 3, "horizontal").contains("disable_inhibit = true"));
+            assert!(line(&lines, 4, "left").contains("disable_inhibit = true"));
+            assert!(line(&lines, 4, "right").contains("disable_inhibit = true"));
+            assert!(!line(&lines, 3, "up").contains("disable_inhibit"), "glimpse stays with the app");
+            assert!(!line(&lines, 4, "up").contains("disable_inhibit"), "fullscreen stays with the app");
+        }
     }
 
     #[test]
