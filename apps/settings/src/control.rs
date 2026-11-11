@@ -27,7 +27,7 @@ pub fn tools() -> Value {
 pub fn description(app_id: &str) -> Value {
     let x = [
         ("settings.pages", json!({"risk": "read_only", "aliases": ["find"], "positional": ["query"], "result": "object"})),
-        ("settings.open", json!({"risk": "writes", "confirmation": "never", "aliases": ["show"], "positional": ["page"], "suggest": {"page": "settings.page_names"}, "result": "object"})),
+        ("settings.open", json!({"icon": "emblem-system-symbolic", "risk": "writes", "confirmation": "never", "aliases": ["show"], "positional": ["page"], "suggest": {"page": "settings.page_names"}, "result": "object"})),
         ("settings.capabilities", json!({"risk": "read_only", "positional": ["query"], "result": "object"})),
         ("settings.value", json!({"risk": "read_only", "positional": ["domain", "key"], "result": "object"})),
         ("settings.devices", json!({"risk": "read_only", "result": "object"})),
@@ -61,7 +61,7 @@ pub fn description(app_id: &str) -> Value {
                    "annotations": {"title": "Page names", "readOnlyHint": true}, "x-nyx": {"risk": "read_only", "result": "object"}}),
             json!({"name": "devices.list", "description": "Phones and other devices paired through Flux: connected or not, battery, what each can do now. A prefix keeps those whose name starts with it.",
                    "inputSchema": {"type": "object", "properties": {"prefix": {"type": "string"}, "limit": {"type": "integer"}}, "additionalProperties": false},
-                   "annotations": {"title": "Devices", "readOnlyHint": true}, "x-nyx": {"risk": "read_only", "aliases": ["phones"], "positional": ["prefix"], "result": "list"}}),
+                   "annotations": {"title": "Devices", "readOnlyHint": true}, "x-nyx": {"icon": "phone-symbolic", "risk": "read_only", "aliases": ["phones"], "positional": ["prefix"], "result": "list"}}),
             json!({"name": "devices.ring", "description": "Ring a connected phone, to find it.", "inputSchema": one, "annotations": {"title": "Ring"},
                    "x-nyx": {"risk": "writes", "aliases": ["find"], "positional": ["device"], "suggest": {"device": "devices.list"}, "result": "message"}}),
             json!({"name": "devices.send", "description": "Send what's on this computer's clipboard to a connected device.", "inputSchema": one, "annotations": {"title": "Send the clipboard"},
