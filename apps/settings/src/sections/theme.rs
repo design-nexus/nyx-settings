@@ -64,7 +64,7 @@ fn colour_strip(dir: &std::path::Path) -> Option<gtk::Box> {
     Some(strip)
 }
 
-fn load_thumbnail(picture: &gtk::Picture, path: PathBuf) {
+pub(crate) fn load_thumbnail(picture: &gtk::Picture, path: PathBuf) {
     let picture = picture.clone();
     cmd::background(
         move || {

@@ -69,7 +69,7 @@ pub fn system_group(page: &Page) {
         pic.set_hexpand(true);
         art.set_child(Some(&pic));
         match &e.meta.preview {
-            Some(p) => pic.set_filename(Some(p)),
+            Some(p) => super::theme::load_thumbnail(&pic, p.clone()),
             None => art.add_overlay(&strip(&sample(&registry, &id))),
         }
         let tick = gtk::Image::from_icon_name("object-select-symbolic");
