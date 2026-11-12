@@ -175,12 +175,27 @@ pub fn build(page: &Page) {
     }
 
     let g = page.group("Coding tools");
-    match settings["openai_endpoint"].as_str() {
-        Some(addr) => {
-            g.add(&widgets::info_row("OpenAI-compatible API", &format!("http://{addr}/v1")).0);
-            g.note("Point a coding tool at this address with any placeholder key. Only this computer can reach it; it starts Nyx AI Core when called.");
-        }
-        None => g.note("The OpenAI-compatible API is off (openai_endpoint in ~/.config/nyx-ai/settings.toml)."),
+    let endpoint = settings["openai_endpoint"].as_str();
+    g.add(&widgets::switch_row(
+        "OpenAI-compatible API",
+        "Lets coding tools on this computer use your local models. They need the API key below.",
+        endpoint.is_some(),
+        |on| change(vec!["service".into(), format!("openai={}", if on { "on" } else { "off" })], PAGE, ""),
+    )
+    .0);
+    if let Some(addr) = endpoint {
+        g.add(&widgets::info_row("Address", &format!("http://{addr}/v1")).0);
+        let key = settings["openai_key_file"].as_str().and_then(|f| std::fs::read_to_string(f).ok()).map(|k| k.trim().to_string());
+        let copy = gtk::Button::with_label("Copy");
+        copy.set_valign(gtk::Align::Center);
+        copy.set_sensitive(key.is_some());
+        copy.connect_clicked(move |b| {
+            if let Some(key) = &key {
+                b.clipboard().set_text(key);
+                window::toast("Copied the API key");
+            }
+        });
+        g.add(&widgets::row("API key", "Paste it into the coding tool as its API key. Only programs that have it can use the API.", Some(copy.upcast_ref())));
     }
     widgets::keywords("ai llm llama local model nyx ai core gpu memory vram cuda vulkan unload update default openai api coding tools");
 }
