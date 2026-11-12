@@ -183,7 +183,7 @@ fn how(t: &Target) -> &'static str {
 
 /// The kinds, in order: the category `nyx update` takes, its title, and what it covers.
 const KINDS: [(&str, &str, &str); 4] = [
-    ("system", "System", "NixOS, NyxOS and the Nyx apps built into the desktop, as one new generation."),
+    ("system", "System", "NyxOS and the Nyx apps built into the desktop, as one new generation."),
     ("apps", "Applications", "Your apps (Nyx apps, apps from the catalog and Flatpaks), each updated on its own."),
     ("tools", "Developer Tools", "Coding agents and your mise and uv tools, managed by NyxOS rather than their own updaters."),
     ("firmware", "Firmware", "From fwupd and LVFS, for devices that support it. Firmware can't be undone."),
