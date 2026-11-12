@@ -141,6 +141,35 @@ pub fn build(page: &Page) {
     g.add(&r);
     widgets::keywords("start stop restart service mute doctor");
 
+    // What leaves the computer or keeps the microphone open: off until chosen here.
+    let g = page.group("Privacy");
+    g.add(&switch(
+        &cfg,
+        "wake_word.enabled",
+        &format!("Listen for “{}”", gtk::glib::markup_escape_text(&name)),
+        "The microphone stays on while it waits for its name; what it hears stays on this computer. Off: it listens only while you hold the push-to-talk key.",
+    ));
+    g.add(&switch(
+        &cfg,
+        "location.enabled",
+        "Use my location",
+        "For the weather: your public IP address goes to ipapi.co to find your city. No GPS.",
+    ));
+    let web = match client::get_str(&cfg, "permissions.web").as_str() {
+        "allow" => "allow",
+        "deny" => "deny",
+        _ => "confirm",
+    };
+    let (r, _) = widgets::choice_row(
+        "Search the web",
+        "Your question goes to the search engine and the sites it finds.",
+        vec![("confirm".into(), "Ask each time".into()), ("allow".into(), "Allow".into()), ("deny".into(), "Off".into())],
+        web,
+        |id| save("permissions.web", client::quoted(&id)),
+    );
+    g.add(&r);
+    widgets::keywords("privacy microphone wake word listening location ip web search internet");
+
     let g = page.group("Who it is");
     let ps = personas();
     if !ps.is_empty() {
@@ -180,12 +209,6 @@ pub fn build(page: &Page) {
     widgets::keywords("persona name wake phrases aliases");
 
     let g = page.group("Talking");
-    g.add(&switch(
-        &cfg,
-        "wake_word.enabled",
-        "Wake word",
-        &format!("Start listening when you say “{}”.", gtk::glib::markup_escape_text(&name)),
-    ));
     g.add(&switch(
         &cfg,
         "conversation.enabled",
@@ -329,7 +352,6 @@ pub fn build(page: &Page) {
         |id| run_then_redraw(vec!["search-provider".into(), id], "Couldn't change web search"),
     );
     g.add(&r);
-    g.add(&switch(&cfg, "location.enabled", "Use my location", "An approximate city, for the weather. No GPS."));
     let (r, _) = widgets::entry_row(
         "City",
         "Set one to use it instead of the automatic city.",
