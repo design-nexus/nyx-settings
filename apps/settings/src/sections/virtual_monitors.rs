@@ -39,8 +39,8 @@ pub fn build(page: &Page, monitors: &[Value]) {
     let Ok(status) = vm::status(&hypr) else { return };
     let Ok(paths) = Paths::default_paths() else { return };
 
-    let g = page.group("Virtual monitors");
-    widgets::keywords("virtual monitors split ultrawide wide screen regions divide three two");
+    let g = page.group("Virtual monitors (experimental)");
+    widgets::keywords("virtual monitors split ultrawide wide screen regions divide three two experimental");
     let settings = match Settings::load(&paths) {
         Ok(s) => s,
         Err(e) => {
@@ -52,7 +52,8 @@ pub fn build(page: &Page, monitors: &[Value]) {
         }
     };
     g.note(
-        "Split one wide screen into two or three monitors side by side, each with its own workspaces, windows and fullscreen.",
+        "Split one wide screen into two or three monitors side by side, each with its own workspaces, windows and fullscreen. \
+         Experimental: not yet tried on every screen, and a layout change that isn't confirmed may not always go back by itself.",
     );
 
     let h = hypr.clone();
