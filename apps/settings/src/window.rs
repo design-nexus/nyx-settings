@@ -183,11 +183,6 @@ fn build(app: &gtk::Application) {
     let (empty, empty_label) = search_empty_page();
     stack.add_named(&empty, Some(EMPTY_PAGE));
 
-    let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    body.set_vexpand(true);
-    body.append(&nav);
-    body.append(&stack);
-
     // ----- Header: the app and the page, the sidebar toggle, search, and the
     // page's config files -----
     let header = nyx_ui::chrome::app_header(&window, "preferences-system-symbolic", "Settings");
@@ -202,14 +197,10 @@ fn build(app: &gtk::Application) {
     let edit = widgets::hbox(0);
     header.end.append(&edit);
 
-    let frame = widgets::vbox(0);
-    frame.add_css_class("window-frame");
-    frame.append(&header.root);
-    frame.append(&body);
-
-    let overlay = gtk::Overlay::new();
-    overlay.set_child(Some(&frame));
-    window.set_child(Some(&overlay));
+    let frame = nyx_ui::frame::AppFrame::new(&header.root);
+    frame.set_sidebar(&nav);
+    frame.set_page(&stack);
+    let overlay = frame.install(&window);
 
     // ----- Keys -----
     let keys = gtk::EventControllerKey::new();
