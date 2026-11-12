@@ -21,7 +21,14 @@ fn default_row(
         .collect();
     let (r, _) = widgets::choice_row(title, desc, options, &current, move |id| {
         let label = id.clone();
-        cmd::run_async(&[setter, &id], move |r| match r {
+        // An app Omarchy's setter doesn't know is offered by its desktop entry (Browser) and
+        // set the XDG way.
+        let argv: Vec<&str> = if id.ends_with(".desktop") {
+            vec!["xdg-settings", "set", "default-web-browser", &id]
+        } else {
+            vec![setter, &id]
+        };
+        cmd::run_async(&argv, move |r| match r {
             Ok(_) => window::toast(&format!("Default set to {label}")),
             Err(e) => window::toast(&format!("{e}")),
         });
@@ -47,6 +54,7 @@ fn omarchy_defaults(page: &Page) {
             ("edge", "Microsoft Edge", "microsoft-edge-stable"),
             ("firefox", "Firefox", "firefox"),
             ("zen", "Zen", "zen-browser"),
+            ("io.github.design_nexus.nyx.Browser.desktop", "Browser", "nyx-browser"),
         ],
     ));
     g.add(&default_row(
