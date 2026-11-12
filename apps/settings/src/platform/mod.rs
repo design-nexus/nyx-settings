@@ -91,6 +91,12 @@ pub fn hibernation_available() -> bool {
 }
 
 /// The Network page's firewall group.
+/// Whether phones reach Nyx Connect only on trusted networks, and fluxd waits for a
+/// pairing before it starts (NyxOS's firewall and fluxd unit do both).
+pub fn connect_on_trusted_networks() -> bool {
+    PLATFORM == Platform::NyxOS
+}
+
 pub fn firewall_group(page: &Page) {
     match PLATFORM {
         Platform::NyxOS => nyxos::pages::firewall(page),

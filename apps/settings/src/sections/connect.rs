@@ -8,7 +8,7 @@
 
 use crate::backend::connect as flux;
 use crate::widgets::{self, Page};
-use crate::{capability, cmd, window};
+use crate::{capability, cmd, platform, window};
 use gtk::glib;
 use gtk::prelude::*;
 use nyx_connect::{Access, Client, Device, Feature, PairStep, Prefs, Snapshot, Status};
@@ -50,7 +50,19 @@ fn unavailable(page: &Page) {
         g.add(&widgets::row("Looking for Flux…", "", None));
         return;
     };
-    if capability::state("daemon:flux") == nyx_capability::State::Inactive {
+    if capability::state("daemon:flux") == nyx_capability::State::Inactive && platform::connect_on_trusted_networks() && !paired_before() {
+        let (r, _) = widgets::button_row(
+            "Pair a phone",
+            "Nyx Connect starts once a phone is paired. Start pairing, open Flux on the phone, and compare the key on both screens.",
+            "Start pairing",
+            |b| {
+                b.set_sensitive(false);
+                start_pairing();
+            },
+        );
+        g.add(&r);
+        trust_row(&g);
+    } else if capability::state("daemon:flux") == nyx_capability::State::Inactive {
         let (r, _) = widgets::button_row(
             "Flux isn't running",
             "Flux connects this computer to your phone. Start it to pair and use your devices.",
@@ -68,6 +80,77 @@ fn unavailable(page: &Page) {
     } else {
         g.add(&widgets::row("Flux isn't reachable", &esc(&why), None));
     }
+}
+
+/// Whether a phone was ever paired here (fluxd's list of paired devices exists).
+fn paired_before() -> bool {
+    gtk::glib::user_data_dir().join("flux/devices.json").exists()
+}
+
+/// fluxd waits for a pairing on NyxOS: say one is starting, then start it.
+fn start_pairing() {
+    let flag = gtk::glib::user_runtime_dir().join("nyx-connect/pairing");
+    if let Err(e) = flag.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| std::fs::write(&flag, "")) {
+        window::toast(&format!("Couldn't start pairing: {e}"));
+        return;
+    }
+    cmd::run_async(&["systemctl", "--user", "start", "fluxd.service"], |r| {
+        if let Err(e) = r {
+            window::toast(&format!("Couldn't start Flux: {e}"));
+        }
+    });
+}
+
+/// The network phones would reach this computer on: the connected Wi-Fi or wired
+/// connection, and whether it's trusted (NetworkManager's home, work or trusted zone).
+struct Network {
+    uuid: String,
+    device: String,
+    name: String,
+    trusted: bool,
+}
+
+fn network() -> Option<Network> {
+    let status = cmd::output(&["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"])?;
+    let line = status.lines().find(|l| {
+        let f: Vec<&str> = l.splitn(4, ':').collect();
+        f.len() == 4 && matches!(f[1], "wifi" | "ethernet") && f[2] == "connected"
+    })?;
+    let f: Vec<&str> = line.splitn(4, ':').collect();
+    let device = f[0].to_string();
+    let uuid = cmd::output(&["nmcli", "-g", "GENERAL.CON-UUID", "device", "show", &device])?.trim().to_string();
+    let zone = cmd::output(&["nmcli", "-g", "connection.zone", "connection", "show", &uuid]).unwrap_or_default();
+    Some(Network { uuid, device, name: f[3].replace("\\:", ":"), trusted: matches!(zone.trim(), "home" | "work" | "trusted") })
+}
+
+/// On NyxOS, phones reach Nyx Connect only on trusted networks: this one, trusted or not.
+fn trust_row(g: &widgets::Group) {
+    if !platform::connect_on_trusted_networks() {
+        return;
+    }
+    let Some(net) = network() else {
+        g.note("Connect to your home or work network to pair a phone.");
+        return;
+    };
+    let (r, _) = widgets::switch_row(
+        &format!("Trust {}", esc(&net.name)),
+        "Phones reach this computer only on trusted networks. Trust your home or work network, not a café's or hotel's.",
+        net.trusted,
+        move |on| {
+            let device = net.device.clone();
+            let zone = if on { "home" } else { "" };
+            cmd::run_async(&["nmcli", "connection", "modify", &net.uuid, "connection.zone", zone], move |r| match r {
+                // Reapplying it lets the firewall open or close the port now.
+                Ok(_) => cmd::run_async(&["nmcli", "device", "reapply", &device], |r| {
+                    if let Err(e) = r {
+                        window::toast(&format!("Couldn't apply it to the network: {e}"));
+                    }
+                }),
+                Err(e) => window::toast(&format!("Couldn't change the network: {e}")),
+            });
+        },
+    );
+    g.add(&r);
 }
 
 // ----- What every device shares -----
@@ -136,6 +219,7 @@ fn devices(page: &Page, s: &Snapshot) {
         },
     );
     g.add(&r);
+    trust_row(&g);
     let here: Vec<&Device> = s.devices.iter().filter(|d| d.status() != Status::Disconnected).collect();
     if here.is_empty() {
         g.add(&widgets::row("No devices nearby", "Paired devices show here while they're connected.", None));
