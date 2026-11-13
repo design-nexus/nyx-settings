@@ -192,7 +192,7 @@ fn commit(hypr: &Instance, display: Display, risky: bool) {
             save(&s, &p);
         },
         move || {
-            // Hyprland reverts on its own when the time runs out; this is for Revert.
+            // Revert, Escape or the countdown: Hyprland's own timer doesn't always put it back.
             let mut s = settings.clone();
             let old = previous.clone().unwrap_or(Display { enabled: false, ..display.clone() });
             *s.entry(&old.id, &old.connector, &old.description) = old.clone();

@@ -265,6 +265,8 @@ fn disable_all() -> Result<()> {
 
 fn change(o: &Opts, hypr: &Instance, screen: &Screen, risky: bool, f: impl FnOnce(&mut Display)) -> Result<()> {
     let (mut settings, paths) = load()?;
+    let mut before = settings.clone();
+    let before_display = before.entry(&screen.stable_id, &screen.name, &screen.description).clone();
     let display = {
         let d = settings.entry(&screen.stable_id, &screen.name, &screen.description);
         f(d);
@@ -284,7 +286,13 @@ fn change(o: &Opts, hypr: &Instance, screen: &Screen, risky: bool, f: impl FnOnc
         print!("Keep this layout? [y/N] (it goes back in {seconds} seconds) ");
         std::io::stdout().flush()?;
         if !answered_yes(Duration::from_secs(seconds as u64)) {
-            println!("\nPut back as it was.");
+            // Hyprland's own timer doesn't always put it back: put the old layout back
+            // here too (or every screen whole, when virtual monitors were off).
+            let put_back = if before.enabled { vm::apply(hypr, &before, &before_display, None) } else { vm::disable_all(hypr) };
+            match put_back {
+                Ok(()) => println!("\nPut back as it was."),
+                Err(e) => println!("\nCouldn't put it back ({e:#}): run nyx display virtual disable --all"),
+            }
             return Ok(());
         }
         vm::confirm(hypr)?;
