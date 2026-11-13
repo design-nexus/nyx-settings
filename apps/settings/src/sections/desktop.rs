@@ -87,7 +87,7 @@ pub fn set_dock(key: &str, value: toml::Value) {
 /// The dock's look and behaviour, which "Back to the defaults" hands back (pins and
 /// folders stay).
 const DOCK_LOOK: &[&str] =
-    &["position", "icon_size", "hide", "hide_delay_ms", "running", "previews", "preview_delay_ms", "trash", "folder_counts", "apps", "app_names", "apps_search_bar"];
+    &["position", "icon_size", "hide", "hide_delay_ms", "running", "previews", "preview_delay_ms", "trash", "folder_counts", "apps", "app_names", "apps_search_bar", "click_animation"];
 
 pub fn build_dock(page: &Page) {
     let g = page.group("Dock");
@@ -153,6 +153,22 @@ pub fn build_dock(page: &Page) {
         |on| set_dock("previews", toml::Value::Boolean(on)),
     );
     g.add(&r);
+    let (r, _) = widgets::choice_row(
+        "Click animation",
+        "How an app's icon answers a click. Nothing moves when Reduce motion is on.",
+        opts(&[
+            ("squish", "Squish"),
+            ("bounce", "Bounce"),
+            ("ripple", "Ripple"),
+            ("pop", "Pop"),
+            ("glow", "Glow"),
+            ("depress", "Depress"),
+            ("none", "None"),
+        ]),
+        &s("click_animation", "squish"),
+        |v| set_dock("click_animation", toml::Value::String(v)),
+    );
+    g.add(&r);
     let (r, _) = widgets::switch_row("Trash", "Keep the Trash at the end of the dock.", b("trash", true), |on| {
         set_dock("trash", toml::Value::Boolean(on))
     });
@@ -177,7 +193,7 @@ pub fn build_dock(page: &Page) {
     );
     g.add(&r);
     widgets::keywords(
-        "position size hide autohide previews thumbnails trash apps launcher search running monitor screen folder count badge",
+        "position size hide autohide previews thumbnails trash apps launcher search running monitor screen folder count badge click animation bounce squish",
     );
     let reset = widgets::confirm_button("Reset", "Click again to reset", |_| {
         let failed: Vec<String> = DOCK_LOOK.iter().filter_map(|k| reset_key("dock", k).err()).collect();
