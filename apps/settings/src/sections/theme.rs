@@ -495,48 +495,50 @@ fn icons_row(g: &widgets::Group) {
     options.extend(appearance::icon_themes().into_iter().map(|t| (t.clone(), t)));
     let current = appearance::chosen(&cfg).unwrap_or_default();
 
-    // Umbra's look, shown while Umbra is the icon theme.
-    let look = appearance::umbra_look().unwrap_or_else(|| "tile".into());
-    let looks: Vec<(String, String)> =
-        appearance::UMBRA_LOOKS.iter().map(|(id, label, _)| (id.to_string(), label.to_string())).collect();
-    let (look_row, _) = widgets::choice_row(
-        "Look",
-        "Umbra's folders and files: satin tiles, solid folders and pages, or coloured lines.",
-        looks,
-        &look,
-        |id| {
-            cmd::background(
-                move || appearance::use_umbra(&id),
-                |r: anyhow::Result<()>| {
-                    if let Err(e) = r {
-                        crate::window::toast(&format!("Couldn't change the look: {e}"));
-                    }
-                },
-            );
-        },
-    );
-    look_row.set_visible(current == appearance::UMBRA);
+    // Each icon set's Look, shown while that set is the icon theme. App icons take the
+    // look's style (`nyx icons` follows the set's settings).
+    let look_rows: Vec<(&'static str, gtk::Box)> = appearance::SETS
+        .iter()
+        .map(|set| {
+            let looks: Vec<(String, String)> =
+                set.looks.iter().map(|(id, label, _)| (id.to_string(), label.to_string())).collect();
+            let (row, _) = widgets::choice_row("Look", set.about, looks, &set.look_or_default(), move |id| {
+                cmd::background(
+                    move || set.use_look(&id),
+                    |r: anyhow::Result<()>| {
+                        if let Err(e) = r {
+                            crate::window::toast(&format!("Couldn't change the look: {e}"));
+                        }
+                    },
+                );
+            });
+            let ids: Vec<&str> = set.looks.iter().map(|(id, _, _)| *id).collect();
+            widgets::keywords(&format!("{} icons icon theme look {}", set.id.to_lowercase(), ids.join(" ")));
+            row.set_visible(current == set.id);
+            (set.id, row)
+        })
+        .collect();
 
-    let lr = look_row.clone();
+    let rows = look_rows.clone();
     let (r, _) = widgets::choice_row(
         "Icons",
         "Icon theme for apps and file choosers. Omarchy themes pick one; choose here to keep your own.",
         options,
         &current,
         move |id| {
-            let umbra = id == appearance::UMBRA;
-            lr.set_visible(umbra);
+            for (set, row) in &rows {
+                row.set_visible(*set == id);
+            }
+            let set = appearance::set_of(&id);
             let c = appearance::Config { icon_theme: (id != FOLLOW).then_some(id) };
             cmd::background(
                 move || {
                     appearance::save(&c)?;
                     crate::backend::themehook::ensure();
-                    if umbra {
-                        let look = appearance::umbra_look().unwrap_or_else(|| "tile".into());
-                        appearance::use_umbra(&look)
-                    } else {
-                        appearance::leave_umbra();
-                        appearance::apply_icons(&c)
+                    appearance::leave_sets(set.map(|s| s.id));
+                    match set {
+                        Some(s) => s.use_look(&s.look_or_default()),
+                        None => appearance::apply_icons(&c),
                     }
                 },
                 |r: anyhow::Result<()>| {
@@ -547,11 +549,12 @@ fn icons_row(g: &widgets::Group) {
             );
         },
     );
-    widgets::keywords("icon theme icons yaru papirus adwaita umbra look tile solid line");
+    widgets::keywords("icon theme icons yaru papirus adwaita umbra vellum look");
     g.add(&r);
-    if appearance::umbra_installed() || current == appearance::UMBRA {
-        widgets::keywords("umbra icon look tile solid line");
-        g.add(&look_row);
+    for (set, (_, row)) in appearance::SETS.iter().zip(look_rows) {
+        if set.installed() || current == set.id {
+            g.add(&row);
+        }
     }
 }
 

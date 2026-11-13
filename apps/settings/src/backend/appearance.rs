@@ -59,68 +59,122 @@ pub fn omarchy_icon_theme() -> Option<String> {
         .filter(|t| !t.is_empty())
 }
 
-// ----- Umbra -----
+// ----- Icon sets: Umbra and Vellum -----
 //
-// Umbra comes as three icon themes, one per look (Umbra, Umbra-Solid, Umbra-Line), drawn
-// in the theme's colours by `umbra-icons`. Settings shows it as one choice with a Look.
+// An icon set comes as one icon theme per look (Umbra, Umbra-Solid…; Vellum,
+// Vellum-Mono), drawn in the theme's colours by its own command (`umbra-icons`,
+// `vellum-icons`). Settings shows each set as one choice with a Look row. `nyx icons`
+// draws app icons in the style of the look in use.
 
-/// The id Settings stores for Umbra, whichever look.
+/// A look: (id, label, icon theme directory).
+pub type Look = (&'static str, &'static str, &'static str);
+
+pub struct IconSet {
+    /// What Settings stores for the set, whichever look: its first look's directory.
+    pub id: &'static str,
+    pub command: &'static str,
+    /// Its folder in ~/.config, where `settings.json` has the look in use.
+    pub config: &'static str,
+    pub looks: &'static [Look],
+    pub about: &'static str,
+}
+
 pub const UMBRA: &str = "Umbra";
-/// (look, label, icon theme directory)
-pub const UMBRA_LOOKS: [(&str, &str, &str); 3] =
-    [("tile", "Tile", "Umbra"), ("solid", "Solid", "Umbra-Solid"), ("line", "Line", "Umbra-Line")];
+pub const VELLUM: &str = "Vellum";
+pub static SETS: [IconSet; 2] = [
+    IconSet {
+        id: UMBRA,
+        command: "umbra-icons",
+        config: "umbra",
+        looks: &[
+            ("tile", "Tile", "Umbra"),
+            ("solid", "Solid", "Umbra-Solid"),
+            ("line", "Line", "Umbra-Line"),
+            ("tinted", "Tinted", "Umbra-Tinted"),
+            ("frame", "Frame", "Umbra-Frame"),
+            ("colour", "Colour", "Umbra-Colour"),
+        ],
+        about: "Umbra's folders and files: satin tiles, solid shapes, coloured lines, tinted tiles, outlined frames or colour tiles.",
+    },
+    IconSet {
+        id: VELLUM,
+        command: "vellum-icons",
+        config: "vellum",
+        looks: &[("paper", "Paper", "Vellum"), ("mono", "Mono", "Vellum-Mono")],
+        about: "Vellum's folders and files: pastel paper, or the theme's greys with colour only on the mark.",
+    },
+];
 
-pub fn umbra_installed() -> bool {
-    cmd::present("umbra-icons")
-}
+impl IconSet {
+    pub fn installed(&self) -> bool {
+        cmd::present(self.command)
+    }
 
-/// The Umbra look in use, if Umbra is.
-pub fn umbra_look() -> Option<String> {
-    let text = std::fs::read_to_string(paths::config_home().join("umbra/settings.json")).ok()?;
-    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
-    v.get("look")?.as_str().filter(|l| UMBRA_LOOKS.iter().any(|(id, _, _)| id == l)).map(str::to_string)
-}
+    /// The look in use, if the set is.
+    pub fn look(&self) -> Option<String> {
+        let text = std::fs::read_to_string(paths::config_home().join(self.config).join("settings.json")).ok()?;
+        let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+        v.get("look")?.as_str().filter(|l| self.looks.iter().any(|(id, _, _)| id == l)).map(str::to_string)
+    }
 
-/// Whether an icon theme directory is one of Umbra's looks.
-pub fn is_umbra(theme: &str) -> bool {
-    UMBRA_LOOKS.iter().any(|(_, _, dir)| *dir == theme)
-}
+    /// The look Settings shows: the one in use, else the first.
+    pub fn look_or_default(&self) -> String {
+        self.look().unwrap_or_else(|| self.looks[0].0.to_string())
+    }
 
-fn umbra_dir(look: &str) -> &'static str {
-    UMBRA_LOOKS.iter().find(|(id, _, _)| *id == look).map_or("Umbra", |(_, _, dir)| dir)
-}
+    pub fn owns(&self, theme: &str) -> bool {
+        self.looks.iter().any(|(_, _, dir)| *dir == theme)
+    }
 
-/// The icon theme Settings shows as chosen: the override (any Umbra look as Umbra), or
-/// Umbra when it's in use, or None to follow the Omarchy theme.
-pub fn chosen(c: &Config) -> Option<String> {
-    match &c.icon_theme {
-        Some(t) if is_umbra(t) => Some(UMBRA.into()),
-        Some(t) => Some(t.clone()),
-        None => umbra_look().map(|_| UMBRA.into()),
+    fn dir(&self, look: &str) -> &'static str {
+        self.looks.iter().find(|(id, _, _)| *id == look).map_or(self.id, |(_, _, dir)| dir)
+    }
+
+    /// Use a look: the set's command builds it if needed and switches to it.
+    pub fn use_look(&self, look: &str) -> anyhow::Result<()> {
+        cmd::run(&[self.command, "look", look])?;
+        Ok(())
+    }
+
+    /// Another icon theme was chosen: the set stops putting itself back after theme changes.
+    pub fn leave(&self) {
+        if self.look().is_some() {
+            let _ = cmd::run(&[self.command, "look", "off"]);
+        }
     }
 }
 
-/// Use an Umbra look: `umbra-icons` builds it if needed and switches to it.
-pub fn use_umbra(look: &str) -> anyhow::Result<()> {
-    cmd::run(&["umbra-icons", "look", look])?;
-    Ok(())
+/// The set an icon theme directory or stored id belongs to.
+pub fn set_of(theme: &str) -> Option<&'static IconSet> {
+    SETS.iter().find(|s| s.owns(theme))
 }
 
-/// Another icon theme was chosen: Umbra stops putting itself back after theme changes.
-pub fn leave_umbra() {
-    if umbra_look().is_some() {
-        let _ = cmd::run(&["umbra-icons", "look", "off"]);
+/// Every set but `keep` stops putting itself back.
+pub fn leave_sets(keep: Option<&str>) {
+    for s in SETS.iter().filter(|s| Some(s.id) != keep) {
+        s.leave();
+    }
+}
+
+/// The icon theme Settings shows as chosen: the override (any look as its set), or the
+/// set in use, or None to follow the Omarchy theme.
+pub fn chosen(c: &Config) -> Option<String> {
+    match &c.icon_theme {
+        Some(t) => Some(set_of(t).map_or_else(|| t.clone(), |s| s.id.to_string())),
+        None => SETS.iter().find(|s| s.look().is_some()).map(|s| s.id.to_string()),
     }
 }
 
 /// Apply what the config says: the override, or the Omarchy theme's icons.
 pub fn apply_icons(c: &Config) -> anyhow::Result<()> {
-    let umbra = umbra_look().map(|l| umbra_dir(&l).to_string());
+    let in_use = |s: &IconSet| s.look().map(|l| s.dir(&l).to_string());
     let want = match &c.icon_theme {
-        // Umbra's look lives with Umbra.
-        Some(t) if is_umbra(t) => umbra.or_else(|| Some(t.clone())),
-        Some(t) => Some(t.clone()),
-        None => umbra.or_else(omarchy_icon_theme),
+        // A set's look lives with the set.
+        Some(t) => match set_of(t) {
+            Some(s) => in_use(s).or_else(|| Some(t.clone())),
+            None => Some(t.clone()),
+        },
+        None => SETS.iter().find_map(in_use).or_else(omarchy_icon_theme),
     };
     if let Some(t) = want
         && current_icon_theme() != t
@@ -140,13 +194,19 @@ pub fn is_icon_theme(dir: &Path) -> bool {
     has_dirs && !hidden
 }
 
-/// Installed icon themes, sorted, without duplicates. Umbra's looks are one entry.
+/// Installed icon themes, sorted, without duplicates. Each set's looks are one entry.
 pub fn icon_themes() -> Vec<String> {
-    let mut out: Vec<String> = all_icon_themes().into_iter().filter(|t| !is_umbra(t) || t == UMBRA).collect();
-    if !out.iter().any(|t| t == UMBRA) && all_icon_themes().iter().any(|t| is_umbra(t)) {
-        out.push(UMBRA.into());
-        out.sort_by_key(|n| n.to_lowercase());
+    one_per_set(all_icon_themes())
+}
+
+fn one_per_set(all: Vec<String>) -> Vec<String> {
+    let mut out: Vec<String> = all.iter().filter(|t| set_of(t).is_none_or(|s| s.id == *t)).cloned().collect();
+    for s in &SETS {
+        if !out.iter().any(|t| t == s.id) && all.iter().any(|t| s.owns(t)) {
+            out.push(s.id.into());
+        }
     }
+    out.sort_by_key(|n| n.to_lowercase());
     out
 }
 
@@ -178,15 +238,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn umbra_is_one_choice() {
-        assert!(is_umbra("Umbra") && is_umbra("Umbra-Solid") && is_umbra("Umbra-Line"));
-        assert!(!is_umbra("Umbra-Other") && !is_umbra("Yaru"));
-        assert_eq!(umbra_dir("line"), "Umbra-Line");
-        assert_eq!(umbra_dir("nonsense"), "Umbra");
+    fn each_set_is_one_choice() {
+        let umbra = set_of("Umbra-Colour").unwrap();
+        assert_eq!(umbra.id, UMBRA);
+        assert!(["Umbra", "Umbra-Solid", "Umbra-Line", "Umbra-Tinted", "Umbra-Frame"].iter().all(|t| umbra.owns(t)));
+        assert_eq!(set_of("Vellum-Mono").map(|s| s.id), Some(VELLUM));
+        assert!(set_of("Umbra-Other").is_none() && set_of("Yaru").is_none());
+        assert_eq!(umbra.dir("line"), "Umbra-Line");
+        assert_eq!(umbra.dir("nonsense"), "Umbra");
         let solid = Config { icon_theme: Some("Umbra-Solid".into()) };
         assert_eq!(chosen(&solid).as_deref(), Some(UMBRA));
+        let mono = Config { icon_theme: Some("Vellum-Mono".into()) };
+        assert_eq!(chosen(&mono).as_deref(), Some(VELLUM));
         let yaru = Config { icon_theme: Some("Yaru".into()) };
         assert_eq!(chosen(&yaru).as_deref(), Some("Yaru"));
+    }
+
+    #[test]
+    fn icon_list_collapses_each_sets_looks() {
+        let all = ["Adwaita", "Umbra-Frame", "Umbra", "Umbra-Solid", "Vellum-Mono", "Yaru"].map(String::from).to_vec();
+        assert_eq!(one_per_set(all), ["Adwaita", "Umbra", "Vellum", "Yaru"]);
     }
 
     fn theme_dir(name: &str, index: Option<&str>) -> PathBuf {
