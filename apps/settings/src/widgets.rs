@@ -1154,6 +1154,53 @@ pub fn form_disclosure(title: &str, desc: &str, form: &impl IsA<gtk::Widget>) ->
     wrapper
 }
 
+/// "Open config" over a page: opens its config file, or offers a menu of them when
+/// there are several.
+pub fn open_config_button(files: &[std::path::PathBuf]) -> gtk::Widget {
+    let content = hbox(6);
+    content.append(&gtk::Image::from_icon_name("text-editor-symbolic"));
+    content.append(&gtk::Label::new(Some("Open config")));
+    let tooltip = match files {
+        [path] => format!("Open {}", nyx_core::paths::pretty(path)),
+        _ => "Open a config file".to_string(),
+    };
+    let widget: gtk::Widget = if let [path] = files {
+        let b = gtk::Button::new();
+        b.set_child(Some(&content));
+        let path = path.clone();
+        b.connect_clicked(move |_| nyx_core::cmd::open_in_editor(&path));
+        b.upcast()
+    } else {
+        let menu = gtk::MenuButton::new();
+        menu.set_child(Some(&content));
+        menu.set_always_show_arrow(false);
+        let list = vbox(2);
+        let popover = gtk::Popover::new();
+        for path in files {
+            let b = gtk::Button::with_label(&nyx_core::paths::pretty(path));
+            b.add_css_class("flat");
+            if let Some(label) = b.child().and_downcast::<gtk::Label>() {
+                label.set_xalign(0.0);
+            }
+            let p = path.clone();
+            let pop = popover.clone();
+            b.connect_clicked(move |_| {
+                pop.popdown();
+                nyx_core::cmd::open_in_editor(&p);
+            });
+            list.append(&b);
+        }
+        popover.set_child(Some(&list));
+        menu.set_popover(Some(&popover));
+        menu.upcast()
+    };
+    widget.add_css_class("open-config");
+    widget.add_css_class("flat");
+    widget.set_valign(gtk::Align::Center);
+    widget.set_tooltip_text(Some(&tooltip));
+    widget
+}
+
 /// A small pill label, e.g. "Restart needed".
 pub fn tag(text: &str) -> gtk::Label {
     let l = gtk::Label::new(Some(text));

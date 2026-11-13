@@ -1,6 +1,7 @@
-//! The main window: the unified header (the app and the page, the sidebar
-//! toggle, search, the page's config files), the navigation sidebar, a stack of
-//! section pages built the first time they're shown.
+//! The main window: the unified header (the app, the sidebar toggle, search), the
+//! sidebar of sections, and the page: its section, its name, its config files and
+//! the section's other pages as tabs over a stack of pages built the first time
+//! they're shown.
 
 use crate::capability::Visibility;
 use crate::sections::{self, Section};
@@ -9,7 +10,7 @@ use crate::{prefs, theme};
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 struct Ui {
@@ -17,11 +18,10 @@ struct Ui {
     stack: gtk::Stack,
     nav: gtk::Box,
     nav_list: gtk::Box,
-    nav_items: HashMap<&'static str, gtk::Button>,
-    nav_groups: Vec<(gtk::Label, Vec<&'static str>)>,
-    /// Hidden in the icon-only sidebar: fixed parts, and the labels of the current items.
-    compact_fixed: Vec<gtk::Widget>,
-    compact_items: Vec<gtk::Widget>,
+    /// The sidebar's rows: Home, then one per section.
+    categories: Vec<Category>,
+    /// The section of each page in the sidebar (Home's is "").
+    page_group: HashMap<&'static str, &'static str>,
     /// A Cell: it's set while the window is being shown, when the UI is already borrowed.
     compact: std::cell::Cell<bool>,
     pages: HashMap<&'static str, gtk::ScrolledWindow>,
@@ -29,14 +29,76 @@ struct Ui {
     current: &'static str,
     overlay: gtk::Overlay,
     collapse_button: gtk::Button,
-    /// The header, which shows the page's name after the app's.
-    header: nyx_ui::chrome::AppHeader,
-    /// Holds the current page's "open the config file" button.
-    edit: gtk::Box,
+    head: PageHead,
     /// The "nothing matches" page's message.
     empty_label: gtk::Label,
     /// The toast on screen, if any: a new one replaces it.
     toast: Option<gtk::Revealer>,
+}
+
+/// A sidebar row: a section, whose pages are the tabs over the page.
+struct Category {
+    group: &'static str,
+    button: gtk::Button,
+    pages: Vec<&'static str>,
+}
+
+/// Over the page: its section in the section's colour, its name and what it's for,
+/// its config files, and the section's pages as tabs.
+struct PageHead {
+    root: gtk::Box,
+    kicker: gtk::Label,
+    title: gtk::Label,
+    about: gtk::Label,
+    edit: gtk::Box,
+    tabs: gtk::Box,
+    tabs_scroll: gtk::ScrolledWindow,
+    /// The section colour class on the kicker and the tabs' underlines.
+    section: RefCell<String>,
+}
+
+fn page_head() -> PageHead {
+    let root = widgets::vbox(0);
+    root.add_css_class("page-head");
+    let top = widgets::hbox(8);
+    let kicker = widgets::label("", "page-kicker");
+    kicker.set_hexpand(true);
+    kicker.set_valign(gtk::Align::Center);
+    top.append(&kicker);
+    let edit = widgets::hbox(0);
+    top.append(&edit);
+    root.append(&top);
+    let line = widgets::hbox(12);
+    line.add_css_class("page-head-line");
+    let title = widgets::label("", "page-head-title");
+    title.set_valign(gtk::Align::BaselineCenter);
+    line.append(&title);
+    let about = widgets::label("", "page-head-about");
+    about.set_valign(gtk::Align::BaselineCenter);
+    about.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    // Its width is what's left beside the name; a long one doesn't widen the window.
+    about.set_max_width_chars(1);
+    about.set_hexpand(true);
+    line.append(&about);
+    root.append(&line);
+    let tabs = widgets::hbox(18);
+    tabs.add_css_class("page-tabs");
+    let tabs_scroll = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::External)
+        .vscrollbar_policy(gtk::PolicyType::Never)
+        .propagate_natural_height(true)
+        .child(&tabs)
+        .build();
+    let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::BOTH_AXES);
+    let s = tabs_scroll.clone();
+    wheel.connect_scroll(move |_, dx, dy| {
+        let adj = s.hadjustment();
+        adj.set_value(adj.value() + (dx + dy) * 40.0);
+        glib::Propagation::Stop
+    });
+    tabs_scroll.add_controller(wheel);
+    root.append(&tabs_scroll);
+    PageHead { root, kicker, title, about, edit, tabs, tabs_scroll, section: RefCell::default() }
 }
 
 /// The stack page shown when a search finds nothing.
@@ -158,10 +220,9 @@ fn build(app: &gtk::Application) {
     nav.add_css_class("settings-navigation");
     // Labels inside expand; don't let that widen the sidebar itself.
     nav.set_hexpand(false);
-    let compact_hide: Vec<gtk::Widget> = Vec::new();
 
-    let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let (nav_items, nav_groups, compact_items) = fill_nav(&list, &sections);
+    let list = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    let (categories, page_group) = fill_nav(&list, &sections, false);
     let nav_scroll = gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Never)
         // Scrolls with wheel, trackpad and keyboard; no visible scrollbar.
@@ -183,8 +244,12 @@ fn build(app: &gtk::Application) {
     let (empty, empty_label) = search_empty_page();
     stack.add_named(&empty, Some(EMPTY_PAGE));
 
-    // ----- Header: the app and the page, the sidebar toggle, search, and the
-    // page's config files -----
+    let head = page_head();
+    let main = widgets::vbox(0);
+    main.append(&head.root);
+    main.append(&stack);
+
+    // ----- Header: the app, the sidebar toggle and search -----
     let header = nyx_ui::chrome::app_header(&window, "preferences-system-symbolic", "Settings");
     let collapse_button = widgets::bar_button("sidebar-show-symbolic", "Collapse the sidebar (Ctrl+B)");
     collapse_button.connect_clicked(|_| toggle_sidebar());
@@ -194,12 +259,12 @@ fn build(app: &gtk::Application) {
     search.add_css_class("bar-search");
     search.set_width_chars(34);
     header.center.append(&search);
-    let edit = widgets::hbox(0);
-    header.end.append(&edit);
 
     let frame = nyx_ui::frame::AppFrame::new(&header.root);
     frame.set_sidebar(&nav);
-    frame.set_page(&stack);
+    frame.set_page(&main);
+    // The page head's line reaches the sheet's sides; pages keep their own padding.
+    frame.set_flush(true);
     let overlay = frame.install(&window);
 
     // ----- Keys -----
@@ -290,29 +355,31 @@ fn build(app: &gtk::Application) {
         stack,
         nav: nav.clone(),
         nav_list: list,
-        nav_items,
-        nav_groups,
-        compact_fixed: compact_hide,
-        compact_items,
+        categories,
+        page_group,
         compact: std::cell::Cell::new(false),
         pages: HashMap::new(),
         sections,
         current: "",
         overlay,
         collapse_button,
-        header,
-        edit,
+        head,
         empty_label,
         toast: None,
     };
     UI.with(|u| *u.borrow_mut() = Some(Rc::new(RefCell::new(ui))));
 }
 
-type NavParts = (HashMap<&'static str, gtk::Button>, Vec<(gtk::Label, Vec<&'static str>)>, Vec<gtk::Widget>);
+type NavParts = (Vec<Category>, HashMap<&'static str, &'static str>);
 
 thread_local! {
-    /// Counts shown after a page's name in the sidebar, e.g. updates on Home.
+    /// Counts shown after a page's name, e.g. updates on Home: on its tab, and on its
+    /// section's row in the sidebar.
     static NAV_BADGES: RefCell<HashMap<&'static str, String>> = RefCell::default();
+    /// The pages that match the search, while searching.
+    static MATCHING: RefCell<Option<HashSet<&'static str>>> = const { RefCell::new(None) };
+    /// The page last shown in each section, which the section's row opens again.
+    static LAST_IN: RefCell<HashMap<&'static str, &'static str>> = RefCell::default();
 }
 
 fn nav_badge(text: &str) -> gtk::Label {
@@ -321,85 +388,253 @@ fn nav_badge(text: &str) -> gtk::Label {
     t
 }
 
-/// Show `text` after a page's name in the sidebar, or nothing.
+fn search_count(n: usize, tooltip: &str) -> gtk::Label {
+    let t = widgets::tag(&n.to_string());
+    t.add_css_class("search-count");
+    t.set_tooltip_text(Some(tooltip));
+    t
+}
+
+/// Show `text` after a page's name on its tab and its section's row, or nothing.
 pub fn set_nav_badge(id: &'static str, text: Option<&str>) {
-    NAV_BADGES.with(|b| match text {
-        Some(t) => b.borrow_mut().insert(id, t.to_string()),
-        None => b.borrow_mut().remove(id),
+    let changed = NAV_BADGES.with(|b| match text {
+        Some(t) => b.borrow_mut().insert(id, t.to_string()).as_deref() != Some(t),
+        None => b.borrow_mut().remove(id).is_some(),
     });
-    let Some(ui) = ui() else { return };
-    let mut u = ui.borrow_mut();
-    let Some(content) = u.nav_items.get(id).and_then(|b| b.child()).and_downcast::<gtk::Box>() else { return };
-    if let Some(old) = content.last_child().filter(|w| w.has_css_class("nav-badge")) {
-        content.remove(&old);
-        u.compact_items.retain(|w| w != &old);
-    }
-    if let Some(text) = text {
-        let t = nav_badge(text);
-        t.set_visible(!u.compact.get());
-        content.append(&t);
-        u.compact_items.push(t.upcast());
+    if changed {
+        refill_nav();
     }
 }
 
-/// The sidebar entries: a heading per group, a button per page.
-/// The theme's name for a group of pages (`[sections.settings]`): Home's pages
+/// The theme's name for a section's colour (`[sections.settings]`): Home's pages
 /// have no group.
 fn section_key(group: &str) -> String {
-    let group = crate::platform::colour_group(group);
-    if group.is_empty() { "home".into() } else { group.to_lowercase().replace(' ', "-") }
+    match crate::platform::colour_group(group) {
+        "" => "home".into(),
+        "Assistant & AI" => "assistant".into(),
+        g => g.to_lowercase().replace(' ', "-"),
+    }
 }
 
-fn fill_nav(list: &gtk::Box, sections: &[Section]) -> NavParts {
-    let mut nav_items = HashMap::new();
-    let mut nav_groups: Vec<(gtk::Label, Vec<&'static str>)> = Vec::new();
-    let mut compact_items: Vec<gtk::Widget> = Vec::new();
-    let mut last_group = "";
+/// The icon on a section's tile: its own, or else its first page's.
+fn category_icon(group: &str, first_page: &'static str) -> &'static str {
+    match group {
+        "" => "user-home-symbolic",
+        "Connections" | "Network" => "network-wireless-symbolic",
+        "Hardware" | "Displays" => "video-display-symbolic",
+        "Personalization" | "Appearance" => "preferences-desktop-appearance-symbolic",
+        "Desktop" => "view-grid-symbolic",
+        "Input" => "input-keyboard-symbolic",
+        "Accounts" => "avatar-default-symbolic",
+        "Assistant & AI" => "settings-sparkle-symbolic",
+        "Security" => "security-high-symbolic",
+        "Apps & Defaults" => "view-app-grid-symbolic",
+        "Storage & Backup" => "drive-harddisk-symbolic",
+        "System" => "emblem-system-symbolic",
+        _ => first_page,
+    }
+}
+
+/// The sidebar's rows: Home, a line, then a row per section with its tile in the
+/// section's colour, its name and its first pages. While searching only sections
+/// with a matching page show, with how many settings match.
+fn fill_nav(list: &gtk::Box, sections: &[Section], compact: bool) -> NavParts {
+    let mut groups: Vec<(&'static str, Vec<&Section>)> = Vec::new();
+    let mut page_group = HashMap::new();
     for s in sections {
-        let visibility = s.visibility();
-        if visibility == Visibility::Hidden || crate::platform::off_sidebar(s.id) {
+        if !s.shown() || crate::platform::off_sidebar(s.id) {
             continue;
         }
-        if s.group != last_group {
-            // The icon-only sidebar shows a thin line where a group's heading would be.
-            let divider = gtk::Separator::new(gtk::Orientation::Horizontal);
-            divider.add_css_class("nav-divider");
-            divider.set_visible(false);
-            // The group's section colour (from the theme) on its heading and divider.
-            let section = format!("section-{}", section_key(s.group));
-            divider.add_css_class(&section);
-            list.append(&divider);
-            let g = widgets::label(&s.group.to_uppercase(), "nav-group");
-            g.add_css_class(&section);
-            compact_items.push(g.clone().upcast());
-            list.append(&g);
-            nav_groups.push((g, Vec::new()));
-            last_group = s.group;
-        }
-        let button = gtk::Button::new();
-        button.add_css_class("nav-item");
-        let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-        content.append(&gtk::Image::from_icon_name(s.icon));
-        let l = widgets::label(s.title, "nav-label");
-        l.set_hexpand(true);
-        compact_items.push(l.clone().upcast());
-        content.append(&l);
-        if let Some(text) = NAV_BADGES.with(|b| b.borrow().get(s.id).cloned()) {
-            let t = nav_badge(&text);
-            compact_items.push(t.clone().upcast());
-            content.append(&t);
-        }
-        button.set_child(Some(&content));
-        mark_nav(&button, s, &visibility);
-        let id = s.id;
-        button.connect_clicked(move |_| navigate(id));
-        list.append(&button);
-        nav_items.insert(s.id, button);
-        if let Some(g) = nav_groups.last_mut() {
-            g.1.push(s.id);
+        page_group.insert(s.id, s.group);
+        match groups.iter_mut().find(|(g, _)| *g == s.group) {
+            Some((_, pages)) => pages.push(s),
+            None => groups.push((s.group, vec![s])),
         }
     }
-    (nav_items, nav_groups, compact_items)
+    let matching = MATCHING.with(|m| m.borrow().clone());
+    let counts = COUNTS.with(|c| c.borrow().clone());
+    let mut categories = Vec::new();
+    for (group, pages) in groups {
+        let ids: Vec<&'static str> = pages.iter().map(|s| s.id).collect();
+        let shown = matching.as_ref().is_none_or(|m| ids.iter().any(|id| m.contains(id)));
+        let count = counts.as_ref().map(|c| ids.iter().filter_map(|id| c.get(id)).sum::<usize>());
+        let button = category_row(group, &pages, compact, count);
+        button.set_visible(shown);
+        list.append(&button);
+        if group.is_empty() {
+            let line = gtk::Separator::new(gtk::Orientation::Horizontal);
+            line.add_css_class("nav-split");
+            line.set_visible(shown);
+            list.append(&line);
+        }
+        categories.push(Category { group, button, pages: ids });
+    }
+    (categories, page_group)
+}
+
+/// A section's row. `count` is how many of its settings match, while searching:
+/// after its name, or in its tooltip in the icon-only sidebar.
+fn category_row(group: &'static str, pages: &[&Section], compact: bool, count: Option<usize>) -> gtk::Button {
+    let name = if group.is_empty() { "Home" } else { group };
+    let button = gtk::Button::new();
+    button.add_css_class("nav-item");
+    button.add_css_class("nav-category");
+    let content = widgets::hbox(12);
+    content.set_halign(if compact { gtk::Align::Center } else { gtk::Align::Fill });
+    let tile = widgets::hbox(0);
+    tile.add_css_class("category-tile");
+    tile.add_css_class(&format!("section-{}", section_key(group)));
+    tile.set_valign(gtk::Align::Center);
+    tile.set_hexpand(false);
+    let icon = gtk::Image::from_icon_name(category_icon(group, pages.first().map_or("", |s| s.icon)));
+    icon.set_hexpand(true);
+    icon.set_halign(gtk::Align::Center);
+    tile.append(&icon);
+    content.append(&tile);
+    let titles: Vec<&str> = pages.iter().map(|s| s.title).collect();
+    if !compact {
+        let text = widgets::vbox(1);
+        text.set_valign(gtk::Align::Center);
+        text.set_hexpand(true);
+        let summary =
+            if group.is_empty() { "This computer and updates".to_string() } else { titles[..titles.len().min(3)].join(", ") };
+        for (t, class) in [(name, "category-name"), (summary.as_str(), "category-pages")] {
+            let l = widgets::label(t, class);
+            l.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            // As wide as the sidebar, which doesn't grow to fit it.
+            l.set_max_width_chars(1);
+            text.append(&l);
+        }
+        content.append(&text);
+        let badge = pages.iter().find_map(|s| NAV_BADGES.with(|b| b.borrow().get(s.id).cloned()));
+        match (count, badge) {
+            (Some(n), _) if n > 0 => content.append(&search_count(n, "Settings in this section that match")),
+            (None, Some(text)) => content.append(&nav_badge(&text)),
+            _ => {}
+        }
+    }
+    button.set_child(Some(&content));
+    let tip = match count {
+        Some(n) if compact => format!("{name}: {n} matching {}", if n == 1 { "setting" } else { "settings" }),
+        _ => format!("{name}\n{}", titles.join(", ")),
+    };
+    button.set_tooltip_text(Some(&tip));
+    button.update_property(&[gtk::accessible::Property::Label(name)]);
+    button.connect_clicked(move |_| open_category(group));
+    button
+}
+
+/// Open a section: the page last shown in it, or else its first (its first matching
+/// one while searching).
+fn open_category(group: &'static str) {
+    let Some(ui) = ui() else { return };
+    let target = {
+        let u = ui.borrow();
+        let Some(c) = u.categories.iter().find(|c| c.group == group) else { return };
+        let matching = MATCHING.with(|m| m.borrow().clone());
+        let ok = |id: &&'static str| matching.as_ref().is_none_or(|m| m.contains(id));
+        let last = LAST_IN.with(|l| l.borrow().get(group).copied()).filter(|id| c.pages.contains(id) && ok(id));
+        last.or_else(|| c.pages.iter().find(|id| ok(id)).copied())
+    };
+    if let Some(id) = target {
+        navigate(id);
+    }
+}
+
+/// The page head for the page shown: its section, name, config files and tabs.
+fn show_head(u: &Ui) {
+    let Some(s) = u.sections.iter().find(|s| s.id == u.current) else { return };
+    let head = &u.head;
+    let section = format!("section-{}", section_key(s.group));
+    let old = head.section.replace(section.clone());
+    if old != section {
+        if !old.is_empty() {
+            head.kicker.remove_css_class(&old);
+        }
+        head.kicker.add_css_class(&section);
+    }
+    head.kicker.set_text(&s.group.to_uppercase());
+    head.kicker.set_visible(!s.group.is_empty());
+    head.title.set_text(s.title);
+    head.about.set_text(s.description);
+    head.about.set_tooltip_text(Some(s.description));
+    while let Some(c) = head.edit.first_child() {
+        head.edit.remove(&c);
+    }
+    let files = s.config_files();
+    if !files.is_empty() {
+        head.edit.append(&widgets::open_config_button(&files));
+    }
+    fill_tabs(u);
+}
+
+/// The section's pages as tabs over the page (only the matching ones while
+/// searching), each with how many of its settings match, or its badge.
+fn fill_tabs(u: &Ui) {
+    let head = &u.head;
+    while let Some(c) = head.tabs.first_child() {
+        head.tabs.remove(&c);
+    }
+    let Some(group) = u.sections.iter().find(|s| s.id == u.current).map(|s| s.group) else { return };
+    head.tabs_scroll.set_visible(!group.is_empty());
+    let matching = MATCHING.with(|m| m.borrow().clone());
+    let counts = COUNTS.with(|c| c.borrow().clone());
+    let section = head.section.borrow().clone();
+    let mut active = None;
+    for s in u.sections.iter().filter(|s| u.page_group.get(s.id) == Some(&group)) {
+        if s.id != u.current && matching.as_ref().is_some_and(|m| !m.contains(s.id)) {
+            continue;
+        }
+        let b = gtk::Button::new();
+        b.add_css_class("page-tab");
+        let col = widgets::vbox(0);
+        let row = widgets::hbox(6);
+        row.add_css_class("tab-label");
+        row.append(&gtk::Label::new(Some(s.title)));
+        let badge = NAV_BADGES.with(|b| b.borrow().get(s.id).cloned());
+        match (counts.as_ref().and_then(|c| c.get(s.id)), badge) {
+            (Some(n), _) => row.append(&search_count(*n, "Settings on this page that match")),
+            (None, Some(text)) if counts.is_none() => row.append(&nav_badge(&text)),
+            _ => {}
+        }
+        col.append(&row);
+        let line = widgets::hbox(0);
+        line.add_css_class("tab-line");
+        line.add_css_class(&section);
+        col.append(&line);
+        b.set_child(Some(&col));
+        b.update_property(&[gtk::accessible::Property::Label(s.title)]);
+        match s.visibility() {
+            Visibility::Disabled(why) => {
+                b.add_css_class("nav-unavailable");
+                b.set_tooltip_text(Some(&format!("{}\n{why}", s.description)));
+            }
+            _ => b.set_tooltip_text(Some(s.description)),
+        }
+        if s.id == u.current {
+            b.add_css_class("active");
+            active = Some(b.clone());
+        }
+        let id = s.id;
+        // After this click is handled: going there redraws the tabs.
+        b.connect_clicked(move |_| {
+            glib::idle_add_local_once(move || navigate(id));
+        });
+        head.tabs.append(&b);
+    }
+    if let Some(b) = active {
+        let (scroll, tabs) = (head.tabs_scroll.clone(), head.tabs.clone());
+        glib::idle_add_local_once(move || {
+            let Some(bounds) = b.compute_bounds(&tabs) else { return };
+            let adj = scroll.hadjustment();
+            let (x, w) = (f64::from(bounds.x()), f64::from(bounds.width()));
+            if x < adj.value() {
+                adj.set_value(x);
+            } else if x + w > adj.value() + adj.page_size() {
+                adj.set_value(x + w - adj.page_size());
+            }
+        });
+    }
 }
 
 /// What to do with a finished update check.
@@ -476,11 +711,7 @@ pub fn reload_sections(fresh: bool) {
     while let Some(c) = u.nav_list.first_child() {
         u.nav_list.remove(&c);
     }
-    let (items, groups, compact_items) = fill_nav(&u.nav_list, &sections);
-    for w in &compact_items {
-        w.set_visible(!u.compact.get());
-    }
-    show_dividers(&u.nav_list, u.compact.get());
+    let (categories, page_group) = fill_nav(&u.nav_list, &sections, u.compact.get());
     // Drop built extension pages (their page may have changed) and pages that are gone.
     let stale: Vec<&'static str> = u
         .pages
@@ -495,9 +726,8 @@ pub fn reload_sections(fresh: bool) {
             u.stack.remove(&p);
         }
     }
-    u.nav_items = items;
-    u.nav_groups = groups;
-    u.compact_items = compact_items;
+    u.categories = categories;
+    u.page_group = page_group;
     u.sections = sections;
     let current = u.current;
     u.current = "";
@@ -513,11 +743,12 @@ thread_local! {
     static SIZED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// Below this the sidebar always shows only icons. Above it, only when the page
-/// wouldn't fit beside the full sidebar (half a 1920-pixel screen keeps the headings).
-const NARROW_BELOW: i32 = 760;
+/// Below this the sidebar always shows only the sections' tiles. Above it, only when
+/// the page wouldn't fit beside the full sidebar (half a 1920-pixel screen keeps the
+/// names).
+const NARROW_BELOW: i32 = 860;
 /// The full sidebar's width, a little over what it measures.
-const SIDEBAR_WIDTH: i32 = 272;
+const SIDEBAR_WIDTH: i32 = 236;
 /// How much wider a page gets when it leaves the narrow padding (20 px a side more).
 const NARROW_PADDING_SAVING: i32 = 40;
 
@@ -617,63 +848,24 @@ pub fn show_shortcuts() {
     dialog.present();
 }
 
-/// The sidebar shows only icons: hide the labels, centre the icons and the toggle.
+/// The sidebar shows only the sections' tiles.
 fn apply_compact(compact: bool) {
     let Some(ui) = ui() else { return };
-    let u = ui.borrow();
-    if compact {
-        u.nav.add_css_class("compact");
-    } else {
-        u.nav.remove_css_class("compact");
-    }
-    u.compact.set(compact);
-    for wdg in u.compact_fixed.iter().chain(&u.compact_items) {
-        wdg.set_visible(!compact);
-    }
-    show_group_labels(&u);
-    show_dividers(&u.nav_list, compact);
-    show_search_counts(&u);
-    u.collapse_button.set_tooltip_text(Some(if compact {
-        "Expand the sidebar (Ctrl+B)"
-    } else {
-        "Collapse the sidebar (Ctrl+B)"
-    }));
-    centre_icons(u.nav.upcast_ref(), compact);
-}
-
-/// The full sidebar's group headings: shown for groups with a page showing.
-fn show_group_labels(u: &Ui) {
-    for (label, ids) in &u.nav_groups {
-        let any = ids.iter().any(|id| u.nav_items.get(id).is_some_and(|b| b.is_visible()));
-        label.set_visible(any && !u.compact.get());
-    }
-}
-
-/// The icon-only sidebar's group dividers: shown for groups with a page showing.
-fn show_dividers(list: &gtk::Box, compact: bool) {
-    let mut c = list.first_child();
-    while let Some(w) = c {
-        if w.has_css_class("nav-divider") {
-            let any = std::iter::successors(w.next_sibling(), |n| n.next_sibling())
-                .take_while(|n| !n.has_css_class("nav-divider"))
-                .any(|n| n.has_css_class("nav-item") && n.is_visible());
-            w.set_visible(compact && any);
-        }
-        c = w.next_sibling();
-    }
-}
-
-fn centre_icons(w: &gtk::Widget, compact: bool) {
-    if w.has_css_class("nav-item")
-        && let Some(content) = w.downcast_ref::<gtk::Button>().and_then(|b| b.child())
     {
-        content.set_halign(if compact { gtk::Align::Center } else { gtk::Align::Fill });
+        let u = ui.borrow();
+        if compact {
+            u.nav.add_css_class("compact");
+        } else {
+            u.nav.remove_css_class("compact");
+        }
+        u.compact.set(compact);
+        u.collapse_button.set_tooltip_text(Some(if compact {
+            "Expand the sidebar (Ctrl+B)"
+        } else {
+            "Collapse the sidebar (Ctrl+B)"
+        }));
     }
-    let mut child = w.first_child();
-    while let Some(c) = child {
-        centre_icons(&c, compact);
-        child = c.next_sibling();
-    }
+    refill_nav();
 }
 
 pub fn toggle_sidebar() {
@@ -684,9 +876,16 @@ pub fn toggle_sidebar() {
 fn set_narrow(narrow: bool) {
     NARROW.with(|n| n.set(narrow));
     let Some(ui) = ui() else { return };
-    for page in ui.borrow().pages.values() {
+    let u = ui.borrow();
+    for page in u.pages.values() {
         mark_page(page, narrow);
     }
+    if narrow {
+        u.head.root.add_css_class("narrow");
+    } else {
+        u.head.root.remove_css_class("narrow");
+    }
+    u.head.about.set_visible(!narrow);
 }
 
 fn mark_page(page: &gtk::ScrolledWindow, narrow: bool) {
@@ -852,23 +1051,9 @@ fn show_availability(s: &Section) {
     });
 }
 
-/// A sidebar entry: dimmed, with the reason, when its page can't be used right now.
-fn mark_nav(button: &gtk::Button, s: &Section, visibility: &Visibility) {
-    match visibility {
-        Visibility::Disabled(why) => {
-            button.add_css_class("nav-unavailable");
-            button.set_tooltip_text(Some(&format!("{}\n{why}", s.description)));
-        }
-        _ => {
-            button.remove_css_class("nav-unavailable");
-            button.set_tooltip_text(Some(s.description));
-        }
-    }
-}
-
-/// Something this computer can do came or went: the sidebar entries and pages that
-/// depend on it follow. The sidebar is filled again only when an entry comes or goes;
-/// the page shown stays shown (saying why) even if its entry went.
+/// Something this computer can do came or went: the sidebar, the tabs and the pages
+/// that depend on it follow. The page shown stays shown (saying why) even if its
+/// section's row went.
 pub fn capabilities_changed(changes: &[nyx_capability::Change]) {
     let Some(ui) = ui() else { return };
     let affected: Vec<Section> = {
@@ -878,27 +1063,14 @@ pub fn capabilities_changed(changes: &[nyx_capability::Change]) {
     if affected.is_empty() {
         return;
     }
-    let comes_or_goes = {
-        let u = ui.borrow();
-        affected.iter().any(|s| s.shown() != u.nav_items.contains_key(s.id) && !crate::platform::off_sidebar(s.id))
-    };
-    if comes_or_goes {
-        refill_nav();
-    } else {
-        let u = ui.borrow();
-        for s in &affected {
-            if let Some(b) = u.nav_items.get(s.id) {
-                mark_nav(b, s, &s.visibility());
-            }
-        }
-    }
+    refill_nav();
     for s in &affected {
         show_availability(s);
     }
 }
 
-/// Fill the sidebar again from the sections as they are, keeping the pages built and the
-/// one shown.
+/// Fill the sidebar and the tabs again from the sections as they are, keeping the
+/// pages built and the one shown.
 fn refill_nav() {
     let Some(ui) = ui() else { return };
     let mut u = ui.borrow_mut();
@@ -906,17 +1078,23 @@ fn refill_nav() {
         u.nav_list.remove(&c);
     }
     let sections = u.sections.clone();
-    let (items, groups, compact_items) = fill_nav(&u.nav_list, &sections);
-    for w in &compact_items {
-        w.set_visible(!u.compact.get());
+    let (categories, page_group) = fill_nav(&u.nav_list, &sections, u.compact.get());
+    u.categories = categories;
+    u.page_group = page_group;
+    mark_category(&u);
+    fill_tabs(&u);
+}
+
+/// Mark the row of the page shown's section.
+fn mark_category(u: &Ui) {
+    let group = u.sections.iter().find(|s| s.id == u.current).map(|s| s.group);
+    for c in &u.categories {
+        if Some(c.group) == group {
+            c.button.add_css_class("active");
+        } else {
+            c.button.remove_css_class("active");
+        }
     }
-    show_dividers(&u.nav_list, u.compact.get());
-    if let Some(b) = items.get(u.current) {
-        b.add_css_class("active");
-    }
-    u.nav_items = items;
-    u.nav_groups = groups;
-    u.compact_items = compact_items;
 }
 
 thread_local! {
@@ -983,25 +1161,13 @@ pub fn navigate(id: &str) {
         FORWARD.with(|h| h.borrow_mut().clear());
     }
     let mut u = ui.borrow_mut();
-    if let Some(prev) = u.nav_items.get(u.current) {
-        prev.remove_css_class("active");
-    }
-    if let Some(b) = u.nav_items.get(id) {
-        b.add_css_class("active");
-    }
     u.stack.set_visible_child_name(id);
     u.current = id;
-    if let Some(s) = u.sections.iter().find(|s| s.id == id) {
-        u.header.set_subtitle(s.title);
-        nyx_theme::set_section(Some(&section_key(s.group)));
-        while let Some(c) = u.edit.first_child() {
-            u.edit.remove(&c);
-        }
-        let files = s.config_files();
-        if !files.is_empty() {
-            u.edit.append(&widgets::config_button(&files));
-        }
+    if let Some(group) = u.page_group.get(id).copied() {
+        LAST_IN.with(|l| l.borrow_mut().insert(group, id));
     }
+    mark_category(&u);
+    show_head(&u);
     let window = u.window.clone();
     drop(u);
     watch_live(id);
@@ -1107,7 +1273,7 @@ fn search_for(query: &str, fresh: bool) {
         let u = ui.borrow();
         u.sections
             .iter()
-            .filter(|s| u.nav_items.contains_key(s.id))
+            .filter(|s| u.page_group.contains_key(s.id))
             .filter(|s| {
                 crate::search::matches(
                     &crate::search::normalise(&format!("{} {} {}", s.title, s.description, s.keywords)),
@@ -1159,7 +1325,7 @@ fn search_for(query: &str, fresh: bool) {
     // Results in the sidebar's order, for Up and Down.
     let mut ordered: Vec<(&'static str, gtk::Widget)> = Vec::new();
     // Pages not in the sidebar (their capability went) aren't results.
-    for s in u.sections.iter().filter(|s| u.nav_items.contains_key(s.id)) {
+    for s in u.sections.iter().filter(|s| u.page_group.contains_key(s.id)) {
         ordered.extend(hit_rows.iter().filter(|(sec, _)| sec == s.id).map(|(_, r)| (s.id, r.clone())));
     }
     HITS.with(|h| *h.borrow_mut() = ordered);
@@ -1167,21 +1333,21 @@ fn search_for(query: &str, fresh: bool) {
     let counts =
         (!terms.is_empty()).then(|| u.sections.iter().filter_map(|s| section_hits.get(s.id).map(|n| (s.id, *n))).collect());
     COUNTS.with(|c| *c.borrow_mut() = counts);
-    show_search_counts(&u);
 
-    let mut first_match: Option<&'static str> = None;
-    for s in &u.sections {
-        let Some(button) = u.nav_items.get(s.id) else { continue };
-        let visible = terms.is_empty() || section_hits.contains_key(s.id) || title_hits.contains(&s.id);
-        button.set_visible(visible);
-        if visible && first_match.is_none() && !terms.is_empty() {
-            first_match = Some(s.id);
-        }
-    }
-    show_group_labels(&u);
-    show_dividers(&u.nav_list, u.compact.get());
+    let matching: Option<HashSet<&'static str>> = (!terms.is_empty()).then(|| {
+        u.sections
+            .iter()
+            .filter(|s| u.page_group.contains_key(s.id))
+            .filter(|s| section_hits.contains_key(s.id) || title_hits.contains(&s.id))
+            .map(|s| s.id)
+            .collect()
+    });
+    let first_match = matching
+        .as_ref()
+        .and_then(|m| u.sections.iter().map(|s| s.id).find(|id| m.contains(id) && u.page_group.contains_key(id)));
     let current = u.current;
-    let current_visible = u.nav_items.get(current).is_some_and(|b| b.is_visible());
+    let current_visible = u.page_group.contains_key(current) && matching.as_ref().is_none_or(|m| m.contains(current));
+    MATCHING.with(|m| *m.borrow_mut() = matching);
     let was_empty = u.stack.visible_child_name().as_deref() == Some(EMPTY_PAGE);
     let nothing = !terms.is_empty() && first_match.is_none();
     if nothing {
@@ -1191,6 +1357,7 @@ fn search_for(query: &str, fresh: bool) {
         u.stack.set_visible_child_name(current);
     }
     drop(u);
+    refill_nav();
     // Results found later on other pages don't take you away from the one shown.
     let move_on = if fresh { !current_visible || !section_hits.contains_key(current) } else { !current_visible || was_empty };
     if let Some(first) = first_match
@@ -1217,47 +1384,6 @@ fn search_for(query: &str, fresh: bool) {
 thread_local! {
     /// Each page's number of results while searching; `None` when not.
     static COUNTS: RefCell<Option<HashMap<&'static str, usize>>> = const { RefCell::new(None) };
-}
-
-/// The number of results after each page's name in the sidebar while searching, or
-/// in its tooltip when the sidebar shows only icons (a count there would widen it).
-fn show_search_counts(u: &Ui) {
-    let compact = u.compact.get();
-    COUNTS.with(|counts| {
-        let counts = counts.borrow();
-        for s in &u.sections {
-            let Some(button) = u.nav_items.get(s.id) else { continue };
-            let count = counts.as_ref().and_then(|c| c.get(s.id).copied());
-            set_search_count(button, if compact { None } else { count });
-            let tip = match count {
-                Some(n) if compact => format!("{}: {n} matching {}", s.title, if n == 1 { "setting" } else { "settings" }),
-                _ => s.description.to_string(),
-            };
-            button.set_tooltip_text(Some(&tip));
-        }
-    });
-}
-
-/// How many results a page has, after its name in the sidebar while searching.
-fn set_search_count(button: &gtk::Button, count: Option<usize>) {
-    let Some(content) = button.child().and_downcast::<gtk::Box>() else { return };
-    let existing = std::iter::successors(content.first_child(), |c| c.next_sibling()).find(|c| c.has_css_class("search-count"));
-    match (count, existing) {
-        (Some(n), Some(l)) => {
-            if let Some(l) = l.downcast_ref::<gtk::Label>() {
-                l.set_text(&n.to_string());
-            }
-            l.set_visible(true);
-        }
-        (Some(n), None) => {
-            let l = widgets::tag(&n.to_string());
-            l.add_css_class("search-count");
-            l.set_tooltip_text(Some("Settings on this page that match"));
-            content.append(&l);
-        }
-        (None, Some(l)) => l.set_visible(false),
-        (None, None) => {}
-    }
 }
 
 /// Mark result `at`, going to its page and scrolling to it.

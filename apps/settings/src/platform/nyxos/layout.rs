@@ -39,7 +39,7 @@ pub fn group(id: &str, group: &'static str) -> &'static str {
             "" => "",
             "Connections" => "Network",
             "Personalization" => "Appearance",
-            "Assistant" | "Local AI" => "Apps & Defaults",
+            "Assistant & AI" => "Apps & Defaults",
             "Hardware" => "System",
             other => other,
         },

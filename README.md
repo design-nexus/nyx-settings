@@ -22,13 +22,14 @@ curl -fsSL https://raw.githubusercontent.com/design-nexus/nyx-settings/main/inst
 
   ![Settings: Home](docs/home.png)
 
-- **Organized and searchable**: pages are grouped into Connections, Hardware,
-  Personalization, Desktop, Input, Accounts, Assistant (when Nyx Assistant is
-  installed) and System. Each group of settings
+- **Organized and searchable**: the sidebar lists the sections, each in its own
+  colour: Connections, Hardware, Personalization, Desktop, Input, Accounts,
+  Assistant & AI (when Nyx Assistant or Nyx AI Core is installed) and System. A
+  section's pages are tabs across the top of the page. Each group of settings
   sits on one card, and less-used groups fold away until you open them.
   <kbd>Ctrl</kbd>+<kbd>F</kbd> searches every setting on
   every page, by its own words or everyday ones ("volume", "hotkeys",
-  "wifi"), with a count per page in the sidebar; <kbd>↑</kbd>/<kbd>↓</kbd> go
+  "wifi"), with a count per section in the sidebar and per page on its tab; <kbd>↑</kbd>/<kbd>↓</kbd> go
   through the results. <kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd> (or the
   mouse's side buttons) go back and forward between pages.
 - **Stays current**: Wi-Fi, Bluetooth, Sound, Power, Displays, Printers,
