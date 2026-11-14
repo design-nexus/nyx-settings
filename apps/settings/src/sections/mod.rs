@@ -388,7 +388,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             keywords: "nyx bar top panel height size compact cozy spacious status pill calendar clock date time 12-hour 24-hour military seconds workspaces arrange",
             files: || vec![gtk::glib::user_config_dir().join("nyx/bar.toml")],
             build: Build::Native(nyxbar::build),
-            visible: always,
+            visible: crate::platform::has_nyx_bar,
             needs: &["program:nyx-bar"],
         },
         Section {

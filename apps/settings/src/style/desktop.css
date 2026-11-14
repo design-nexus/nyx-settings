@@ -1,0 +1,862 @@
+/* desktop pages: their own parts, on top of style.css. Classes are prefixed by page:
+ * dk- Dock, cc- Control Center, nt- Notifications, sw- Switcher, ws- Tiling & Workspaces. */
+
+/* ---------- Dock ---------- */
+
+.dk-lead .settings-option-title {
+  font-weight: 600;
+}
+
+.dk-stage {
+  border-radius: 9px;
+}
+
+.dk-dock {
+  padding: 5px 6px;
+  border-radius: 12px;
+  background: alpha(@theme_bg, 0.78);
+  box-shadow: inset 0 0 0 1.5px alpha(currentColor, 0.9), 0 0 0 4px alpha(currentColor, 0.16), 0 4px 14px alpha(black, 0.3);
+}
+
+.dk-dock image {
+  color: @theme_text;
+}
+
+.dk-dock separator {
+  background: alpha(@theme_text, 0.25);
+  min-width: 1px;
+  min-height: 1px;
+  margin: 2px 2px;
+}
+
+.dk-measure {
+  padding: 1px 8px;
+  border-radius: 99px;
+  background: alpha(currentColor, 0.85);
+}
+
+.dk-measure-text {
+  color: white;
+  font-size: 0.769em;
+  font-weight: 700;
+}
+
+.dk-tag {
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: alpha(black, 0.62);
+  color: white;
+}
+
+.dk-tag image {
+  -gtk-icon-size: 12px;
+}
+
+.dk-tag-text {
+  font-size: 0.769em;
+  font-weight: 600;
+}
+
+window.settings-window button.dk-edge {
+  padding: 4px;
+  min-width: 0;
+  border-radius: var(--nyx-radius-small);
+}
+
+window.settings-window button.dk-edge:checked {
+  background: alpha(currentColor, 0.14);
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.dk-tiles {
+  padding: 0;
+}
+
+.dk-tile {
+  padding: 10px 10px 9px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+}
+
+.dk-tile-icon {
+  color: @theme_dim_text;
+  -gtk-icon-size: 15px;
+}
+
+.dk-tile-name {
+  font-weight: 600;
+  font-size: 0.923em;
+}
+
+.dk-tile-desc {
+  color: @theme_text_tertiary;
+  font-size: 0.846em;
+}
+
+.dk-anims {
+  padding: 12px 12px 10px;
+}
+
+.dk-anims-title {
+  font-weight: 600;
+}
+
+.dk-anims-sub {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.dk-frames {
+  margin-top: 10px;
+}
+
+window.settings-window button.dk-anim {
+  padding: 8px 2px 6px;
+  min-width: 0;
+  border-radius: var(--nyx-radius-small);
+  background: alpha(@theme_text, 0.035);
+}
+
+window.settings-window button.dk-anim:checked {
+  background: alpha(currentColor, 0.13);
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.dk-anim-name {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+button.dk-anim:checked .dk-anim-name {
+  color: @theme_text;
+  font-weight: 600;
+}
+
+.dk-fx {
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 9px;
+}
+
+.dk-fx image {
+  color: @theme_text;
+}
+
+.dk-fx-squish image {
+  transform: translateY(4px) scale(1.2, 0.72);
+}
+
+.dk-fx-bounce image {
+  transform: translateY(-7px);
+}
+
+.dk-fx-ripple {
+  box-shadow: 0 0 0 3px alpha(currentColor, 0.45), 0 0 0 7px alpha(currentColor, 0.18);
+}
+
+.dk-fx-pop image {
+  transform: scale(1.28);
+}
+
+.dk-fx-glow {
+  box-shadow: 0 0 14px 3px alpha(currentColor, 0.75);
+  background: alpha(currentColor, 0.2);
+}
+
+.dk-fx-depress image {
+  transform: translateY(2px) scale(0.8);
+  opacity: 0.65;
+}
+
+/* ---------- Control Center ---------- */
+
+.cc-stage {
+  margin-top: 6px;
+}
+
+.cc-panel {
+  min-width: 360px;
+  padding: 12px 12px 14px;
+  border-radius: 14px;
+  background: @theme_popover;
+  color: @theme_text;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.08), 0 10px 30px alpha(black, 0.28);
+}
+
+/* The panel's parts, drawn as the Control Center draws them, a little smaller. */
+.ccp-head {
+  min-height: 34px;
+}
+
+.ccp-avatar {
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  background: @theme_accent;
+  color: @theme_on_accent;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.ccp-hb {
+  min-width: 26px;
+  min-height: 26px;
+  border-radius: 6px;
+  color: @theme_dim_text;
+}
+
+.ccp-hb image {
+  -gtk-icon-size: 13px;
+}
+
+.ccp-tile {
+  min-height: 42px;
+  border-radius: 10px;
+  background: @theme_card;
+}
+
+.ccp-toggle {
+  padding: 0 7px;
+}
+
+.ccp-chip {
+  min-width: 26px;
+  min-height: 26px;
+  border-radius: 6px;
+  background: alpha(@theme_text, 0.1);
+  color: @theme_text;
+}
+
+.ccp-chip image {
+  -gtk-icon-size: 14px;
+}
+
+.ccp-title {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.ccp-sub {
+  font-size: 10px;
+  color: @theme_dim_text;
+}
+
+.ccp-split-main {
+  padding: 0 0 0 8px;
+}
+
+.ccp-more {
+  min-width: 24px;
+  border-left: 1px solid @theme_divider;
+  color: @theme_dim_text;
+}
+
+.ccp-more image {
+  -gtk-icon-size: 12px;
+}
+
+.ccp-sliders {
+  padding: 6px 6px 6px 4px;
+}
+
+.ccp-ib {
+  min-width: 24px;
+  min-height: 24px;
+  color: @theme_dim_text;
+}
+
+.ccp-ib image {
+  -gtk-icon-size: 13px;
+}
+
+window.settings-window .cc-panel scale {
+  padding: 0 3px;
+  min-height: 14px;
+}
+
+window.settings-window .cc-panel scale > trough {
+  min-height: 5px;
+  border-radius: 3px;
+  background: alpha(@theme_text, 0.1);
+  box-shadow: none;
+}
+
+window.settings-window .cc-panel scale > trough > highlight {
+  border-radius: 3px;
+  background: @theme_accent;
+}
+
+window.settings-window .cc-panel scale > trough > slider {
+  min-width: 12px;
+  min-height: 12px;
+  margin: -4px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 1px 3px alpha(black, 0.4);
+}
+
+.ccp-value {
+  font-size: 10px;
+  color: @theme_dim_text;
+  font-feature-settings: "tnum";
+}
+
+.ccp-power {
+  padding: 4px;
+}
+
+.ccp-seg {
+  padding: 2px;
+  border-radius: 6px;
+  background: alpha(@theme_text, 0.035);
+}
+
+.ccp-segb {
+  border-radius: 5px;
+  color: @theme_dim_text;
+}
+
+.ccp-segb image {
+  -gtk-icon-size: 15px;
+}
+
+.ccp-segb.on {
+  background: @theme_raised;
+}
+
+.ccp-pip {
+  min-width: 6px;
+  min-height: 3px;
+  border-radius: 2px;
+  background: alpha(@theme_text, 0.18);
+}
+
+.ccp-pip.lit {
+  background: @cc_teal;
+}
+
+.ccp-battery.ccp-green image {
+  color: @cc_green;
+}
+
+.ccp-media {
+  padding: 8px 10px;
+}
+
+.ccp-art {
+  min-width: 56px;
+  min-height: 56px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, @cc_pink, @cc_violet);
+  color: alpha(@theme_bg, 0.85);
+}
+
+.ccp-art image {
+  -gtk-icon-size: 22px;
+}
+
+.ccp-media .ccp-title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ccp-progress {
+  margin-top: 4px;
+}
+
+window.settings-window .ccp-progress scale > trough {
+  min-height: 3px;
+}
+
+window.settings-window .ccp-progress scale > trough > highlight {
+  background: @cc_pink;
+}
+
+window.settings-window .ccp-progress scale > trough > slider {
+  min-width: 8px;
+  min-height: 8px;
+  margin: -3px;
+}
+
+.ccp-time {
+  font-size: 9px;
+  color: @theme_text_tertiary;
+  font-feature-settings: "tnum";
+}
+
+.ccp-mb {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 999px;
+  color: @theme_text;
+}
+
+.ccp-mb image {
+  -gtk-icon-size: 15px;
+}
+
+.ccp-play {
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 999px;
+  background: @cc_pink;
+  color: @theme_bg;
+}
+
+.ccp-play image {
+  -gtk-icon-size: 17px;
+}
+
+.ccp-list {
+  padding: 8px 10px;
+}
+
+.ccp-list > * + * {
+  margin-top: 3px;
+}
+
+.ccp-list-head {
+  margin-bottom: 2px;
+}
+
+.ccp-list-head image {
+  -gtk-icon-size: 12px;
+}
+
+.ccp-event {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: alpha(@theme_text, 0.06);
+}
+
+.ccp-event-title {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.ccp-event-when {
+  font-size: 10px;
+  color: @theme_dim_text;
+  font-feature-settings: "tnum";
+}
+
+.ccp-blue .ccp-chip.on { background: @cc_blue; color: @theme_bg; }
+.ccp-split.on.ccp-blue { background: mix(@theme_card, @cc_blue, 0.13); }
+.ccp-split.on.ccp-blue .ccp-more { border-left-color: alpha(@cc_blue, 0.25); }
+window.settings-window .ccp-slider.ccp-blue scale > trough > highlight { background: @cc_blue; }
+.ccp-slider.ccp-blue > .ccp-ib:first-child { color: @cc_blue; }
+.ccp-segb.on.ccp-blue { color: @cc_blue; }
+.ccp-event.ccp-ev-blue { background: mix(@theme_card, @cc_blue, 0.13); box-shadow: inset 0 0 0 1px alpha(@cc_blue, 0.16); }
+.ccp-event.ccp-ev-blue .ccp-event-title { color: mix(@theme_text, @cc_blue, 0.22); }
+.ccp-list.ccp-blue .ccp-list-head image { color: @cc_blue; }
+.ccp-violet .ccp-chip.on { background: @cc_violet; color: @theme_bg; }
+.ccp-split.on.ccp-violet { background: mix(@theme_card, @cc_violet, 0.13); }
+.ccp-split.on.ccp-violet .ccp-more { border-left-color: alpha(@cc_violet, 0.25); }
+window.settings-window .ccp-slider.ccp-violet scale > trough > highlight { background: @cc_violet; }
+.ccp-slider.ccp-violet > .ccp-ib:first-child { color: @cc_violet; }
+.ccp-segb.on.ccp-violet { color: @cc_violet; }
+.ccp-event.ccp-ev-violet { background: mix(@theme_card, @cc_violet, 0.13); box-shadow: inset 0 0 0 1px alpha(@cc_violet, 0.16); }
+.ccp-event.ccp-ev-violet .ccp-event-title { color: mix(@theme_text, @cc_violet, 0.22); }
+.ccp-list.ccp-violet .ccp-list-head image { color: @cc_violet; }
+.ccp-pink .ccp-chip.on { background: @cc_pink; color: @theme_bg; }
+.ccp-split.on.ccp-pink { background: mix(@theme_card, @cc_pink, 0.13); }
+.ccp-split.on.ccp-pink .ccp-more { border-left-color: alpha(@cc_pink, 0.25); }
+window.settings-window .ccp-slider.ccp-pink scale > trough > highlight { background: @cc_pink; }
+.ccp-slider.ccp-pink > .ccp-ib:first-child { color: @cc_pink; }
+.ccp-segb.on.ccp-pink { color: @cc_pink; }
+.ccp-event.ccp-ev-pink { background: mix(@theme_card, @cc_pink, 0.13); box-shadow: inset 0 0 0 1px alpha(@cc_pink, 0.16); }
+.ccp-event.ccp-ev-pink .ccp-event-title { color: mix(@theme_text, @cc_pink, 0.22); }
+.ccp-list.ccp-pink .ccp-list-head image { color: @cc_pink; }
+.ccp-red .ccp-chip.on { background: @cc_red; color: @theme_bg; }
+.ccp-split.on.ccp-red { background: mix(@theme_card, @cc_red, 0.13); }
+.ccp-split.on.ccp-red .ccp-more { border-left-color: alpha(@cc_red, 0.25); }
+window.settings-window .ccp-slider.ccp-red scale > trough > highlight { background: @cc_red; }
+.ccp-slider.ccp-red > .ccp-ib:first-child { color: @cc_red; }
+.ccp-segb.on.ccp-red { color: @cc_red; }
+.ccp-event.ccp-ev-red { background: mix(@theme_card, @cc_red, 0.13); box-shadow: inset 0 0 0 1px alpha(@cc_red, 0.16); }
+.ccp-event.ccp-ev-red .ccp-event-title { color: mix(@theme_text, @cc_red, 0.22); }
+.ccp-list.ccp-red .ccp-list-head image { color: @cc_red; }
+.ccp-coral .ccp-chip.on { background: @cc_coral; color: @theme_bg; }
+.ccp-split.on.ccp-coral { background: mix(@theme_card, @cc_coral, 0.13); }
+.ccp-split.on.ccp-coral .ccp-more { border-left-color: alpha(@cc_coral, 0.25); }
+window.settings-window .ccp-slider.ccp-coral scale > trough > highlight { background: @cc_coral; }
+.ccp-slider.ccp-coral > .ccp-ib:first-child { color: @cc_coral; }
+.ccp-segb.on.ccp-coral { color: @cc_coral; }
+.ccp-event.ccp-ev-coral { background: mix(@theme_card, @cc_coral, 0.13); box-shadow: inset 0 0 0 1px alpha(@cc_coral, 0.16); }
+.ccp-event.ccp-ev-coral .ccp-event-title { color: mix(@theme_text, @cc_coral, 0.22); }
+.ccp-list.ccp-coral .ccp-list-head image { color: @cc_coral; }
+.ccp-amber .ccp-chip.on { background: @cc_amber; color: @theme_bg; }
+.ccp-split.on.ccp-amber { background: mix(@theme_card, @cc_amber, 0.13); }
+.ccp-split.on.ccp-amber .ccp-more { border-left-color: alpha(@cc_amber, 0.25); }
+window.settings-window .ccp-slider.ccp-amber scale > trough > highlight { background: @cc_amber; }
+.ccp-slider.ccp-amber > .ccp-ib:first-child { color: @cc_amber; }
+.ccp-segb.on.ccp-amber { color: @cc_amber; }
+.ccp-event.ccp-ev-amber { background: mix(@theme_card, @cc_amber, 0.13); box-shadow: inset 0 0 0 1px alpha(@cc_amber, 0.16); }
+.ccp-event.ccp-ev-amber .ccp-event-title { color: mix(@theme_text, @cc_amber, 0.22); }
+.ccp-list.ccp-amber .ccp-list-head image { color: @cc_amber; }
+.ccp-green .ccp-chip.on { background: @cc_green; color: @theme_bg; }
+.ccp-split.on.ccp-green { background: mix(@theme_card, @cc_green, 0.13); }
+.ccp-split.on.ccp-green .ccp-more { border-left-color: alpha(@cc_green, 0.25); }
+window.settings-window .ccp-slider.ccp-green scale > trough > highlight { background: @cc_green; }
+.ccp-slider.ccp-green > .ccp-ib:first-child { color: @cc_green; }
+.ccp-segb.on.ccp-green { color: @cc_green; }
+.ccp-event.ccp-ev-green { background: mix(@theme_card, @cc_green, 0.13); box-shadow: inset 0 0 0 1px alpha(@cc_green, 0.16); }
+.ccp-event.ccp-ev-green .ccp-event-title { color: mix(@theme_text, @cc_green, 0.22); }
+.ccp-list.ccp-green .ccp-list-head image { color: @cc_green; }
+.ccp-teal .ccp-chip.on { background: @cc_teal; color: @theme_bg; }
+.ccp-split.on.ccp-teal { background: mix(@theme_card, @cc_teal, 0.13); }
+.ccp-split.on.ccp-teal .ccp-more { border-left-color: alpha(@cc_teal, 0.25); }
+window.settings-window .ccp-slider.ccp-teal scale > trough > highlight { background: @cc_teal; }
+.ccp-slider.ccp-teal > .ccp-ib:first-child { color: @cc_teal; }
+.ccp-segb.on.ccp-teal { color: @cc_teal; }
+.ccp-event.ccp-ev-teal { background: mix(@theme_card, @cc_teal, 0.13); box-shadow: inset 0 0 0 1px alpha(@cc_teal, 0.16); }
+.ccp-event.ccp-ev-teal .ccp-event-title { color: mix(@theme_text, @cc_teal, 0.22); }
+.ccp-list.ccp-teal .ccp-list-head image { color: @cc_teal; }
+
+.cc-empty {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+  margin: 18px 0;
+}
+
+.cc-dot {
+  min-width: 5px;
+  min-height: 5px;
+  border-radius: 3px;
+  background: alpha(@theme_text, 0.1);
+}
+
+.cc-dot.on {
+  min-width: 14px;
+  background: @theme_dim_text;
+}
+
+.cc-barstrip {
+  margin: 8px 10px 4px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 9px;
+  background: mix(@theme_bg, @theme_text, 0.03);
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.07);
+}
+
+.cc-ws {
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 99px;
+  background: alpha(@theme_text, 0.35);
+}
+
+.cc-ws.on {
+  min-width: 14px;
+  background: @theme_accent;
+}
+
+.cc-clock {
+  font-weight: 600;
+  font-size: 0.846em;
+}
+
+.cc-status {
+  padding: 4px 8px;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  background: alpha(currentColor, 0.1);
+}
+
+.cc-status image {
+  color: @theme_text;
+  -gtk-icon-size: 12px;
+}
+
+.cc-button {
+  padding: 4px 5px;
+}
+
+/* ---------- Notifications ---------- */
+
+.nt-stage {
+  border-radius: 9px;
+}
+
+.nt-pop {
+  padding: 10px 12px 12px;
+  border-radius: 12px;
+  background: alpha(mix(@theme_bg, @theme_text, 0.06), 0.97);
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.08), 0 8px 22px alpha(black, 0.32);
+}
+
+.nt-app {
+  font-weight: 600;
+  font-size: 0.846em;
+}
+
+.nt-when {
+  color: @theme_dim_text;
+  font-size: 0.769em;
+}
+
+.nt-line {
+  min-height: 5px;
+  border-radius: 3px;
+  background: alpha(@theme_text, 0.22);
+}
+
+.nt-line.nt-title {
+  min-height: 7px;
+  margin-top: 2px;
+  background: alpha(@theme_text, 0.55);
+}
+
+.nt-night {
+  padding: 12px 14px;
+}
+
+.nt-night-title {
+  font-weight: 600;
+}
+
+.nt-night-line {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.nt-chip {
+  padding: 2px 9px;
+  border-radius: 7px;
+  background: alpha(@theme_text, 0.07);
+}
+
+.nt-chip image {
+  -gtk-icon-size: 12px;
+}
+
+.nt-chip.on {
+  background: alpha(currentColor, 0.16);
+  box-shadow: inset 0 0 0 1px alpha(currentColor, 0.6);
+}
+
+.nt-chip-text {
+  font-size: 0.846em;
+  font-weight: 600;
+  color: @theme_text;
+}
+
+.nt-keep {
+  margin-top: 2px;
+}
+
+.nt-keep > image {
+  color: @theme_success;
+  -gtk-icon-size: 14px;
+}
+
+.nt-keep-text {
+  color: @theme_dim_text;
+  font-size: 0.885em;
+}
+
+.nt-time-word {
+  color: @theme_dim_text;
+}
+
+.settings-option.nt-choice.picked {
+  background: alpha(@theme_accent, 0.06);
+}
+
+.settings-option.nt-choice > checkbutton {
+  margin-right: 2px;
+}
+
+.cc-status.off {
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.18);
+  background: none;
+  opacity: 0.45;
+}
+
+/* ---------- Switcher ---------- */
+
+.sw-stage {
+  border-radius: 9px;
+}
+
+.sw-panel {
+  padding: 10px;
+  border-radius: 14px;
+  background: alpha(mix(@theme_bg, @theme_text, 0.05), 0.94);
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.1), 0 10px 30px alpha(black, 0.35);
+}
+
+.sw-thumb,
+.sw-app {
+  padding: 4px;
+  border-radius: 9px;
+}
+
+.sw-thumb.on,
+.sw-app.on {
+  background: alpha(currentColor, 0.16);
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.sw-app {
+  padding: 8px 8px 6px;
+}
+
+.sw-title {
+  font-size: 0.769em;
+  color: @theme_dim_text;
+}
+
+.sw-thumb.on .sw-title,
+.sw-app.on .sw-title {
+  color: @theme_text;
+  font-weight: 600;
+}
+
+.sw-count {
+  padding: 0 5px;
+  border-radius: 99px;
+  font-size: 0.692em;
+  font-weight: 700;
+  color: white;
+  background: alpha(black, 0.65);
+}
+
+.sw-empty {
+  color: @theme_dim_text;
+  margin: 18px 30px;
+}
+
+.sw-keyhint {
+  padding: 4px 10px;
+  border-radius: 9px;
+  background: alpha(@theme_bg, 0.88);
+}
+
+.sw-hint-text {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.sw-timing {
+  padding: 12px 14px;
+}
+
+.sw-timing-title {
+  font-weight: 600;
+}
+
+.sw-timing-sub {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.sw-readout {
+  font-weight: 700;
+}
+
+/* ---------- Tiling & Workspaces ---------- */
+
+.ws-desk {
+  border-radius: 9px;
+}
+
+window.settings-window button.ws-gaps-button {
+  padding: 4px 10px;
+  font-size: 0.885em;
+}
+
+.ws-layouts .picture-cards {
+  margin-top: -4px;
+}
+
+window.settings-window .ws-layouts button.picture-card {
+  padding: 6px 6px 8px;
+}
+
+.ws-lay-label {
+  font-size: 0.923em;
+}
+
+.ws-strip {
+  padding: 12px 14px;
+}
+
+.ws-strip-title {
+  font-weight: 600;
+}
+
+.ws-strip-sub {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+window.settings-window button.ws-link {
+  padding: 2px 6px;
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.ws-screen {
+  padding: 8px 10px 10px;
+  border-radius: var(--nyx-radius-small);
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.09);
+}
+
+.ws-screen image {
+  color: @theme_dim_text;
+  -gtk-icon-size: 13px;
+}
+
+.ws-screen-name {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.ws-chip {
+  padding: 2px 8px;
+  min-height: 20px;
+  border-radius: 6px;
+  background: alpha(@theme_text, 0.07);
+}
+
+.ws-chip.always {
+  background: alpha(currentColor, 0.28);
+}
+
+.ws-chip.cur {
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.ws-chip image {
+  color: @theme_text;
+  -gtk-icon-size: 11px;
+}
+
+.ws-chip-n {
+  font-weight: 700;
+  font-size: 0.846em;
+  color: @theme_text;
+}
+
+.ws-chip-name {
+  font-size: 0.846em;
+  color: @theme_text;
+}
+
+.ws-num {
+  min-width: 26px;
+  min-height: 26px;
+  border-radius: 7px;
+  font-weight: 700;
+  background: alpha(@theme_text, 0.08);
+}
+
+window.settings-window button.ws-gaps-button {
+  padding: 2px 9px;
+  font-size: 0.846em;
+}
+
+.ws-layouts .settings-option-description {
+  margin-bottom: 2px;
+}

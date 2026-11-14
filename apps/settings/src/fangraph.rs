@@ -166,7 +166,7 @@ pub fn fan_graph(points: Points, on_change: impl Fn(&Points) + 'static) -> FanGr
                 cr.set_font_size(12.0);
                 let tw = cr.text_extents(&text).map(|e| e.width()).unwrap_or(60.0);
                 let (x, y) = xy[i];
-                let bx = (x - tw / 2.0 - 8.0).clamp(PAD_L, g.w - PAD_R - tw - 16.0);
+                let bx = (x - tw / 2.0 - 8.0).min(g.w - PAD_R - tw - 16.0).max(PAD_L);
                 let by = if y - 34.0 < PAD_T { y + 14.0 } else { y - 34.0 };
                 cr.set_source_rgba(tr, tg, tb, 0.95);
                 cr.rectangle(bx, by, tw + 16.0, 22.0);

@@ -3,7 +3,7 @@
 //! fluxd does the pairing, the connection and the phone features; this page drives its
 //! pairing (always with the key the user compared), shows each device's state and what it
 //! offers, and edits what each may do (fluxd's per-device access). Devices that are
-//! paired but away are under Remembered Devices, where their access can still change.
+//! paired but away stay in the list, where their access can still change.
 //! Unpair removes the pairing; Forget also drops this computer's choices for the device.
 
 use crate::backend::connect as flux;
@@ -12,6 +12,9 @@ use crate::{capability, cmd, platform, window};
 use gtk::glib;
 use gtk::prelude::*;
 use nyx_connect::{Access, Client, Device, Feature, PairStep, Prefs, Snapshot, Status};
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
 
 pub fn build(page: &Page) {
     flux::follow();
@@ -19,10 +22,21 @@ pub fn build(page: &Page) {
         unavailable(page);
         return;
     };
+    let pv = page.split();
+    pv.pane.set_size_request(520, -1);
+    let body = widgets::vbox(14);
+    pv.add(&body);
+    let foot = pv.foot("dialog-information-symbolic", "Unpair to stop it connecting; Forget also drops its choices here.");
+    let removal = widgets::hbox(4);
+    if let Some(row) = foot.parent().and_downcast::<gtk::Box>() {
+        row.append(&removal);
+    }
+    let ui = Rc::new(Ui { snap: snap.clone(), body, removal, foot, rows: RefCell::default() });
+    devices(page, &ui);
     general(page, &snap);
-    devices(page, &snap);
-    remembered(page, &snap);
+    trust_group(page);
     diagnostics(page, &snap);
+    show_picked(&ui);
 }
 
 fn esc(s: &str) -> String {
@@ -44,6 +58,16 @@ fn act<T: Send + 'static>(
 }
 
 fn unavailable(page: &Page) {
+    // The same split as with Flux there, so the page keeps its width when it arrives.
+    let pv = page.split();
+    pv.pane.set_size_request(520, -1);
+    let (title, line) = match flux::away() {
+        None => ("Looking for Flux…", "Flux connects this computer to your phones and tablets."),
+        Some(_) => ("Flux isn't here", "Flux connects this computer to your phones and tablets."),
+    };
+    let empty = nyx_ui::widgets::empty_state("phone-symbolic", title, line, None);
+    empty.add_css_class("cn-empty");
+    pv.add(&empty);
     let g = page.group("");
     widgets::keywords("flux phone tablet pair connect");
     let Some(why) = flux::away() else {
@@ -134,7 +158,7 @@ fn trust_row(g: &widgets::Group) {
     };
     let (r, _) = widgets::switch_row(
         &format!("Trust {}", esc(&net.name)),
-        "Phones reach this computer only on trusted networks. Trust your home or work network, not a café's or hotel's.",
+        "Phones reach this computer only on networks you trust: home or work, not a café.",
         net.trusted,
         move |on| {
             let device = net.device.clone();
@@ -150,19 +174,27 @@ fn trust_row(g: &widgets::Group) {
             });
         },
     );
+    widgets::keywords("trusted network zone home work");
+    r.prepend(&widgets::tile("security-high-symbolic"));
+    r.add_css_class("with-tile");
     g.add(&r);
 }
 
 // ----- What every device shares -----
 
 fn general(page: &Page, s: &Snapshot) {
-    let g = page.group("");
+    let g = page.group("For every device");
     widgets::keywords("flux phone clipboard sync copy paste notifications browse files home folder");
+    let tiled = |r: gtk::Box, icon: &str| {
+        r.prepend(&widgets::tile(icon));
+        r.add_css_class("with-tile");
+        r
+    };
     if capability::program("nyx-clipboardd") {
         let on = Prefs::load().clipboard_sync;
         let (r, _) = widgets::switch_row(
             "Sync the clipboard",
-            "What you copy goes to your devices after Nyx Clipboard's filters: copies from excluded apps, passwords and secrets stay here. What you copy on them lands in your clipboard history.",
+            "Passwords and copies from excluded apps stay here; what you copy on them lands in your clipboard history.",
             on,
             |on| {
                 cmd::background(
@@ -175,64 +207,182 @@ fn general(page: &Page, s: &Snapshot) {
                 );
             },
         );
-        g.add(&r);
+        g.add(&tiled(r, "edit-copy-symbolic"));
     } else {
         let (r, _) = widgets::switch_row(
             "Sync the clipboard",
-            "Flux sends what you copy to your devices, and puts what you copy on them on this computer's clipboard.",
+            "Copies go to your devices, and theirs come here.",
             s.settings.auto_clipboard,
             |on| act(move |c| c.set("autoClipboard", on.into()), |_| {}),
         );
-        g.add(&r);
+        g.add(&tiled(r, "edit-copy-symbolic"));
     }
     let (r, _) = widgets::switch_row(
-        "Show notifications from devices",
-        "Their notifications appear here, in the Notification Center.",
+        "Show their notifications",
+        "In the Notification Center.",
         s.settings.notifications,
         |on| act(move |c| c.set("notifications", on.into()), |_| {}),
     );
-    g.add(&r);
+    widgets::keywords("show notifications from devices");
+    g.add(&tiled(r, "preferences-system-notifications-symbolic"));
     let (r, _) = widgets::switch_row(
-        "Let devices browse this computer",
-        "A paired device can open and copy any file in your home folder while this is on. Each device can be kept out below.",
+        "Let them browse this computer",
+        "Your home folder. Each device can still be kept out.",
         s.settings.share_home,
         |on| act(move |c| c.set("shareHome", on.into()), |_| {}),
     );
-    g.add(&r);
-    let (r, _) = widgets::info_row("Files from devices are saved in", &s.settings.download_dir);
-    g.add(&r);
+    widgets::keywords("let devices browse this computer home folder");
+    g.add(&tiled(r, "folder-symbolic"));
+    let home = glib::home_dir();
+    let dir = std::path::Path::new(&s.settings.download_dir);
+    let shown = match dir.strip_prefix(&home) {
+        Ok(rest) if rest.as_os_str().is_empty() => "Home folder".to_string(),
+        Ok(rest) => rest.display().to_string(),
+        Err(_) => s.settings.download_dir.clone(),
+    };
+    let (r, l) = widgets::info_row("Files they send", &shown);
+    l.set_tooltip_text(Some(&s.settings.download_dir));
+    widgets::keywords("files from devices are saved in downloads folder");
+    g.add(&tiled(r, "folder-download-symbolic"));
 }
 
-// ----- Devices here now -----
+fn trust_group(page: &Page) {
+    if !platform::connect_on_trusted_networks() {
+        return;
+    }
+    let g = page.group("");
+    trust_row(&g);
+}
 
-fn devices(page: &Page, s: &Snapshot) {
+// ----- The devices -----
+
+thread_local! {
+    /// The device shown on the right, kept while the page is redrawn.
+    static PICKED: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+struct Ui {
+    snap: Arc<Snapshot>,
+    body: gtk::Box,
+    removal: gtk::Box,
+    foot: gtk::Label,
+    /// Each paired device's row, to mark the one picked.
+    rows: RefCell<Vec<(String, gtk::Box)>>,
+}
+
+fn app_name(d: &Device) -> String {
+    let app = match d.app.as_str() {
+        "android" | "android-debug" => "Flux for Android",
+        "ios" => "Flux for iOS",
+        "macos" => "Flux for macOS",
+        "fluxd" => "Flux",
+        _ => "",
+    };
+    format!("{app} {}", d.app_version).trim().to_string()
+}
+
+/// "Connected · 82% battery, charging" or "Not connected · last seen yesterday".
+fn describe(d: &Device) -> String {
+    let mut parts = Vec::new();
+    if d.online {
+        parts.push("Connected".to_string());
+        if let Some(b) = d.battery {
+            parts.push(format!("{}% battery{}", b.charge, if b.charging { ", charging" } else { "" }));
+        }
+    } else {
+        let index = nyx_devices::Index::load_standard();
+        let seen = match (index.get(&nyx_connect::device_id(&d.id)), d.last_seen) {
+            (Some(p), _) => crate::backend::devices::last_seen(Some(p)),
+            (None, t) if t > 0 => crate::backend::devices::last_seen(Some(&nyx_devices::Profile {
+                category: nyx_devices::Category::Linked,
+                name: d.name.clone(),
+                matches: String::new(),
+                connector: None,
+                last_seen: t as u64,
+            })),
+            _ => "Not connected".into(),
+        };
+        parts.push(esc(&if seen == "Not connected" { seen } else { format!("Not connected · {}", lower_first(&seen)) }));
+    }
+    parts.join(" · ")
+}
+
+fn lower_first(s: &str) -> String {
+    let mut c = s.chars();
+    c.next().map(|f| f.to_lowercase().collect::<String>() + c.as_str()).unwrap_or_default()
+}
+
+fn devices(page: &Page, ui: &Rc<Ui>) {
+    let s = &ui.snap;
     let g = page.group("Devices");
     widgets::keywords("pair new phone tablet android iphone flux verification key accept reject unpair forget ring");
-    let (r, _) = widgets::button_row(
-        "Pair a new device",
-        "Open Flux on the phone, on the same network. It shows up here; then compare the key on both screens.",
-        "Look for devices",
-        |b| {
-            b.set_sensitive(false);
-            let b = b.clone();
-            act(|c| c.discover(), move |_| b.set_sensitive(true));
-        },
-    );
-    g.add(&r);
-    trust_row(&g);
-    let here: Vec<&Device> = s.devices.iter().filter(|d| d.status() != Status::Disconnected).collect();
-    if here.is_empty() {
-        g.add(&widgets::row("No devices nearby", "Paired devices show here while they're connected.", None));
-    }
-    for d in here {
+    // Connected first, then the ones asking to pair or nearby, then the ones away.
+    let mut list: Vec<&Device> = s.devices.iter().collect();
+    list.sort_by_key(|d| match d.status() {
+        Status::Connected => 0,
+        Status::Pairing(_) => 1,
+        Status::Discovered => 2,
+        Status::Disconnected => 3,
+    });
+    let paired: Vec<&Device> = s.paired().collect();
+    let picked = PICKED
+        .with(|p| p.borrow().clone())
+        .filter(|id| paired.iter().any(|d| &d.id == id))
+        .or_else(|| paired.iter().find(|d| d.online).or(paired.first()).map(|d| d.id.clone()));
+    PICKED.with(|p| *p.borrow_mut() = picked);
+    for d in list {
         let name = d.display_name(&s.devices);
         match d.status() {
             Status::Discovered => g.add(&discovered(d, &name)),
             Status::Pairing(step) => g.add(&pairing(d, &name, step)),
-            Status::Connected => g.add(&connected(s, d, &name)),
-            Status::Disconnected => {}
+            Status::Connected | Status::Disconnected => {
+                let chevron = gtk::Image::from_icon_name("go-next-symbolic");
+                chevron.add_css_class("chevron");
+                let r = widgets::icon_row(d.icon(), &esc(&name), &describe(d), Some(chevron.upcast_ref()));
+                widgets::keywords("phone tablet device paired remembered");
+                let (ui2, id) = (ui.clone(), d.id.clone());
+                r.add_css_class("cn-click");
+                r.set_cursor_from_name(Some("pointer"));
+                r.set_focusable(true);
+                let click = gtk::GestureClick::new();
+                click.connect_released(move |_, _, _, _| {
+                    PICKED.with(|p| *p.borrow_mut() = Some(id.clone()));
+                    show_picked(&ui2);
+                });
+                r.add_controller(click);
+                ui.rows.borrow_mut().push((d.id.clone(), r.clone()));
+                g.add(&r);
+            }
         }
     }
+    // Remembered here, but no longer paired.
+    let index = nyx_devices::Index::load_standard();
+    for (id, profile) in nyx_connect::orphans(&index, s) {
+        let forget = forget_button(s, id.key());
+        let r = widgets::icon_row(
+            "phone-symbolic",
+            &esc(&profile.name),
+            "No longer paired. Pair it again, or forget it.",
+            Some(forget.upcast_ref()),
+        );
+        widgets::keywords("remembered offline away disconnected phone forget unpair");
+        g.add(&r);
+    }
+    let pair = widgets::icon_row("list-add-symbolic", "Pair a new device…", "Open Flux on the phone, on the same network.", None);
+    pair.add_css_class("cn-add-row");
+    pair.add_css_class("cn-click");
+    pair.set_cursor_from_name(Some("pointer"));
+    widgets::keywords("pair a new device look for devices discover");
+    let desc = pair.first_child().and_then(|t| t.next_sibling()).and_then(|t| t.last_child()).and_downcast::<gtk::Label>();
+    let click = gtk::GestureClick::new();
+    click.connect_released(move |_, _, _, _| {
+        if let Some(d) = &desc {
+            d.set_text("Looking… it shows up above; then compare the key on both screens.");
+        }
+        act(|c| c.discover(), |_| {});
+    });
+    pair.add_controller(click);
+    g.add(&pair);
 }
 
 fn discovered(d: &Device, name: &str) -> gtk::Box {
@@ -255,7 +405,7 @@ fn discovered(d: &Device, name: &str) -> gtk::Box {
     if d.old_app {
         pair.set_sensitive(false);
     }
-    widgets::row(&esc(name), &desc, Some(pair.upcast_ref()))
+    widgets::icon_row(d.icon(), &esc(name), &desc, Some(pair.upcast_ref()))
 }
 
 fn pairing(d: &Device, name: &str, step: PairStep) -> gtk::Box {
@@ -284,6 +434,7 @@ fn pairing(d: &Device, name: &str, step: PairStep) -> gtk::Box {
                     move |c| c.pair_accept(&id, &raw),
                     move |p| {
                         flux::remember(&p.device);
+                        PICKED.with(|x| *x.borrow_mut() = Some(p.device.clone()));
                         window::toast(&format!("Paired with {}", p.name));
                     },
                 );
@@ -302,81 +453,138 @@ fn pairing(d: &Device, name: &str, step: PairStep) -> gtk::Box {
             }
         }
     };
-    widgets::row(&esc(name), &format!("{desc} Pairing ends after 30 seconds."), Some(controls.upcast_ref()))
+    let r = widgets::icon_row(d.icon(), &esc(name), &format!("{desc} Pairing ends after 30 seconds."), Some(controls.upcast_ref()));
+    r.add_css_class("cn-picked");
+    r
 }
 
-fn describe(d: &Device) -> String {
-    let mut parts = vec![if d.online { "Connected".to_string() } else { "Not connected".to_string() }];
-    if let Some(b) = d.battery.filter(|_| d.online) {
-        parts.push(format!("{}% battery{}", b.charge, if b.charging { ", charging" } else { "" }));
+// ----- The picked device -----
+
+fn show_picked(ui: &Rc<Ui>) {
+    let picked = PICKED.with(|p| p.borrow().clone());
+    for (id, row) in ui.rows.borrow().iter() {
+        if picked.as_deref() == Some(id.as_str()) {
+            row.add_css_class("cn-picked");
+        } else {
+            row.remove_css_class("cn-picked");
+        }
     }
-    let app = match d.app.as_str() {
-        "android" | "android-debug" => "Flux for Android",
-        "ios" => "Flux for iOS",
-        "macos" => "Flux for macOS",
-        "fluxd" => "Flux",
-        _ => "",
+    let body = &ui.body;
+    while let Some(c) = body.first_child() {
+        body.remove(&c);
+    }
+    while let Some(c) = ui.removal.first_child() {
+        ui.removal.remove(&c);
+    }
+    let s = &ui.snap;
+    let Some(d) = picked.and_then(|id| s.paired().find(|d| d.id == id)) else {
+        ui.foot.set_text("Phones and tablets with the Flux app pair with this computer on the same network.");
+        let empty = nyx_ui::widgets::empty_state(
+            "phone-symbolic",
+            "No devices yet",
+            "Open Flux on your phone, then choose Pair a new device on the left and compare the key on both screens.",
+            None,
+        );
+        empty.add_css_class("cn-empty");
+        body.append(&empty);
+        return;
     };
-    if !app.is_empty() {
-        parts.push(format!("{app} {}", d.app_version).trim().to_string());
-    }
-    if !d.app_update.is_empty() {
-        parts.push(format!("Flux {} is available for it", d.app_update));
-    }
-    esc(&parts.join(" · "))
-}
+    ui.foot.set_text("Unpair to stop it connecting; Forget also drops its choices here.");
+    let name = d.display_name(&s.devices);
 
-fn connected(s: &Snapshot, d: &Device, name: &str) -> gtk::Box {
-    let body = widgets::vbox(8);
-    let features: Vec<&str> = d.features().iter().map(|f| f.label()).collect();
-    if !features.is_empty() {
-        let l = widgets::label(&format!("Offers: {}", features.join(", ")), "dim");
-        l.set_xalign(0.0);
-        l.set_wrap(true);
-        body.append(&l);
+    // The heading: its name, its app, and what you can do with it now.
+    let head = widgets::hbox(8);
+    head.add_css_class("preview-head");
+    let text = widgets::vbox(2);
+    text.set_hexpand(true);
+    let t = widgets::label(&name, "preview-title");
+    t.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    text.append(&t);
+    let mut line = vec![app_name(d)];
+    if !d.app_update.is_empty() {
+        line.push(format!("Flux {} is available for it", d.app_update));
     }
-    for r in access_rows(s, d) {
-        body.append(&r);
-    }
-    let buttons = widgets::hbox(8);
-    if d.has(Feature::Ring) {
+    let l = widgets::label(&line.into_iter().filter(|x| !x.is_empty()).collect::<Vec<_>>().join(" · "), "preview-line");
+    l.set_wrap(true);
+    l.set_xalign(0.0);
+    text.append(&l);
+    head.append(&text);
+    if d.online && d.has(Feature::Clipboard) {
+        let b = nyx_ui::widgets::labeled_button("edit-copy-symbolic", "Send clipboard");
+        b.set_valign(gtk::Align::Center);
         let id = d.id.clone();
-        let ring = gtk::Button::with_label("Ring");
+        b.connect_clicked(move |b| {
+            let id = id.clone();
+            b.display().clipboard().read_text_async(gtk::gio::Cancellable::NONE, move |r| match r {
+                Ok(Some(text)) => {
+                    let text = text.to_string();
+                    act(move |c| c.send_clipboard(&id, &text), |_| window::toast("Sent"));
+                }
+                _ => window::toast("There's no text on the clipboard to send"),
+            });
+        });
+        head.append(&b);
+    }
+    if d.online && d.has(Feature::Ring) {
+        let ring = nyx_ui::widgets::labeled_button("audio-volume-high-symbolic", "Ring");
+        ring.set_valign(gtk::Align::Center);
         ring.set_tooltip_text(Some("Ring it, to find it"));
+        let id = d.id.clone();
         ring.connect_clicked(move |_| {
             let id = id.clone();
             act(move |c| c.ring(&id), |_| {});
         });
-        buttons.append(&ring);
+        head.append(&ring);
     }
-    unpair_forget(&buttons, s, d);
-    body.append(&buttons);
-    widgets::stacked_row(&esc(name), &describe(d), body.upcast_ref())
-}
+    body.append(&head);
 
-fn access_rows(s: &Snapshot, d: &Device) -> Vec<gtk::Box> {
-    flux::accesses(s, d)
-        .into_iter()
-        .map(|access| {
-            let desc = match access {
-                Access::Clipboard => "Clipboard sync, and clips sent from it by hand.",
-                Access::Notifications => "Its notifications appear here.",
-                Access::ShareHome => "It can open and copy files in your home folder.",
-                Access::RemoteInput => "It can move the pointer and type here.",
-                Access::RemoteDesktop => "It can show this screen.",
-            };
-            let id = d.id.clone();
-            let (r, _) = widgets::switch_row(access.label(), desc, s.allowed(&d.id, access), move |on| {
-                let id = id.clone();
-                let id2 = id.clone();
-                act(move |c| c.set_access(&id, access, Some(on)), move |_| flux::remember(&id2));
-            });
-            r
-        })
-        .collect()
-}
+    // The phone, and beside it what it may do here and what it offers.
+    let row = widgets::hbox(18);
+    let stage = widgets::vbox(8);
+    stage.set_valign(gtk::Align::Start);
+    stage.append(&phone(s, d));
+    if let Some(b) = d.battery.filter(|_| d.online) {
+        let pct = widgets::label(&format!("{}%", b.charge), "cn-big");
+        pct.set_halign(gtk::Align::Center);
+        stage.append(&pct);
+        if b.charging {
+            let c = widgets::label("Charging", "cn-okt");
+            c.set_halign(gtk::Align::Center);
+            stage.append(&c);
+        }
+    }
+    row.append(&stage);
+    let side = widgets::vbox(8);
+    side.set_hexpand(true);
+    let accesses = flux::accesses(s, d);
+    if !accesses.is_empty() {
+        side.append(&widgets::label("What it may do here", "cn-strong"));
+        for access in accesses {
+            side.append(&access_tile(s, d, access));
+        }
+    }
+    let features = d.features();
+    if !features.is_empty() {
+        let h = widgets::label("It offers", "cn-strong");
+        h.set_margin_top(8);
+        side.append(&h);
+        let chips = gtk::FlowBox::new();
+        chips.set_selection_mode(gtk::SelectionMode::None);
+        chips.set_max_children_per_line(8);
+        chips.set_row_spacing(6);
+        chips.set_column_spacing(6);
+        chips.add_css_class("cn-flow");
+        for f in features {
+            let c = widgets::label(f.label(), "cn-chip");
+            c.set_halign(gtk::Align::Start);
+            chips.insert(&c, -1);
+        }
+        side.append(&chips);
+    }
+    row.append(&side);
+    body.append(&row);
 
-fn unpair_forget(buttons: &gtk::Box, s: &Snapshot, d: &Device) {
+    // Unpair and Forget at the foot.
     let id = d.id.clone();
     let unpair = widgets::confirm_button("Unpair", "Click again to unpair", move |b| {
         b.set_sensitive(false);
@@ -387,8 +595,110 @@ fn unpair_forget(buttons: &gtk::Box, s: &Snapshot, d: &Device) {
         );
     });
     unpair.set_tooltip_text(Some("Remove the pairing. It has to be paired again to connect."));
-    buttons.append(&unpair);
-    buttons.append(&forget_button(s, &d.id));
+    let forget = forget_button(s, &d.id);
+    for b in [&unpair, &forget] {
+        b.add_css_class("flat");
+        b.add_css_class("cn-danger");
+        b.set_valign(gtk::Align::Center);
+        ui.removal.append(b);
+    }
+}
+
+/// The phone, drawn: its clock, Flux connected, and a tile for each thing it may do.
+fn phone(s: &Snapshot, d: &Device) -> gtk::Box {
+    let ph = widgets::vbox(10);
+    ph.add_css_class("cn-phone");
+    if !d.online {
+        ph.add_css_class("away");
+    }
+    ph.set_halign(gtk::Align::Center);
+    let status = widgets::hbox(4);
+    status.add_css_class("cn-phone-status");
+    let time = glib::DateTime::now_local().ok().and_then(|t| t.format("%H:%M").ok()).map(|t| t.to_string()).unwrap_or_default();
+    let clock = widgets::label(&time, "cn-phone-clock");
+    clock.set_hexpand(true);
+    clock.set_xalign(0.0);
+    status.append(&clock);
+    if let Some(b) = d.battery.filter(|_| d.online) {
+        status.append(&widgets::label(&format!("{}%", b.charge), "cn-phone-clock"));
+    }
+    ph.append(&status);
+    let mid = widgets::vbox(4);
+    mid.set_vexpand(true);
+    mid.set_valign(gtk::Align::Center);
+    let logo = widgets::hbox(0);
+    logo.add_css_class("cn-phone-logo");
+    logo.set_halign(gtk::Align::Center);
+    let i = gtk::Image::from_icon_name("insert-link-symbolic");
+    i.set_pixel_size(22);
+    logo.append(&i);
+    mid.append(&logo);
+    let f = widgets::label("Flux", "cn-phone-title");
+    f.set_halign(gtk::Align::Center);
+    mid.append(&f);
+    let c = widgets::label(
+        &if d.online { format!("Connected to {}", s.this.name) } else { "Not connected".to_string() },
+        "cn-phone-line",
+    );
+    c.set_halign(gtk::Align::Center);
+    c.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    c.set_max_width_chars(16);
+    mid.append(&c);
+    ph.append(&mid);
+    let grid = gtk::Grid::new();
+    grid.set_row_spacing(6);
+    grid.set_column_spacing(6);
+    grid.set_halign(gtk::Align::Center);
+    let tiles = [
+        ("edit-copy-symbolic", Some(Access::Clipboard)),
+        ("preferences-system-notifications-symbolic", Some(Access::Notifications)),
+        ("folder-symbolic", Some(Access::ShareHome)),
+        ("send-to-symbolic", None),
+    ];
+    for (i, (icon, access)) in tiles.into_iter().enumerate() {
+        let t = widgets::hbox(0);
+        t.add_css_class("cn-phone-tile");
+        if access.is_some_and(|a| !s.allowed(&d.id, a)) {
+            t.add_css_class("off");
+        }
+        let img = gtk::Image::from_icon_name(icon);
+        img.set_hexpand(true);
+        t.append(&img);
+        grid.attach(&t, (i % 2) as i32, (i / 2) as i32, 1, 1);
+    }
+    ph.append(&grid);
+    ph
+}
+
+fn access_tile(s: &Snapshot, d: &Device, access: Access) -> gtk::Box {
+    let (icon, desc) = match access {
+        Access::Clipboard => ("edit-copy-symbolic", "Copies go both ways."),
+        Access::Notifications => ("preferences-system-notifications-symbolic", "Its notifications show here."),
+        Access::ShareHome => ("folder-symbolic", "It can open your home folder."),
+        Access::RemoteInput => ("input-mouse-symbolic", "It can move the pointer and type."),
+        Access::RemoteDesktop => ("video-display-symbolic", "It can show what's on screen."),
+    };
+    let on = s.allowed(&d.id, access);
+    let sw = gtk::Switch::new();
+    sw.set_active(on);
+    let r = widgets::icon_row(icon, access.label(), desc, Some(sw.upcast_ref()));
+    r.add_css_class("cn-dv-access");
+    if on {
+        r.add_css_class("on");
+    }
+    let (id, r2) = (d.id.clone(), r.clone());
+    sw.connect_active_notify(move |sw| {
+        let on = sw.is_active();
+        if on {
+            r2.add_css_class("on");
+        } else {
+            r2.remove_css_class("on");
+        }
+        let id = id.clone();
+        let id2 = id.clone();
+        act(move |c| c.set_access(&id, access, Some(on)), move |_| flux::remember(&id2));
+    });
+    r
 }
 
 fn forget_button(s: &Snapshot, id: &str) -> gtk::Button {
@@ -413,59 +723,13 @@ fn forget_button(s: &Snapshot, id: &str) -> gtk::Button {
     forget
 }
 
-// ----- Paired, but away -----
-
-fn remembered(page: &Page, s: &Snapshot) {
-    let away: Vec<&Device> = s.paired().filter(|d| !d.online).collect();
-    let index = nyx_devices::Index::load_standard();
-    let orphans = nyx_connect::orphans(&index, s);
-    if away.is_empty() && orphans.is_empty() {
-        return;
-    }
-    let g = page.collapsible("Remembered devices", false);
-    g.note("Paired devices that aren't connected now. Their access can change here; it applies when they're back.");
-    widgets::keywords("remembered offline away disconnected phone forget unpair");
-    for d in away {
-        let body = widgets::vbox(8);
-        for r in access_rows(s, d) {
-            body.append(&r);
-        }
-        let buttons = widgets::hbox(8);
-        unpair_forget(&buttons, s, d);
-        body.append(&buttons);
-        let profile = index.get(&nyx_connect::device_id(&d.id));
-        let seen = match (profile, d.last_seen) {
-            (Some(p), _) => crate::backend::devices::last_seen(Some(p)),
-            (None, t) if t > 0 => crate::backend::devices::last_seen(Some(&nyx_devices::Profile {
-                category: nyx_devices::Category::Linked,
-                name: d.name.clone(),
-                matches: String::new(),
-                connector: None,
-                last_seen: t as u64,
-            })),
-            _ => "Not connected".into(),
-        };
-        g.add(&widgets::stacked_row(&esc(&d.display_name(&s.devices)), &esc(&seen), body.upcast_ref()));
-    }
-    for (id, profile) in orphans {
-        let buttons = widgets::hbox(8);
-        buttons.append(&forget_button(s, id.key()));
-        g.add(&widgets::stacked_row(
-            &esc(&profile.name),
-            "No longer paired: it was unpaired on the device, or Flux forgot it. Pair it again above, or forget it.",
-            buttons.upcast_ref(),
-        ));
-    }
-}
-
 // ----- What's going on -----
 
 fn diagnostics(page: &Page, s: &Snapshot) {
-    let g = page.collapsible("Diagnostics", false);
-    widgets::keywords("flux version port status debug clipboard sync");
+    let g = page.group("");
     let version = if s.this.version.is_empty() { "earlier than 0.8".to_string() } else { s.this.version.clone() };
-    let rows = [
-        ("Flux", version),
+    let rows = vec![
+        ("Flux", version.clone()),
         ("This computer", format!("{} ({})", s.this.name, s.this.kind)),
         ("Port", s.this.tcp_port.to_string()),
         ("Socket", nyx_connect::socket_path().display().to_string()),
@@ -481,8 +745,23 @@ fn diagnostics(page: &Page, s: &Snapshot) {
             },
         ),
     ];
-    for (k, v) in rows {
-        let (r, _) = widgets::info_row(k, &v);
-        g.add(&r);
-    }
+    let (r, value) = widgets::nav_row(
+        Some("utilities-terminal-symbolic"),
+        "Diagnostics",
+        "Flux's version, port and what's on its way.",
+        &format!("Flux {version}"),
+        move || {
+            let rows = rows.clone();
+            widgets::subpage("Diagnostics", 520, move |p| {
+                let g = p.group("");
+                for (k, v) in rows {
+                    let (r, _) = widgets::info_row(k, &v);
+                    g.add(&r);
+                }
+            });
+        },
+    );
+    value.set_ellipsize(gtk::pango::EllipsizeMode::None);
+    widgets::keywords("flux version port status debug clipboard sync socket");
+    g.add(&r);
 }

@@ -7,6 +7,10 @@ settings-streamdeck pages | describe PAGE | set PAGE KEY VALUE | theme-changed
 This helper sets galleon-deck up (packages, its own installer, device access)
 and edits its TOML config; galleon-deck rereads the files within a second.
 Config is written with tomlkit so comments survive.
+
+When Settings can draw the preview pane (`preview` in SETTINGS_KINDS), the deck
+page is galleon_page's instead: nyx-deck runs the deck, and the page moves you
+over from galleon-deck. Its settings all start with `g-`.
 """
 
 import glob
@@ -27,6 +31,9 @@ except ImportError:  # Python 3.10
 HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
 import elgato  # noqa: E402  Elgato Stream Decks, run by nyx-deck
+import galleon_config  # noqa: E402
+import galleon_page  # noqa: E402  the Galleon's deck, run by nyx-deck
+import pretend  # noqa: E402
 VENDOR = os.path.join(HERE, "vendor", "galleon-deck")
 HOME = os.path.expanduser("~")
 CONF = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "galleon-deck")
@@ -318,19 +325,42 @@ def valid_key_names(value):
 # ------------------------------------------------------------------ pages
 
 def pages():
+    if pretend.elgato_on():
+        pretend.use_elgato(STATE)
     return galleon_pages() + elgato.pages()
 
 
 def galleon_pages():
-    if not (deck_present() or os.path.exists(CONFIG)):
+    new = galleon_page.supported()
+    if not (deck_present() or os.path.exists(CONFIG) or (new and os.path.exists(galleon_config.nyx_paths().config))):
         return []
     return [{
         "id": "deck",
         "title": "Stream Deck",
         "icon": "view-app-grid-symbolic",
-        "description": "The Galleon 100 SD's screen keys, top screen and dials, run by galleon-deck.",
+        "description": "The Galleon 100 SD's 12 screen keys, top screen and dials." if new else
+                       "The Galleon 100 SD's screen keys, top screen and dials, run by galleon-deck.",
         "keywords": "stream deck streamdeck galleon keys lcd dials profiles pages macro shortcut corsair elgato",
     }]
+
+
+class Jobs:
+    """What galleon_page needs from this helper: the deck, and setup steps run as jobs."""
+
+    deck_present = staticmethod(deck_present)
+    job_state = staticmethod(job_state)
+
+    @staticmethod
+    def start_terminal(name, cmd):
+        start_terminal(name, cmd)
+
+    @staticmethod
+    def step_row(*args):
+        return step_row(*args)
+
+
+def galleon_env():
+    return pretend.GalleonEnv(STATE, Jobs) if pretend.galleon_on() else galleon_page.Env(STATE, Jobs)
 
 
 def step_row(key, title, desc, label, job, done_text):
@@ -463,9 +493,12 @@ def key_rows(profile, page):
 
 def describe(page_id):
     if page_id == "elgato":
-        return elgato.describe(STATE)
+        state = pretend.use_elgato(STATE)[0] if pretend.elgato_on() else STATE
+        return elgato.describe(state)
     if page_id != "deck":
         raise SystemExit(f"no page called {page_id}")
+    if galleon_page.supported():
+        return galleon_page.describe(galleon_env())
     banners = []
     groups = []
     if not deck_present():
@@ -511,7 +544,12 @@ def omarchy_wallpaper():
 
 def set_value(page_id, key, value):
     if page_id == "elgato":
+        if pretend.elgato_on():
+            state, pretend_set = pretend.use_elgato(STATE)
+            return pretend_set(key, value) or elgato.set_value(state, key, value, start_terminal)
         return elgato.set_value(STATE, key, value, start_terminal)
+    if key.startswith("g-"):
+        return galleon_page.set_value(galleon_env(), key, value)
     if key == "install-packages":
         if not shutil.which("pacman"):
             raise SystemExit("Install these yourself: " + " ".join(PACKAGES))
@@ -642,6 +680,12 @@ def theme_changed():
     """Omarchy changed theme (and wallpaper): refresh the wallpaper theme if a profile uses it."""
     if any(read_toml(profile_path(p)).get("theme") == "wallpaper" for p in profiles()):
         wallpaper_theme()
+    nyx = galleon_config.nyx_paths()
+    if any(read_toml(nyx.profile(p)).get("theme") == "wallpaper" for p in galleon_config.profile_names(nyx)):
+        try:
+            galleon_page.Env(STATE, Jobs).wallpaper_theme()
+        except SystemExit:
+            pass
 
 
 def main(argv):

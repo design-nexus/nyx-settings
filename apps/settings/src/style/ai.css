@@ -1,0 +1,473 @@
+/* ai pages: their own parts, on top of style.css. Shared parts are .ai-…; Performance
+ * .aip-…, Language Model .alm-…, Local AI .lai-…, Models .lmx-…. */
+
+/* ---------- Shared ---------- */
+
+.ai-pill {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.846em;
+  font-weight: 600;
+  background: alpha(@theme_text, 0.07);
+  color: @theme_dim_text;
+}
+
+.ai-pill-ok {
+  background: alpha(@theme_success, 0.14);
+  color: @theme_success;
+}
+
+.ai-pill-use {
+  background: alpha(currentColor, 0.15);
+}
+
+.ai-pill-use > label {
+  color: currentColor;
+}
+
+.ai-pill-warn {
+  background: alpha(@theme_warning, 0.14);
+  color: @theme_warning;
+}
+
+.ai-dot {
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 999px;
+  background: alpha(@theme_text, 0.4);
+}
+
+.ai-pill-ok .ai-dot,
+.ai-dot.ai-dot-ok {
+  background: @theme_success;
+}
+
+.ai-dot.ai-dot-wait {
+  background: @theme_warning;
+}
+
+.ai-chip {
+  padding: 3px 9px;
+  border-radius: 7px;
+  font-size: 0.885em;
+  background: alpha(@theme_text, 0.05);
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.09);
+}
+
+.ai-chip:not(.on) {
+  color: @theme_dim_text;
+}
+
+.ai-chip.good > image {
+  color: @theme_success;
+}
+
+/* In the section's colour (the chip carries its `.section-…` class). */
+.ai-chip.on {
+  background: alpha(currentColor, 0.12);
+  box-shadow: inset 0 0 0 1px alpha(currentColor, 0.4);
+}
+
+.ai-chip.on > label {
+  color: @theme_text;
+}
+
+.ai-chips flowboxchild {
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A model's tile: a cube on a gradient of two of the swatch colours. */
+.ai-art {
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px alpha(white, 0.12);
+}
+
+.ai-art > image {
+  color: alpha(white, 0.92);
+}
+
+.ai-art-0 { background-image: linear-gradient(140deg, #23968c, #2e5aa8); }
+.ai-art-1 { background-image: linear-gradient(140deg, #b07a26, #a6453a); }
+.ai-art-2 { background-image: linear-gradient(140deg, #6f4fc2, #a2407f); }
+.ai-art-3 { background-image: linear-gradient(140deg, #3a6fc4, #5c3fa6); }
+.ai-art-4 { background-image: linear-gradient(140deg, #2f8a5e, #23706f); }
+.ai-art-5 { background-image: linear-gradient(140deg, #b45a46, #8a2f3e); }
+
+.ai-legend {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.ai-legend-amount {
+  color: @theme_text_tertiary;
+}
+
+.ai-bar-title {
+  font-weight: 600;
+  font-size: 0.923em;
+}
+
+.ai-bar-figure {
+  color: @theme_dim_text;
+  font-size: 0.885em;
+}
+
+.ai-line {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.ai-line > image {
+  margin-top: 2px;
+}
+
+.ai-line.up > image {
+  color: @theme_success;
+}
+
+.ai-line.down > image {
+  color: @theme_warning;
+}
+
+.ai-empty {
+  padding: 28px 20px;
+}
+
+.ai-empty > image {
+  color: @theme_text_tertiary;
+}
+
+.ai-empty-title {
+  font-weight: 600;
+}
+
+.ai-empty-text {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+/* A row in a list that picks what the preview shows. */
+.settings-option.ai-picked {
+  background: alpha(@theme_accent, 0.09);
+  box-shadow: inset 2px 0 0 @theme_accent;
+}
+
+/* ---------- Local AI: who's using it ---------- */
+
+.lai-diacard {
+  padding: 14px;
+}
+
+.lai-node {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: mix(@theme_card, @theme_bg, 0.55);
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.1);
+}
+
+.lai-node.on,
+.lai-node.lit {
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.75), 0 0 10px alpha(@theme_accent, 0.18);
+}
+
+.lai-node.off {
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.06);
+}
+
+.lai-node.off .lai-node-name,
+.lai-node.off > .row-tile,
+.lai-node.off > .ai-art {
+  opacity: 0.6;
+}
+
+.lai-node.key {
+  box-shadow: inset 0 0 0 1px alpha(#946ff5, 0.55);
+}
+
+.lai-key {
+  color: #a48af7;
+}
+
+.lai-pin {
+  color: @theme_accent;
+}
+
+.lai-node-name {
+  font-weight: 600;
+  font-size: 0.923em;
+}
+
+.lai-node-line {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.lai-core {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: mix(@theme_card, currentColor, 0.07);
+  box-shadow: inset 0 0 0 1px alpha(currentColor, 0.55), 0 0 18px alpha(currentColor, 0.12);
+}
+
+.lai-core-name {
+  color: @theme_text;
+  font-weight: 600;
+  font-size: 1.08em;
+}
+
+.lai-core .lai-node-line {
+  color: @theme_dim_text;
+}
+
+.lai-mems {
+  padding: 12px 16px;
+}
+
+/* ---------- Language Model: the picked model's card ---------- */
+
+.alm-card {
+  padding: 16px 18px;
+}
+
+.alm-name {
+  font-size: 1.23em;
+  font-weight: 600;
+}
+
+.alm-line,
+.alm-about {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.alm-stats {
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.09);
+}
+
+.alm-stat {
+  padding: 10px 12px;
+}
+
+.alm-stat + .alm-stat {
+  box-shadow: inset 1px 0 0 alpha(@theme_text, 0.09);
+}
+
+.alm-stat-big {
+  font-size: 1.38em;
+  font-weight: 600;
+}
+
+.alm-stat-unit,
+.alm-stat-what {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.alm-stat-unit {
+  margin-bottom: 3px;
+}
+
+.alm-fit .ai-bar-figure {
+  color: @theme_success;
+}
+
+.alm-fit .over .ai-bar-figure {
+  color: @theme_warning;
+}
+
+.alm-vs {
+  padding: 14px 18px;
+}
+
+.alm-vs-title {
+  font-weight: 600;
+  font-size: 0.923em;
+}
+
+.alm-vs-name {
+  font-size: 0.923em;
+}
+
+.alm-vs-figure {
+  color: @theme_dim_text;
+  font-size: 0.885em;
+}
+
+/* ---------- Performance: the last answer, step by step ---------- */
+
+.aip-wf {
+  padding: 16px 18px;
+}
+
+.aip-big {
+  font-size: 1.54em;
+  font-weight: 700;
+}
+
+.aip-what {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.aip-step,
+.aip-ms {
+  font-size: 0.923em;
+}
+
+.aip-ms {
+  color: @theme_dim_text;
+}
+
+.aip-step-last,
+.aip-ms-last {
+  font-size: 0.923em;
+  font-weight: 600;
+}
+
+.aip-note {
+  padding-top: 10px;
+  border-top: 1px solid alpha(@theme_text, 0.08);
+}
+
+.aip-vram {
+  padding: 14px 18px;
+}
+
+.aip-preset > checkbutton {
+  margin-right: 2px;
+}
+
+.aip-preset .tag {
+  background: alpha(@theme_accent, 0.16);
+  color: @theme_accent;
+}
+
+/* ---------- Models: the library and the picked model's card ---------- */
+
+.lmx-top {
+  margin-bottom: 2px;
+}
+
+window.settings-window .lmx-top > button {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+window.settings-window button.lmx-chip {
+  padding: 3px 10px;
+  min-height: 0;
+  border-radius: 999px;
+  font-size: 0.923em;
+}
+
+window.settings-window button.lmx-chip:checked {
+  background: alpha(@theme_accent, 0.16);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.45);
+}
+
+.lmx-count {
+  color: @theme_text_tertiary;
+  font-size: 0.846em;
+}
+
+.lmx-loaded {
+  min-width: 7px;
+  min-height: 7px;
+  border-radius: 999px;
+  background: @theme_success;
+}
+
+.lmx-folder,
+.lmx-lock {
+  color: @theme_text_tertiary;
+}
+
+.ai-pill.lmx-update-pill {
+  padding: 2px 9px;
+}
+
+.lmx-none,
+.lmx-when {
+  color: @theme_dim_text;
+  font-size: 0.885em;
+}
+
+.lmx-when {
+  margin-left: 2px;
+}
+
+.lmx-empty {
+  padding: 14px;
+}
+
+.ai-line.lmx-sum {
+  padding: 0 4px;
+  font-size: 0.885em;
+}
+
+.lmx-card {
+  padding: 16px 18px;
+}
+
+.lmx-name {
+  font-size: 1.15em;
+  font-weight: 600;
+}
+
+.lmx-origin {
+  color: @theme_dim_text;
+  font-size: 0.885em;
+}
+
+.lmx-facts {
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.09);
+}
+
+.lmx-fact {
+  padding: 9px 12px;
+}
+
+.lmx-fact.right {
+  box-shadow: inset 1px 0 0 alpha(@theme_text, 0.09);
+}
+
+.lmx-fact.lower {
+  border-top: 1px solid alpha(@theme_text, 0.09);
+}
+
+.lmx-fact-key,
+.lmx-key {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.lmx-key {
+  margin-top: 4px;
+}
+
+.lmx-fact-value {
+  font-weight: 600;
+}
+
+.lmx-update {
+  padding: 12px 16px;
+  background: mix(@theme_card, @theme_accent, 0.08);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.4);
+}
+
+.lmx-update > image {
+  color: @theme_accent;
+}
+
+.lmx-update-title {
+  font-weight: 600;
+}
+
+.lmx-update-line {
+  color: @theme_dim_text;
+  font-size: 0.885em;
+}

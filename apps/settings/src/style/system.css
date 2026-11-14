@@ -1,0 +1,472 @@
+/* system pages: their own parts, on top of style.css. */
+
+/* ---------- About (ab-) ---------- */
+
+.ab-stage {
+  padding: 20px 12px;
+  min-height: 300px;
+}
+
+.ab-fact-label {
+  font-size: 0.769em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: @theme_text_tertiary;
+}
+
+.ab-fact-value {
+  font-weight: 600;
+  font-size: 0.962em;
+}
+
+.ab-fact-sub {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+levelbar.ab-fact-bar {
+  margin-top: 5px;
+}
+
+levelbar.ab-fact-bar trough {
+  min-height: 4px;
+}
+
+.ab-model {
+  font-weight: 600;
+  font-size: 0.923em;
+}
+
+.ab-os {
+  padding: 12px 16px;
+}
+
+.ab-os-key {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.ab-os-value {
+  font-weight: 500;
+}
+
+/* ---------- Nyx apps (nx-) ---------- */
+
+window.settings-window button.nx-card {
+  padding: 9px 12px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+  border: 1px solid transparent;
+}
+
+window.settings-window button.nx-card:hover {
+  background: mix(@theme_card, @theme_accent, 0.06);
+}
+
+window.settings-window button.nx-card:checked {
+  border-color: @theme_accent;
+  background: mix(@theme_card, @theme_accent, 0.1);
+}
+
+.nx-card-title {
+  font-weight: 600;
+  font-size: 0.923em;
+}
+
+.nx-card-line {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.nx-card-link {
+  font-size: 0.846em;
+  color: @theme_accent;
+}
+
+.nx-card image {
+  -gtk-icon-size: 12px;
+  color: @theme_accent;
+}
+
+.nx-app-icon {
+  margin-right: 2px;
+}
+
+/* ---------- Rows picked from a list (sys-) ---------- */
+
+.settings-card .settings-option.sys-pick:hover {
+  background: @row_hover;
+}
+
+.settings-card .settings-option.sys-picked,
+.settings-card .settings-option.sys-picked:hover {
+  background: mix(@theme_card, @theme_accent, 0.12);
+  box-shadow: inset 3px 0 0 @theme_accent;
+}
+
+/* ---------- Extensions (ex-) ---------- */
+
+.ex-map {
+  padding: 0;
+}
+
+.ex-side {
+  padding: 10px 8px;
+  min-width: 150px;
+  border-right: 1px solid @sheet_line;
+}
+
+.ex-side-row {
+  padding: 4px 8px 4px 4px;
+  border-radius: var(--nyx-radius-small);
+}
+
+.ex-side-row .row-tile {
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: 6px;
+}
+
+.ex-side-row .row-tile > image {
+  -gtk-icon-size: 13px;
+  margin: 0 5px;
+}
+
+.ex-side-row.on {
+  background: alpha(@theme_text, 0.06);
+}
+
+.ex-side-name {
+  font-size: 0.923em;
+  color: @theme_dim_text;
+}
+
+.ex-side-row.on .ex-side-name {
+  color: @theme_text;
+  font-weight: 600;
+}
+
+.ex-plus {
+  font-size: 0.846em;
+  font-weight: 600;
+  color: @theme_accent;
+}
+
+.ex-right {
+  padding: 14px 16px 16px;
+}
+
+.ex-kicker {
+  font-size: 0.769em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.ex-strip flowboxchild {
+  padding: 0;
+  background: none;
+}
+
+.ex-tab {
+  font-size: 0.923em;
+  color: @theme_dim_text;
+  padding: 3px 0;
+}
+
+.ex-tab-new {
+  padding: 3px 0;
+  border-bottom: 2px solid currentColor;
+}
+
+.ex-tab-title {
+  font-size: 0.923em;
+  font-weight: 600;
+  color: @theme_text;
+}
+
+.ex-glimpse {
+  padding: 12px 14px;
+  border-radius: var(--nyx-radius-card);
+  background: alpha(@theme_text, 0.04);
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.06);
+}
+
+.ex-glimpse.off {
+  opacity: 0.55;
+}
+
+.ex-glimpse-title {
+  font-weight: 600;
+}
+
+.ex-glimpse-where {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.ex-glimpse-desc,
+.ex-about {
+  font-size: 0.923em;
+  color: @theme_dim_text;
+}
+
+.ex-about {
+  color: @theme_text;
+}
+
+.ex-off .row-tile {
+  opacity: 0.5;
+}
+
+/* ---------- Services (sv-) ---------- */
+
+.sv-dot {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 999px;
+  background: alpha(@theme_text, 0.35);
+}
+
+.sv-dot.run {
+  background: @theme_success;
+  box-shadow: 0 0 0 3px alpha(@theme_success, 0.18);
+}
+
+.sv-dot.fail {
+  background: @theme_danger;
+  box-shadow: 0 0 0 3px alpha(@theme_danger, 0.2);
+}
+
+.sv-row > .sv-dot {
+  margin: 0 4px 0 2px;
+}
+
+.sv-row .settings-option-description {
+  font-family: monospace;
+  font-size: 0.846em;
+}
+
+.sv-bad {
+  color: @theme_danger;
+  font-weight: 600;
+}
+
+.sv-attention .settings-card {
+  background: mix(@theme_card, @theme_danger, 0.08);
+  box-shadow: inset 0 0 0 1px alpha(@theme_danger, 0.35);
+}
+
+.sv-more {
+  padding: 10px 14px 12px;
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.sv-pill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.846em;
+  font-weight: 600;
+  background: alpha(@theme_text, 0.08);
+}
+
+.sv-pill.run {
+  color: @theme_success;
+  background: alpha(@theme_success, 0.12);
+}
+
+.sv-pill.fail {
+  color: @theme_danger;
+  background: alpha(@theme_danger, 0.14);
+}
+
+.sv-pill .sv-dot {
+  box-shadow: none;
+  min-width: 6px;
+  min-height: 6px;
+}
+
+.sv-why.fail {
+  box-shadow: inset 0 0 0 1px alpha(@theme_danger, 0.3);
+}
+
+.sv-why.fail .row-tile {
+  color: @theme_danger;
+}
+
+.sv-why.run .row-tile {
+  color: @theme_success;
+}
+
+.sv-why-title,
+.sv-card-title {
+  font-weight: 600;
+}
+
+.sv-why-text {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.preview-card .settings-option.sv-boot {
+  padding: 8px 0 0;
+  background: transparent;
+  border-top: 1px solid @sheet_line;
+}
+
+.sv-legend {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.sv-legend .sv-dot {
+  box-shadow: none;
+}
+
+window.settings-window button.sv-link {
+  padding: 2px 6px;
+  min-height: 0;
+  color: @theme_accent;
+  font-size: 0.923em;
+}
+
+.sv-link image {
+  -gtk-icon-size: 12px;
+}
+
+.sv-log-time {
+  font-family: monospace;
+  font-size: 0.846em;
+  color: @theme_text_tertiary;
+}
+
+.sv-log-text {
+  font-family: monospace;
+  font-size: 0.846em;
+}
+
+.sv-log-text.warn {
+  color: @theme_warning;
+}
+
+.sv-log-text.bad {
+  color: @theme_danger;
+}
+
+/* ---------- Software (sf-) ---------- */
+
+.sf-head {
+  margin: 14px 0 2px;
+  min-height: 28px;
+}
+
+.sf-head .group-title {
+  margin: 0 2px;
+}
+
+.split-controls > .settings-group:first-child .sf-head {
+  margin-top: 0;
+}
+
+window.settings-window menubutton.sf-add > button {
+  padding: 2px 10px;
+  min-height: 0;
+  font-size: 0.923em;
+}
+
+.sf-add image {
+  -gtk-icon-size: 12px;
+}
+
+.sf-menu {
+  padding: 4px;
+}
+
+.sf-menu button {
+  padding: 6px 10px;
+}
+
+.sf-menu-title {
+  font-weight: 600;
+}
+
+.sf-menu-desc {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.sf-stage {
+  padding: 12px 14px;
+}
+
+.sf-cap {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.sf-launch {
+  padding: 8px;
+  border-radius: 10px;
+  background: alpha(@theme_bg, 0.55);
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.08);
+}
+
+.sf-search {
+  padding: 5px 8px;
+  margin-bottom: 4px;
+  border-radius: 7px;
+  background: alpha(@theme_text, 0.06);
+}
+
+.sf-search image {
+  -gtk-icon-size: 12px;
+  color: @theme_dim_text;
+}
+
+.sf-typed {
+  font-size: 0.923em;
+}
+
+.sf-caret {
+  min-width: 1px;
+  min-height: 13px;
+  background: @theme_accent;
+}
+
+.sf-lr {
+  padding: 5px 8px;
+  border-radius: 7px;
+}
+
+.sf-lr.on {
+  background: alpha(@theme_accent, 0.16);
+}
+
+.sf-lr-name {
+  font-weight: 600;
+  font-size: 0.923em;
+}
+
+.sf-lr-kind {
+  font-size: 0.769em;
+  color: @theme_dim_text;
+}
+
+.sf-arrow {
+  color: @theme_dim_text;
+}
+
+.sf-more > .disclosure-content {
+  padding: 0;
+}
+
+.sf-more > .disclosure-content > .settings-option {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.launcher-row label.tag {
+  padding: 1px 7px;
+  min-height: 0;
+  font-size: 0.769em;
+}

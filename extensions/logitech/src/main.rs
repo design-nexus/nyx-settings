@@ -9,9 +9,11 @@ mod access;
 mod devices;
 mod extension;
 mod files;
+mod gearbench;
 // Kept identical to Logi's copy, including parts this helper doesn't use (pairing, notifications).
 #[allow(dead_code)]
 mod hidpp;
+mod pane;
 mod paths;
 mod service;
 mod state;

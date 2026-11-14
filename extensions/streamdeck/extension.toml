@@ -1,10 +1,10 @@
 id = "streamdeck"
 name = "Stream Deck"
-version = "1.1.0"
-description = "Stream Decks: the Corsair Galleon 100 SD's built-in deck (run by galleon-deck) and Elgato Stream Decks (run by nyx-deck): keys, profiles, pages, brightness and dials."
+version = "1.2.0"
+description = "Stream Decks: the Corsair Galleon 100 SD's built-in deck (run by galleon-deck, or by nyx-deck once you turn it on) and Elgato Stream Decks (run by nyx-deck): keys, profiles, pages, brightness and dials."
 exec = "./settings-streamdeck"
 needs = ["python3", "git"]
 install = "install.sh"
 # Wallpaper-generated deck themes follow Omarchy's wallpaper.
 hooks = ["theme-changed"]
-files = ["~/.config/galleon-deck/config.toml", "~/.config/nyx-deck/config.toml"]
+files = ["~/.config/galleon-deck/config.toml", "~/.config/nyx-deck/config.toml", "~/.config/nyx-deck/galleon/config.toml"]

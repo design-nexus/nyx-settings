@@ -225,12 +225,21 @@ fn all_icon_themes() -> Vec<String> {
     out
 }
 
+/// Nyx's interface and document fonts, which Restore puts back.
+pub const DEFAULT_INTERFACE_FONT: &str = "Inter 11";
+pub const DEFAULT_DOCUMENT_FONT: &str = "Inter 12";
+
 pub fn interface_font() -> String {
-    gsettings_get("font-name").unwrap_or_else(|| "Inter 11".into())
+    gsettings_get("font-name").unwrap_or_else(|| DEFAULT_INTERFACE_FONT.into())
 }
 
 pub fn set_interface_font(desc: &str) -> anyhow::Result<()> {
     gsettings_set("font-name", desc)
+}
+
+pub fn restore_fonts() -> anyhow::Result<()> {
+    gsettings_set("font-name", DEFAULT_INTERFACE_FONT)?;
+    gsettings_set("document-font-name", DEFAULT_DOCUMENT_FONT)
 }
 
 #[cfg(test)]

@@ -1,0 +1,548 @@
+/* personalization pages: their own parts, on top of style.css. */
+
+/* Night Light: the named warmths under the slider. */
+.nl-presets {
+  padding: 4px 10px 10px;
+}
+
+window.settings-window button.nl-preset {
+  padding: 8px 4px;
+  border-radius: var(--nyx-radius-small);
+}
+
+window.settings-window button.nl-preset:checked {
+  background: mix(@theme_card, @theme_accent, 0.14);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.5);
+}
+
+.nl-preset-name {
+  font-weight: 500;
+  font-size: 0.923em;
+}
+
+.nl-preset-k {
+  color: @theme_text_tertiary;
+  font-size: 0.846em;
+}
+
+/* Appearance: theme cards, wallpapers, the sample card and Keep / Apply. */
+.ap-heading .group-title {
+  margin: 0 2px;
+}
+
+.ap-heading {
+  margin: 14px 0 2px;
+  min-height: 28px;
+}
+
+.split-controls > .settings-group:first-child .ap-heading {
+  margin-top: 0;
+}
+
+window.settings-window button.ap-link {
+  padding: 2px 6px;
+  color: @theme_accent;
+  font-size: 0.923em;
+}
+
+window.settings-window button.ap-card {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.ap-sw {
+  border-radius: 10px;
+  padding: 2px;
+  border: 2px solid transparent;
+}
+
+.ap-card:hover .ap-sw {
+  border-color: alpha(@theme_text, 0.18);
+}
+
+.ap-card.in-use .ap-sw {
+  border-color: alpha(@theme_text, 0.55);
+}
+
+.ap-card.trying .ap-sw {
+  border-color: @theme_accent;
+}
+
+.ap-card-name {
+  font-size: 0.923em;
+  font-weight: 500;
+  margin-left: 2px;
+}
+
+.ap-card-state {
+  font-size: 0.8em;
+  color: @theme_dim_text;
+  margin: -2px 0 0 2px;
+  min-height: 1em;
+}
+
+.ap-card.trying .ap-card-state {
+  color: @theme_accent;
+  font-weight: 600;
+}
+
+window.settings-window button.ap-wall {
+  padding: 0;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background: transparent;
+}
+
+window.settings-window button.ap-wall:hover {
+  border-color: alpha(@theme_text, 0.25);
+}
+
+window.settings-window button.ap-wall.selected {
+  border-color: @theme_accent;
+}
+
+.ap-sample {
+  padding: 10px 14px;
+  border-radius: var(--nyx-radius-card);
+}
+
+.ap-sample-cap {
+  font-size: 0.769em;
+  opacity: 0.65;
+}
+
+.ap-sample-text {
+  font-weight: 600;
+}
+
+.ap-apply {
+  padding: 8px 10px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+}
+
+.ap-apply-name {
+  font-weight: 600;
+}
+
+.ap-apply-note {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+/* Window Style: the preview and the presets under it. */
+.lk-presets {
+  margin-top: -2px;
+}
+
+.lk-presets-label {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+  margin-right: 4px;
+}
+
+window.settings-window .lk-presets button.chip {
+  min-height: 26px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.923em;
+  font-weight: 500;
+}
+
+.lk-presets flowboxchild {
+  padding: 0;
+}
+
+window.settings-window .lk-presets button.chip.selected {
+  background: mix(@theme_card, @theme_accent, 0.22);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.5);
+}
+
+/* Bar & Notifications: the screen with the bar, its sections as chips. */
+window.settings-window button.ob-position {
+  padding: 6px 4px 4px;
+  border-radius: var(--nyx-radius-small);
+  background: @theme_card;
+}
+
+window.settings-window button.ob-position:checked {
+  background: mix(@theme_card, @theme_accent, 0.14);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.6);
+}
+
+.ob-position-name {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+button.ob-position:checked .ob-position-name {
+  color: @theme_text;
+  font-weight: 500;
+}
+
+.ob-keys {
+  margin-top: 3px;
+}
+
+.ob-keys .key-cap {
+  font-size: 0.769em;
+  padding: 0 5px;
+  border-radius: 4px;
+}
+
+.ob-stage {
+  border-radius: 10px;
+}
+
+.ob-strip {
+  background: alpha(@theme_bg, 0.94);
+  padding: 4px 9px;
+  min-height: 22px;
+  min-width: 22px;
+  border-radius: 10px 10px 0 0;
+}
+
+.ob-strip.transparent {
+  background: alpha(@theme_bg, 0.3);
+}
+
+.ob-strip-part image {
+  color: alpha(@theme_text, 0.85);
+}
+
+.bar-ws {
+  min-width: 12px;
+  padding: 0 2px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: @theme_dim_text;
+}
+
+.bar-ws.on {
+  background: @theme_accent;
+  color: @theme_on_accent;
+  font-weight: 600;
+}
+
+.bar-clock {
+  font-weight: 600;
+}
+
+.bar-text {
+  font-size: 0.92em;
+}
+
+.ob-zones {
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+}
+
+.ob-zone {
+  padding: 7px 6px;
+  border-bottom: 1px solid alpha(@theme_text, 0.06);
+}
+
+.ob-zone:last-child {
+  border-bottom: none;
+}
+
+.ob-zone.drop-end {
+  background: alpha(@theme_accent, 0.08);
+}
+
+.ob-zone-head {
+  min-width: 58px;
+  min-height: 24px;
+}
+
+.ob-zone-title {
+  font-size: 0.846em;
+  font-weight: 500;
+  color: @theme_dim_text;
+}
+
+.ob-zone-count {
+  font-size: 0.769em;
+  color: @theme_text_tertiary;
+}
+
+window.settings-window menubutton.ob-chip > button {
+  min-height: 24px;
+  min-width: 0;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: alpha(@theme_text, 0.06);
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.08);
+}
+
+window.settings-window menubutton.ob-chip > button:hover {
+  background: alpha(@theme_text, 0.11);
+}
+
+window.settings-window menubutton.ob-chip.spacer > button {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.14);
+  color: @theme_dim_text;
+}
+
+menubutton.ob-chip.dragging {
+  opacity: 0.4;
+}
+
+menubutton.ob-chip.drop-before > button {
+  box-shadow: inset 2px 0 0 @theme_accent;
+}
+
+menubutton.ob-chip.drop-after > button {
+  box-shadow: inset -2px 0 0 @theme_accent;
+}
+
+menubutton.ob-chip > button arrow,
+menubutton.ob-add-chip > button arrow {
+  min-width: 0;
+  min-height: 0;
+  -gtk-icon-size: 0;
+  margin: 0;
+}
+
+.ob-drop-end {
+  font-size: 0.846em;
+  color: @theme_text_tertiary;
+}
+
+.ob-add-label {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+  margin-right: 4px;
+}
+
+.ob-add {
+  margin-top: 2px;
+}
+
+.ob-add flowboxchild {
+  padding: 0;
+}
+
+window.settings-window menubutton.ob-add-chip > button {
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.885em;
+  background: @theme_card;
+}
+
+.ob-menu {
+  padding: 6px 4px;
+  min-width: 190px;
+}
+
+.ob-menu-title {
+  font-weight: 600;
+  margin: 0 8px;
+}
+
+.ob-menu-id {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+  margin: 0 8px 4px;
+}
+
+.ob-menu > box {
+  margin: 4px 8px;
+}
+
+window.settings-window .ob-menu button.ob-remove {
+  color: @theme_danger;
+}
+
+.ob-positions {
+  margin-bottom: 4px;
+}
+
+/* Bar (Nyx Bar): the bar at its real size, the workspaces' looks, the sizes. */
+.nb-stage {
+  border-radius: 10px;
+}
+
+.nb-bar {
+  margin: 8px 8px 0;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: alpha(@theme_bg, 0.92);
+  box-shadow: 0 1px 3px alpha(black, 0.3);
+}
+
+.nb-part {
+  min-height: 0;
+}
+
+.nb-pill {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: alpha(@theme_text, 0.07);
+}
+
+.nb-pill.clock {
+  background: alpha(@theme_accent, 0.18);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.45);
+}
+
+.nb-item {
+  margin: 0 3px;
+}
+
+.nb-date {
+  color: @theme_dim_text;
+}
+
+.nb-time {
+  font-weight: 600;
+}
+
+.nb-divider {
+  min-width: 1px;
+  margin: 7px 2px;
+  background: alpha(@theme_text, 0.18);
+}
+
+.nb-sizes {
+  padding: 10px 14px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+}
+
+.nb-sizes-label {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+  margin-right: 4px;
+}
+
+.nb-size {
+  border-radius: 6px;
+  background: alpha(@theme_text, 0.12);
+}
+
+.nb-size.on {
+  background: @theme_accent;
+}
+
+.nb-size-px {
+  font-size: 0.769em;
+  color: @theme_dim_text;
+}
+
+.nb-sizes-tip {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+  margin-left: 6px;
+}
+
+window.settings-window button.nb-look {
+  padding: 6px 2px 4px;
+  border-radius: var(--nyx-radius-small);
+  background: @theme_card;
+}
+
+window.settings-window button.nb-look:checked {
+  background: mix(@theme_card, @theme_accent, 0.14);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.6);
+}
+
+.nb-look-name {
+  font-size: 0.769em;
+  color: @theme_dim_text;
+}
+
+button.nb-look:checked .nb-look-name {
+  color: @theme_accent;
+  font-weight: 600;
+}
+
+/* Bar Plugins: the list and the picked plugin's details. */
+.pg-heading {
+  margin: 14px 0 2px;
+  min-height: 28px;
+}
+
+.pg-heading .group-title {
+  margin: 0 2px;
+}
+
+.pg-count {
+  color: @theme_text_tertiary;
+  font-size: 0.846em;
+}
+
+.settings-option.pg-update {
+  background: mix(@theme_card, @theme_accent, 0.06);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.25);
+}
+
+.settings-option.pg-row:hover {
+  background: @row_hover;
+}
+
+.settings-option.pg-row.picked {
+  background: mix(@theme_card, @theme_accent, 0.1);
+}
+
+.pg-big-tile {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 12px;
+}
+
+.pg-big-tile > image {
+  -gtk-icon-size: 22px;
+}
+
+.pg-desc {
+  color: @theme_dim_text;
+}
+
+.pg-section {
+  font-weight: 600;
+  margin-bottom: -6px;
+}
+
+.pg-add {
+  padding: 8px 10px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+}
+
+.pg-kind {
+  font-size: 0.846em;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: alpha(@theme_accent, 0.16);
+  color: @theme_accent;
+}
+
+.pg-add-about {
+  font-size: 0.923em;
+  color: @theme_dim_text;
+}
+
+.pg-picture {
+  border-radius: var(--nyx-radius-card);
+}
+
+.pg-facts {
+  padding: 12px 14px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+}
+
+.pg-fact-key {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.pg-fact-value {
+  font-weight: 500;
+}

@@ -1,72 +1,74 @@
-//! NyxOS's Accounts page: you at the top, your online accounts, how you sign in, and
-//! the other users (their own page, opened from here).
+//! NyxOS's Accounts page: you at the top, your online accounts, files and VPN, then how
+//! you sign in and the other people (Users, opened from here).
 
-use crate::sections::{native_accounts, sign_in, vpn_accounts};
+use super::users::avatar;
+use crate::backend::{accounts as acc, passwd};
+use crate::platform::nyxos;
+use crate::sections::{native_accounts, online_accounts, sign_in, vpn_accounts};
 use crate::widgets::{self, Page};
 use crate::window;
 use gtk::prelude::*;
 
 pub fn build(page: &Page) {
-    if vpn_accounts::adding() {
-        vpn_accounts::add_page(page);
+    let listing = native_accounts::on_list() && !vpn_accounts::adding();
+    let before = page.body.last_child();
+    online_accounts::build(page);
+    // When the page splits into the list and the account picked, the list stays while an
+    // account is added; otherwise adding one takes the whole page, without you or the people.
+    let split = nyxos::descendant(&page.body, "split-controls").is_some();
+    if !split && !listing {
         return;
     }
-    let listing = native_accounts::on_list();
-    if listing {
-        you(page);
+    let you = you(page);
+    if let Some(parent) = you.parent().and_downcast::<gtk::Box>() {
+        parent.reorder_child_after(&you, if split { None } else { before.as_ref() });
     }
-    native_accounts::build(page);
-    if native_accounts::on_list() {
-        vpn_accounts::build(page);
-    }
-    if listing {
-        sign_in_and_users(page);
-    }
+    sign_in_and_users(page);
 }
 
-fn you(page: &Page) {
-    let me = crate::backend::accounts::me();
-    let name =
-        crate::backend::accounts::people().into_iter().find(|u| u.name == me).map(|u| u.full_name).filter(|n| !n.is_empty());
-    let g = page.group("You");
-    let picture = gtk::Image::from_icon_name("avatar-default-symbolic");
-    picture.set_pixel_size(48);
-    let (r, _) = widgets::button_row(name.as_deref().unwrap_or(&me), &format!("Signed in as {me}"), "Edit…", |_| {
-        window::navigate("accounts")
-    });
-    r.prepend(&picture);
-    widgets::keywords("profile name picture password me");
+/// You: your face, name and role, and Edit, which opens Users.
+fn you(page: &Page) -> gtk::Box {
+    let me = acc::me();
+    let user = acc::people().into_iter().find(|u| u.name == me);
+    let full = user.as_ref().map(|u| u.full_name.clone()).unwrap_or_default();
+    let admin = user.as_ref().is_some_and(|u| acc::is_admin(u, &passwd::groups()));
+    let g = page.group("");
+    let edit = gtk::Button::with_label("Edit");
+    edit.set_tooltip_text(Some("Your name and password, in Users"));
+    edit.connect_clicked(|_| window::navigate("accounts"));
+    let role = if admin { "Administrator" } else { "Standard account" };
+    let r = widgets::row(if full.is_empty() { &me } else { &full }, &format!("Signed in as {me} · {role}"), Some(edit.upcast_ref()));
+    r.prepend(&avatar(&full, &me, 44));
+    r.add_css_class("nxu-you");
+    widgets::keywords("you profile name picture password me");
     g.add(&r);
+    g.wrapper
 }
 
 fn sign_in_and_users(page: &Page) {
-    let g = page.group("Biometrics");
-    let (r, _) = widgets::button_row("Face and fingerprint", "Checking…", "Set Up", |_| window::navigate("sign-in"));
+    let g = page.group("");
+    let (r, value) = widgets::nav_row(Some("auth-fingerprint-symbolic"), "Face and fingerprint", "", "Checking…", || {
+        window::navigate("sign-in")
+    });
     widgets::keywords("biometrics face fingerprint security key");
     g.add(&r);
-    let row = r.clone();
     sign_in::summary(move |text| {
-        if let Some(desc) = find_description(&row) {
-            desc.set_text(&text);
-        }
+        // "Face, 2 fingerprints. Your password works too." → "Face, 2 fingerprints".
+        let short = text.split(". ").next().unwrap_or(&text).trim_end_matches('.').to_string();
+        value.set_text(&short);
+        value.set_tooltip_text(Some(&text));
     });
-    let g = page.group("");
-    let (r, _) = widgets::button_row("Other users", "Accounts for other people on this computer.", "Open", |_| {
-        window::navigate("accounts")
-    });
-    widgets::keywords("users people add user family");
+    let me = acc::me();
+    let others = acc::people().iter().filter(|u| u.name != me).count();
+    let host = std::fs::read_to_string("/proc/sys/kernel/hostname").map(|h| h.trim().to_string()).unwrap_or_default();
+    let title = if host.is_empty() { "Other people".to_string() } else { format!("Other people on {host}") };
+    let (r, _) = widgets::nav_row(
+        Some("system-users-symbolic"),
+        &title,
+        if others == 0 { "Add someone else who uses this computer." } else { "" },
+        &if others == 0 { String::new() } else { others.to_string() },
+        || window::navigate("accounts"),
+    );
+    widgets::keywords("users people add user family other users");
     g.add(&r);
-}
-
-/// A row's description label (its title's sibling).
-fn find_description(row: &gtk::Box) -> Option<gtk::Label> {
-    let text = row.first_child()?;
-    let mut child = text.first_child();
-    while let Some(c) = child {
-        if c.has_css_class("settings-option-description") {
-            return c.downcast().ok();
-        }
-        child = c.next_sibling();
-    }
-    None
 }

@@ -111,7 +111,7 @@ fn desktop(cr: &gtk::cairo::Context, p: &sketch::Pal, w: f64, h: f64) -> R {
     R::new(1.0, 15.0, w - 2.0, h - 16.0)
 }
 
-const STYLE_KEYS: &[&str] = &[
+pub const STYLE_KEYS: &[&str] = &[
     "general.gaps_in",
     "general.gaps_out",
     "general.border_size",
@@ -120,29 +120,105 @@ const STYLE_KEYS: &[&str] = &[
     "decoration.inactive_opacity",
     "decoration.dim_inactive",
     "decoration.dim_strength",
+    "decoration.blur.enabled",
     "decoration.shadow.enabled",
     "decoration.shadow.range",
 ];
 
-/// Window Style: gaps, borders, rounding, opacity, dimming and shadows.
-pub fn window_style() -> gtk::Box {
+/// Pixels in the Window Style preview per pixel on a screen.
+const STAGE_SCALE: f64 = 0.75;
+
+fn text(cr: &gtk::cairo::Context, s: &str, size: f64) -> Option<gtk::cairo::TextExtents> {
+    cr.select_font_face("sans-serif", gtk::cairo::FontSlant::Normal, gtk::cairo::FontWeight::Bold);
+    cr.set_font_size(size);
+    cr.text_extents(s).ok()
+}
+
+/// A number on the drawing where it shows: a pill in the section's colour, centred on (x, y).
+fn tag(cr: &gtk::cairo::Context, colour: sketch::Rgb, s: &str, x: f64, y: f64, bounds: R) {
+    let Some(e) = text(cr, s, 10.5) else { return };
+    let (w, h) = (e.width() + 14.0, 19.0);
+    // A drawing narrower than the tag pins it to the left (or top) edge.
+    let px = (x - w / 2.0).min(bounds.x + bounds.w - w - 3.0).max(bounds.x + 3.0);
+    let py = (y - h / 2.0).min(bounds.y + bounds.h - h - 3.0).max(bounds.y + 3.0);
+    rounded(cr, px, py, w, h, h / 2.0);
+    set(cr, mix(colour, (0.0, 0.0, 0.0), 0.25), 0.95);
+    let _ = cr.fill_preserve();
+    set(cr, mix(colour, (1.0, 1.0, 1.0), 0.35), 1.0);
+    cr.set_line_width(1.0);
+    let _ = cr.stroke();
+    set(cr, (1.0, 1.0, 1.0), 1.0);
+    cr.move_to(px + 7.0 - e.x_bearing(), py + h / 2.0 - e.height() / 2.0 - e.y_bearing());
+    let _ = cr.show_text(s);
+}
+
+fn fmt(v: f64) -> String {
+    format!("{}", v.round() as i64)
+}
+
+/// Window Style: a large desktop drawn with the page's gaps, borders, rounding,
+/// transparency, blur and shadows, each number labelled where it shows.
+pub fn window_style_stage() -> gtk::DrawingArea {
     let area = gtk::DrawingArea::new();
-    area.set_content_height(200);
+    area.set_content_height(320);
+    area.set_hexpand(true);
+    area.add_css_class("preview-drawing");
     let vals = watch(&area, STYLE_KEYS);
+    let section = crate::widgets::section_rgb();
     area.set_draw_func(move |_, cr, w, h| {
         let p = sketch::pal();
         let (w, h) = (w as f64, h as f64);
-        let room = desktop(cr, &p, w, h);
-        let px = |key: &str, d: f64| (get(&vals, key, d) * SCALE).max(0.0);
-        let gin = px("general.gaps_in", 5.0);
-        let gout = px("general.gaps_out", 10.0);
-        let border = get(&vals, "general.border_size", 2.0);
-        let radius = px("decoration.rounding", 0.0);
+        let screen = R::new(0.5, 0.5, w - 1.0, h - 1.0);
+        cr.save().ok();
+        rounded(cr, screen.x, screen.y, screen.w, screen.h, 10.0);
+        cr.clip();
+        // The wallpaper: soft shapes, so see-through windows show something behind them.
+        let grad = gtk::cairo::LinearGradient::new(0.0, 0.0, w, h);
+        let (a, b) = (mix(p.bg, p.accent, 0.18), mix(p.bg, (0.0, 0.0, 0.0), 0.2));
+        grad.add_color_stop_rgb(0.0, a.0, a.1, a.2);
+        grad.add_color_stop_rgb(1.0, b.0, b.1, b.2);
+        let _ = cr.set_source(&grad);
+        let _ = cr.paint();
+        for (cx, cy, r, c) in [(0.78, 0.32, 0.3, p.danger), (0.25, 0.95, 0.24, mix(p.accent, (0.2, 0.8, 0.7), 0.6))] {
+            let g = gtk::cairo::RadialGradient::new(w * cx, h * cy, 0.0, w * cx, h * cy, w * r);
+            g.add_color_stop_rgba(0.0, c.0, c.1, c.2, 0.75);
+            g.add_color_stop_rgba(0.7, c.0, c.1, c.2, 0.45);
+            g.add_color_stop_rgba(1.0, c.0, c.1, c.2, 0.0);
+            let _ = cr.set_source(&g);
+            let _ = cr.paint();
+        }
+        // The bar.
+        let bar_h = 20.0;
+        set(cr, p.bg, 0.88);
+        cr.rectangle(0.0, 0.0, w, bar_h);
+        let _ = cr.fill();
+        for i in 0..4 {
+            set(cr, if i == 0 { p.accent } else { p.dim }, if i == 0 { 1.0 } else { 0.6 });
+            rounded(cr, 10.0 + if i == 0 { 0.0 } else { 12.0 + i as f64 * 9.0 }, 7.0, if i == 0 { 16.0 } else { 6.0 }, 6.0, 2.0);
+            let _ = cr.fill();
+        }
+        if let Some(e) = text(cr, "Fri 14:17", 10.0) {
+            set(cr, p.text, 0.9);
+            cr.move_to(w / 2.0 - e.width() / 2.0 - e.x_bearing(), bar_h / 2.0 - e.height() / 2.0 - e.y_bearing());
+            let _ = cr.show_text("Fri 14:17");
+        }
+        for i in 0..3 {
+            set(cr, p.text, 0.6);
+            cr.arc(w - 12.0 - i as f64 * 11.0, bar_h / 2.0, 2.4, 0.0, std::f64::consts::TAU);
+            let _ = cr.fill();
+        }
+        let room = R::new(0.0, bar_h, w, h - bar_h);
+
+        let raw = |key: &str, d: f64| get(&vals, key, d).max(0.0);
+        let (gin_v, gout_v) = (raw("general.gaps_in", 5.0), raw("general.gaps_out", 10.0));
+        let (border_v, radius_v) = (raw("general.border_size", 2.0), raw("decoration.rounding", 0.0));
+        let range_v = raw("decoration.shadow.range", 4.0);
+        let (gin, gout, radius, range) = (gin_v * STAGE_SCALE, gout_v * STAGE_SCALE, radius_v * STAGE_SCALE, range_v * STAGE_SCALE);
         let on = get(&vals, "decoration.active_opacity", 1.0);
         let off = get(&vals, "decoration.inactive_opacity", 1.0);
         let dim = if get(&vals, "decoration.dim_inactive", 0.0) > 0.5 { get(&vals, "decoration.dim_strength", 0.5) } else { 0.0 };
+        let blur = get(&vals, "decoration.blur.enabled", 1.0) > 0.5;
         let shadow = get(&vals, "decoration.shadow.enabled", 1.0) > 0.5;
-        let range = px("decoration.shadow.range", 4.0);
 
         let inner = room.inset(gout);
         let (left, right) = inner.hsplit(0.55, gin * 2.0);
@@ -150,17 +226,23 @@ pub fn window_style() -> gtk::Box {
         let wins = [(left, true), (top, false), (bottom, false)];
         if shadow {
             for (r, _) in wins {
-                let steps = 6;
+                let steps = 8;
                 for i in (1..=steps).rev() {
                     let d = range * i as f64 / steps as f64;
-                    rounded(cr, r.x - d, r.y - d + 2.0, r.w + 2.0 * d, r.h + 2.0 * d, radius + d);
-                    set(cr, (0.0, 0.0, 0.0), 0.5 / steps as f64);
+                    rounded(cr, r.x - d, r.y - d + range / 3.0, r.w + 2.0 * d, r.h + 2.0 * d, radius + d);
+                    set(cr, (0.0, 0.0, 0.0), 0.55 / steps as f64);
                     let _ = cr.fill();
                 }
             }
         }
         for (r, focused) in wins {
             let alpha = if focused { on } else { off };
+            // Blur frosts what shows through a see-through window.
+            if blur && alpha < 1.0 {
+                rounded(cr, r.x, r.y, r.w, r.h, radius);
+                set(cr, mix(p.surface, p.text, 0.12), 0.5 * (1.0 - alpha) + 0.1);
+                let _ = cr.fill();
+            }
             sketch::win(
                 cr,
                 &p,
@@ -169,8 +251,8 @@ pub fn window_style() -> gtk::Box {
                     focused,
                     alpha,
                     radius: radius.max(0.01),
-                    border: if border > 0.0 { border.max(1.0) } else { 0.01 },
-                    lines: 3,
+                    border: if border_v > 0.0 { (border_v * STAGE_SCALE).max(1.0) } else { 0.01 },
+                    lines: 4,
                     ..Win::default()
                 },
             );
@@ -180,8 +262,21 @@ pub fn window_style() -> gtk::Box {
                 let _ = cr.fill();
             }
         }
+        cr.restore().ok();
+
+        let b = screen;
+        tag(cr, section, &format!("Gap {}", fmt(gin_v)), left.x + left.w + gin, left.y + left.h * 0.45, b);
+        tag(cr, section, &format!("Edge {}", fmt(gout_v)), left.x, left.y + left.h * 0.8, b);
+        tag(cr, section, &format!("Border {}", fmt(border_v)), left.cx(), left.y + left.h, b);
+        tag(cr, section, &format!("Corners {}", fmt(radius_v)), top.x + 40.0, top.y, b);
+        if off < 1.0 {
+            let s = if blur { "See-through, blurred" } else { "See-through" };
+            tag(cr, section, s, top.x + top.w - 60.0, top.y + top.h - 6.0, b);
+        }
+        let s = if shadow { format!("Shadow {}", fmt(range_v)) } else { "No shadow".to_string() };
+        tag(cr, section, &s, bottom.x + bottom.w - 40.0, bottom.y + bottom.h, b);
     });
-    card(&area, "Preview: the focused window is on the left. It changes as you do.")
+    area
 }
 
 const TILING_KEYS: &[&str] =

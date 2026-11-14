@@ -1,0 +1,352 @@
+/* assistant pages: their own parts, on top of style.css. */
+
+/* Chips: the names it answers to, words that make it ask, states. */
+.asst-chip {
+  font-size: 0.846em;
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: @field;
+  color: @theme_text;
+}
+
+.asst-chip.asst-ok {
+  background: alpha(@theme_success, 0.16);
+  color: @theme_success;
+  font-weight: 600;
+}
+
+.asst-chip.asst-wait {
+  background: alpha(@theme_warning, 0.16);
+  color: @theme_warning;
+  font-weight: 600;
+}
+
+.asst-chip.asst-never {
+  background: alpha(@theme_danger, 0.14);
+  color: @theme_danger;
+  font-weight: 600;
+}
+
+.asst-chip.asst-more-chip {
+  color: @theme_dim_text;
+}
+
+.asst-chips {
+  margin-top: 3px;
+}
+
+.asst-chips > flowboxchild {
+  padding: 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+.asst-keys .key-cap {
+  font-size: 0.846em;
+  padding: 1px 6px;
+  border-radius: 5px;
+}
+
+/* Assistant: its state at the top. */
+.settings-option.asst-status {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.asst-status .settings-option-title {
+  font-weight: 600;
+  font-size: 1.08em;
+}
+
+.asst-card-title {
+  font-weight: 600;
+}
+
+.asst-card-line {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.asst-more .settings-option {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.settings-option.asst-sub-row {
+  padding-left: 32px;
+}
+
+/* Aura: the two styles as picture cards, and the four states under the screen. */
+window.settings-window button.asst-style {
+  padding: 8px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+  border: 1px solid transparent;
+}
+
+window.settings-window button.asst-style:checked {
+  background: mix(@theme_card, @theme_accent, 0.08);
+  border-color: alpha(@theme_accent, 0.7);
+}
+
+.asst-style-name,
+.asst-state-name {
+  font-weight: 600;
+  color: @theme_text;
+}
+
+.asst-style-desc,
+.asst-state-desc {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+window.settings-window button.asst-state {
+  padding: 7px 10px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+  border: 1px solid transparent;
+}
+
+window.settings-window button.asst-state:checked {
+  border-color: alpha(@theme_accent, 0.7);
+  background: mix(@theme_card, @theme_accent, 0.08);
+}
+
+.settings-option.asst-lead .settings-option-title {
+  font-weight: 600;
+}
+
+/* Voice: a short exchange. */
+.asst-chat {
+  padding: 18px 18px 16px;
+}
+
+.asst-bubble-me {
+  background: @theme_accent;
+  color: @theme_bg;
+  padding: 8px 12px;
+  border-radius: 12px 12px 3px 12px;
+}
+
+.asst-bubble-it {
+  background: mix(@theme_card, @theme_text, 0.05);
+  border: 1px solid alpha(@theme_text, 0.08);
+  padding: 10px 12px;
+  border-radius: 12px 12px 12px 3px;
+}
+
+.asst-bubble-text {
+  font-size: 1.04em;
+}
+
+window.settings-window button.asst-play {
+  background: alpha(@theme_accent, 0.2);
+  color: @theme_accent;
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 999px;
+}
+
+.asst-chip.asst-voice-chip {
+  background: alpha(@theme_accent, 0.14);
+  color: @theme_accent;
+  padding: 2px 9px;
+}
+
+/* Permissions: chips you click to take off a list, and the map's popover. */
+window.settings-window button.asst-chip-button {
+  font-size: 0.846em;
+  padding: 1px 7px;
+  min-height: 20px;
+  border-radius: 5px;
+  background: @field;
+  color: @theme_text;
+  font-weight: 400;
+}
+
+window.settings-window button.asst-chip-button:hover {
+  background: alpha(@theme_danger, 0.14);
+  color: @theme_danger;
+}
+
+window.settings-window button.asst-chip-button.asst-add-chip,
+window.settings-window button.asst-chip-button.asst-more-chip {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.45);
+  color: @theme_accent;
+}
+
+window.settings-window button.asst-chip-button.asst-add-chip:hover,
+window.settings-window button.asst-chip-button.asst-more-chip:hover {
+  background: alpha(@theme_accent, 0.12);
+}
+
+.asst-add-chip image {
+  -gtk-icon-size: 12px;
+}
+
+.asst-pop {
+  padding: 6px 4px;
+}
+
+.asst-map-legend {
+  margin-top: 2px;
+}
+
+/* Activity: requests by day, and the chosen one's steps. */
+.asst-tools {
+  margin-bottom: 4px;
+}
+
+window.settings-window button.asst-task {
+  padding: 8px 10px;
+  border-radius: 0;
+  font-weight: 400;
+}
+
+window.settings-window button.asst-task:hover {
+  background: @row_hover;
+}
+
+window.settings-window button.asst-task.asst-picked {
+  background: mix(@theme_card, @theme_accent, 0.12);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.55);
+  border-radius: var(--nyx-radius-small);
+}
+
+.asst-task-title {
+  font-weight: 500;
+  color: @theme_text;
+}
+
+.asst-task-desc,
+.asst-task-time {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.asst-mark {
+  min-width: 26px;
+  min-height: 26px;
+  border-radius: 999px;
+}
+
+.asst-mark image {
+  -gtk-icon-size: 13px;
+}
+
+.asst-mark.asst-done {
+  background: alpha(@theme_success, 0.15);
+  color: @theme_success;
+}
+
+.asst-mark.asst-part {
+  background: alpha(@theme_warning, 0.15);
+  color: @theme_warning;
+}
+
+.asst-mark.asst-failed {
+  background: alpha(@theme_danger, 0.15);
+  color: @theme_danger;
+}
+
+.asst-mark.asst-running {
+  background: alpha(@theme_accent, 0.15);
+  color: @theme_accent;
+}
+
+.asst-chip.asst-done {
+  background: alpha(@theme_success, 0.16);
+  color: @theme_success;
+  font-weight: 600;
+}
+
+.asst-chip.asst-part {
+  background: alpha(@theme_warning, 0.16);
+  color: @theme_warning;
+  font-weight: 600;
+}
+
+.asst-chip.asst-failed {
+  background: alpha(@theme_danger, 0.14);
+  color: @theme_danger;
+  font-weight: 600;
+}
+
+.asst-chip.asst-running {
+  background: alpha(@theme_accent, 0.16);
+  color: @theme_accent;
+  font-weight: 600;
+}
+
+.asst-chip.asst-state-pill {
+  padding: 2px 9px;
+}
+
+.asst-said image {
+  color: @theme_accent;
+  margin-top: 2px;
+}
+
+.asst-said-text {
+  font-size: 1.08em;
+}
+
+.asst-step-marker {
+  min-width: 26px;
+}
+
+.asst-step-dot {
+  min-width: 26px;
+  min-height: 26px;
+  border-radius: 999px;
+  font-size: 0.846em;
+  font-weight: 700;
+  background: alpha(@theme_accent, 0.75);
+  color: @theme_bg;
+}
+
+.asst-step-dot.asst-failed {
+  background: alpha(@theme_danger, 0.8);
+}
+
+.asst-step-dot.asst-neutral {
+  background: mix(@theme_card, @theme_text, 0.12);
+  color: @theme_text;
+}
+
+.asst-step-line {
+  min-width: 2px;
+  margin-top: 4px;
+  background: alpha(@theme_accent, 0.35);
+}
+
+.asst-step {
+  padding: 9px 12px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+  border: 1px solid alpha(@theme_text, 0.06);
+}
+
+.asst-step.asst-failed {
+  border-color: alpha(@theme_danger, 0.5);
+}
+
+.asst-step-title {
+  font-weight: 600;
+}
+
+.asst-step-desc {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.asst-task-actions {
+  margin-top: 4px;
+}
+
+.asst-results {
+  padding: 4px 14px 10px;
+  color: @theme_dim_text;
+}

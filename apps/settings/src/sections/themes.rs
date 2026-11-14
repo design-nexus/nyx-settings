@@ -41,83 +41,38 @@ pub fn omarchy_chooses() -> bool {
     nyx_theme::omarchy_available()
 }
 
-/// The system theme as a grid of cards, where Omarchy isn't the one choosing it.
-pub fn system_group(page: &Page) {
-    let g = page.plain_group("Theme");
-    g.note("Applies to the whole desktop and every Nyx app that follows the system theme.");
+/// The Nyx themes to choose the system theme from (where Omarchy isn't the one
+/// choosing it), with the colours and wallpaper each previews in, and the active one.
+pub(crate) fn nyx_choices() -> (Vec<super::theme::Choice>, String) {
+    use super::theme::{Choice, Colours, hex};
     let registry = Registry::load();
-    let active = engine::get_active_theme();
-    let flow = gtk::FlowBox::new();
-    flow.set_selection_mode(gtk::SelectionMode::None);
-    flow.set_max_children_per_line(4);
-    flow.set_min_children_per_line(3);
-    flow.set_row_spacing(10);
-    flow.set_column_spacing(10);
-    flow.set_homogeneous(true);
-    let cards: Rc<RefCell<Vec<(String, gtk::Button)>>> = Default::default();
-    for e in registry.entries() {
-        let id = e.meta.id.clone();
-        let card = gtk::Button::new();
-        card.add_css_class("theme-card");
-        card.set_tooltip_text(Some(&e.meta.name));
-        let v = widgets::vbox(0);
-        let art = gtk::Overlay::new();
-        let pic = gtk::Picture::new();
-        pic.set_content_fit(gtk::ContentFit::Cover);
-        pic.set_size_request(120, 68);
-        pic.set_can_shrink(true);
-        pic.set_hexpand(true);
-        art.set_child(Some(&pic));
-        match &e.meta.preview {
-            Some(p) => super::theme::load_thumbnail(&pic, p.clone()),
-            None => art.add_overlay(&strip(&sample(&registry, &id))),
-        }
-        let tick = gtk::Image::from_icon_name("object-select-symbolic");
-        tick.add_css_class("theme-tick");
-        tick.set_halign(gtk::Align::End);
-        tick.set_valign(gtk::Align::Start);
-        art.add_overlay(&tick);
-        v.append(&art);
-        let l = widgets::label(&e.meta.name, "theme-card-name");
-        l.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        v.append(&l);
-        card.set_child(Some(&v));
-        if id == active {
-            card.add_css_class("selected");
-        }
-        let cards2 = cards.clone();
-        let name = e.meta.name.clone();
-        card.connect_clicked(move |_| match nyx_theme::choose_system_theme(&id) {
-            Ok(()) => {
-                for (other, b) in cards2.borrow().iter() {
-                    if *other == id {
-                        b.add_css_class("selected");
-                    } else {
-                        b.remove_css_class("selected");
-                    }
+    let choices = registry
+        .entries()
+        .iter()
+        .map(|e| {
+            let s: Vec<_> = sample(&registry, &e.meta.id).iter().map(|c| hex(c)).collect();
+            let at = |i: usize| s.get(i).copied().flatten();
+            let colours = match (at(0), at(1), at(2), at(3)) {
+                (Some(bg), Some(panel), Some(text), Some(accent)) => {
+                    Some(Colours { bg, panel, text, accent, warm: at(4).unwrap_or(accent), green: at(5).unwrap_or(accent) })
                 }
-                window::toast(&format!("Theme set to {name}"));
+                _ => None,
+            };
+            Choice {
+                id: e.meta.id.clone(),
+                name: e.meta.name.clone(),
+                colours,
+                wallpaper: e.meta.wallpapers.first().cloned(),
+                picture: e.meta.preview.clone(),
             }
-            Err(e) => window::toast(&e),
-        });
-        cards.borrow_mut().push((e.meta.id.clone(), card.clone()));
-        flow.insert(&card, -1);
-    }
-    // A theme chosen elsewhere (another app, the command line) moves the tick too.
-    nyx_theme::subscribe(&flow, move || {
-        let active = engine::get_active_theme();
-        for (id, b) in cards.borrow().iter() {
-            if *id == active {
-                b.add_css_class("selected");
-            } else {
-                b.remove_css_class("selected");
-            }
-        }
-    });
-    let row = widgets::stacked_row("", "", flow.upcast_ref());
-    row.add_css_class("bare");
-    widgets::keywords("theme system theme catppuccin mocha default nyx dark light");
-    g.add(&row);
+        })
+        .collect();
+    (choices, engine::get_active_theme())
+}
+
+/// How many themes are in the library beyond the built-in ones.
+pub fn added_count() -> usize {
+    Registry::load().entries().iter().filter(|e| e.meta.origin != Origin::BuiltIn || e.meta.overridden).count()
 }
 
 /// Run `work` off the main thread with the button showing `label`, then `done`.
@@ -432,7 +387,7 @@ const FOLLOW: &str = "";
 
 /// Each Nyx app's theme: Follow system (the default) or one of its own.
 pub fn apps_group(page: &Page) {
-    let g = page.collapsible("App themes", false);
+    let g = page.group("App themes");
     g.note("A Nyx app follows the system theme unless you give it its own here. Panels and the bar always follow the system.");
     widgets::keywords("app theme per app override follow system each app different theme");
     let suite = engine::suite();

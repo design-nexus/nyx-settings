@@ -97,8 +97,73 @@ fn page_head() -> PageHead {
         glib::Propagation::Stop
     });
     tabs_scroll.add_controller(wheel);
-    root.append(&tabs_scroll);
+    tabs_scroll.set_hexpand(true);
+    // Arrows at the ends while tabs are hidden past them.
+    let strip = widgets::hbox(4);
+    strip.add_css_class("page-tabs-strip");
+    let back = tab_arrow("go-previous-symbolic", &tabs_scroll, -1.0);
+    let more = tab_arrow("go-next-symbolic", &tabs_scroll, 1.0);
+    strip.append(&back);
+    strip.append(&tabs_scroll);
+    strip.append(&more);
+    let adj = tabs_scroll.hadjustment();
+    // Both show while any tab is hidden, so the strip's width doesn't change as it scrolls.
+    let ends = move |a: &gtk::Adjustment| {
+        let over = a.upper() > a.page_size() + 1.0;
+        for (arrow, room) in [(&back, a.value() > 1.0), (&more, a.value() + a.page_size() < a.upper() - 1.0)] {
+            arrow.set_visible(over);
+            arrow.set_sensitive(room);
+        }
+    };
+    ends(&adj);
+    adj.connect_value_changed(ends.clone());
+    let t = tabs.clone();
+    // Changed comes during layout; showing the arrows then would resize the strip mid-layout.
+    adj.connect_changed(move |a| {
+        let (a, t, ends) = (a.clone(), t.clone(), ends.clone());
+        glib::idle_add_local_once(move || {
+            ends(&a);
+            show_active_tab(&t, &a);
+        });
+    });
+    root.append(&strip);
     PageHead { root, kicker, title, about, edit, tabs, tabs_scroll, section: RefCell::default() }
+}
+
+/// Scrolls the tab strip so the active tab shows. False until the strip is laid out.
+fn show_active_tab(tabs: &gtk::Box, adj: &gtk::Adjustment) -> bool {
+    let mut c = tabs.first_child();
+    while let Some(t) = c {
+        if t.has_css_class("active") {
+            let Some(r) = t.compute_bounds(tabs).filter(|r| r.width() > 0.0 && adj.page_size() > 0.0) else {
+                return false;
+            };
+            let (x, w) = (f64::from(r.x()), f64::from(r.width()));
+            if x < adj.value() {
+                adj.set_value(x);
+            } else if x + w > adj.value() + adj.page_size() {
+                adj.set_value(x + w - adj.page_size());
+            }
+            return true;
+        }
+        c = t.next_sibling();
+    }
+    true
+}
+
+/// Scrolls the tabs most of a width one way.
+fn tab_arrow(icon: &str, scroll: &gtk::ScrolledWindow, way: f64) -> gtk::Button {
+    let b = gtk::Button::from_icon_name(icon);
+    b.add_css_class("flat");
+    b.add_css_class("page-tabs-arrow");
+    b.set_valign(gtk::Align::Center);
+    b.set_tooltip_text(Some(if way < 0.0 { "Earlier pages" } else { "More pages" }));
+    let s = scroll.clone();
+    b.connect_clicked(move |_| {
+        let adj = s.hadjustment();
+        adj.set_value(adj.value() + way * adj.page_size() * 0.7);
+    });
+    b
 }
 
 /// The stack page shown when a search finds nothing.
@@ -435,7 +500,7 @@ fn category_icon(group: &str, first_page: &'static str) -> &'static str {
     }
 }
 
-/// The sidebar's rows: Home, a line, then a row per section with its tile in the
+/// The sidebar's rows: Home, then a row per section with its tile in the
 /// section's colour, its name and its first pages. While searching only sections
 /// with a matching page show, with how many settings match.
 fn fill_nav(list: &gtk::Box, sections: &[Section], compact: bool) -> NavParts {
@@ -461,12 +526,6 @@ fn fill_nav(list: &gtk::Box, sections: &[Section], compact: bool) -> NavParts {
         let button = category_row(group, &pages, compact, count);
         button.set_visible(shown);
         list.append(&button);
-        if group.is_empty() {
-            let line = gtk::Separator::new(gtk::Orientation::Horizontal);
-            line.add_css_class("nav-split");
-            line.set_visible(shown);
-            list.append(&line);
-        }
         categories.push(Category { group, button, pages: ids });
     }
     (categories, page_group)
@@ -565,6 +624,12 @@ fn show_head(u: &Ui) {
     if !files.is_empty() {
         head.edit.append(&widgets::open_config_button(&files));
     }
+    // Home: no section, files or tabs, so only the title line, centred in the head.
+    if s.group.is_empty() && files.is_empty() {
+        head.root.add_css_class("bare");
+    } else {
+        head.root.remove_css_class("bare");
+    }
     fill_tabs(u);
 }
 
@@ -577,6 +642,9 @@ fn fill_tabs(u: &Ui) {
     }
     let Some(group) = u.sections.iter().find(|s| s.id == u.current).map(|s| s.group) else { return };
     head.tabs_scroll.set_visible(!group.is_empty());
+    if let Some(strip) = head.tabs_scroll.parent() {
+        strip.set_visible(!group.is_empty());
+    }
     let matching = MATCHING.with(|m| m.borrow().clone());
     let counts = COUNTS.with(|c| c.borrow().clone());
     let section = head.section.borrow().clone();
@@ -624,14 +692,12 @@ fn fill_tabs(u: &Ui) {
     }
     if let Some(b) = active {
         let (scroll, tabs) = (head.tabs_scroll.clone(), head.tabs.clone());
-        glib::idle_add_local_once(move || {
-            let Some(bounds) = b.compute_bounds(&tabs) else { return };
-            let adj = scroll.hadjustment();
-            let (x, w) = (f64::from(bounds.x()), f64::from(bounds.width()));
-            if x < adj.value() {
-                adj.set_value(x);
-            } else if x + w > adj.value() + adj.page_size() {
-                adj.set_value(x + w - adj.page_size());
+        // On the first frame the tab has a place in the strip.
+        b.add_tick_callback(move |_, _| {
+            if show_active_tab(&tabs, &scroll.hadjustment()) {
+                glib::ControlFlow::Break
+            } else {
+                glib::ControlFlow::Continue
             }
         });
     }
@@ -896,6 +962,7 @@ fn mark_page(page: &gtk::ScrolledWindow, narrow: bool) {
         } else {
             body.remove_css_class("narrow");
         }
+        widgets::narrow_split(&body, narrow);
     }
 }
 
@@ -999,6 +1066,7 @@ fn ensure_built(id: &'static str) {
     };
     let Some(section) = section else { return };
     let sid = section.id;
+    widgets::set_section_colour(&section_key(section.group));
     let page = widgets::page(sid);
     // Only a page's first build may use answers fetched ahead; a redraw asks again.
     if BUILT_ONCE.with(|b| b.borrow_mut().insert(sid)) {
@@ -1181,7 +1249,7 @@ pub fn rebuild(id: &'static str) {
     let Some(ui) = ui() else { return };
     let old = ui.borrow_mut().pages.remove(id);
     // Where the page was scrolled to, so redrawing it doesn't jump back to the top.
-    let scrolled = old.as_ref().map(|p| p.vadjustment().value()).unwrap_or(0.0);
+    let scrolled = old.as_ref().map(|p| widgets::main_scroller(p).vadjustment().value()).unwrap_or(0.0);
     if let Some(old) = old {
         SEARCH.with(|s| s.borrow_mut().retain(|item| item.section != id));
         ui.borrow().stack.remove(&old);
@@ -1195,7 +1263,7 @@ pub fn rebuild(id: &'static str) {
         && let Some(page) = ui.borrow().pages.get(id).cloned()
     {
         // Once laid out: before that the page has no height to scroll through.
-        let adj = page.vadjustment();
+        let adj = widgets::main_scroller(&page).vadjustment();
         // The adjustment keeps the value within the page's height.
         let restore = adj.connect_changed(move |a| a.set_value(scrolled));
         // Only for the first layouts; later changes are the page's own.
@@ -1422,10 +1490,12 @@ fn scroll_to(row: &gtk::Widget) {
     let Some(page) = ui.borrow().pages.get(current).cloned() else { return };
     let row = row.clone();
     glib::idle_add_local_once(move || {
-        if let Some(child) = page.child()
+        // A split page's controls column scrolls on its own.
+        let scroller = widgets::scroller_for(&row).unwrap_or(page);
+        if let Some(child) = scroller.child()
             && let Some(p) = row.compute_point(&child, &gtk::graphene::Point::new(0.0, 0.0))
         {
-            let adj = page.vadjustment();
+            let adj = scroller.vadjustment();
             // Leave room above for the group's title.
             adj.set_value((p.y() as f64 - 56.0).max(0.0));
         }
@@ -1545,6 +1615,150 @@ pub fn window() -> Option<gtk::ApplicationWindow> {
     ui().map(|u| u.borrow().window.clone())
 }
 
+/// The scrolled windows on the page shown that scroll (a split page's two columns, or
+/// the page itself).
+fn current_scrollers() -> Vec<gtk::ScrolledWindow> {
+    fn walk(w: &gtk::Widget, out: &mut Vec<gtk::ScrolledWindow>) {
+        if let Some(s) = w.downcast_ref::<gtk::ScrolledWindow>()
+            && s.vscrollbar_policy() != gtk::PolicyType::Never
+        {
+            out.push(s.clone());
+        }
+        let mut c = w.first_child();
+        while let Some(child) = c {
+            walk(&child, out);
+            c = child.next_sibling();
+        }
+    }
+    let mut out = Vec::new();
+    if let Some(u) = ui() {
+        let u = u.borrow();
+        if let Some(p) = u.pages.get(u.current) {
+            walk(p.upcast_ref(), &mut out);
+        }
+    }
+    out
+}
+
+/// What doesn't fit on the page shown: each scroller's overflow (how far past the
+/// window its content goes), and widgets that reach below the box holding them.
+fn check_fit() -> String {
+    fn name(w: &gtk::Widget) -> String {
+        let classes: Vec<String> = w.css_classes().iter().map(|c| c.to_string()).collect();
+        format!("{}.{}", w.type_().name(), classes.join("."))
+    }
+    fn walk(w: &gtk::Widget, out: &mut Vec<String>) {
+        let mut c = w.first_child();
+        while let Some(child) = c {
+            if child.is_visible()
+                && w.height() > 0
+                && !w.is::<gtk::Viewport>()
+                && !w.is::<gtk::ScrolledWindow>()
+                && let Some(b) = child.compute_bounds(w)
+            {
+                let over = (b.y() + b.height()) as i32 - w.height();
+                if over > 24 {
+                    out.push(format!("SPILL {over}px below {} by {}", name(w), name(&child)));
+                }
+            }
+            walk(&child, out);
+            c = child.next_sibling();
+        }
+    }
+    let mut out = Vec::new();
+    for s in current_scrollers() {
+        let a = s.vadjustment();
+        let over = (a.upper() - a.page_size()).max(0.0) as i32;
+        out.push(format!("SCROLLER {} overflow {over}px (content {}, window {})", name(s.upcast_ref()), a.upper(), a.page_size()));
+    }
+    // Anything running past its parent's right edge, anywhere in the window.
+    fn wide(w: &gtk::Widget, out: &mut Vec<String>) {
+        let mut c = w.first_child();
+        while let Some(child) = c {
+            if child.is_visible()
+                && w.width() > 0
+                && !w.is::<gtk::Viewport>()
+                && !w.is::<gtk::ScrolledWindow>()
+                && !w.is::<gtk::Popover>()
+                && let Some(b) = child.compute_bounds(w)
+            {
+                let over = (b.x() + b.width()) as i32 - w.width();
+                if over > 8 {
+                    out.push(format!("WIDE {over}px past {} by {}", name(w), name(&child)));
+                }
+            }
+            wide(&child, out);
+            c = child.next_sibling();
+        }
+    }
+    // Cards (and loose text) with less than 6px between them, side by side or stacked.
+    const CARDS: &[&str] = &[
+        "settings-card", "settings-option", "card", "preview-card", "theme-card", "stat-tile", "chart-card", "home-hero",
+        "update-list", "group-toggle", "banner",
+    ];
+    fn boxes(w: &gtk::Widget, page: &gtk::Widget, in_card: bool, out: &mut Vec<(gtk::graphene::Rect, String, bool)>) {
+        let mut c = w.first_child();
+        while let Some(child) = c {
+            if child.is_mapped() && child.width() > 0 && child.height() > 0 {
+                let card = !in_card
+                    && CARDS.iter().any(|k| child.has_css_class(k))
+                    && !child.has_css_class("bare")
+                    && !child.has_css_class("card-row");
+                let text = !in_card && child.is::<gtk::Label>();
+                if (card || text)
+                    && let Some(mut b) = child.compute_bounds(page)
+                {
+                    // A label taller than its text: only the text counts.
+                    if let Some(l) = child.downcast_ref::<gtk::Label>() {
+                        let th = l.layout().pixel_size().1 as f32;
+                        if th < b.height() {
+                            let y = b.y() + (b.height() - th) * l.yalign();
+                            b = gtk::graphene::Rect::new(b.x(), y, b.width(), th);
+                        }
+                    }
+                    out.push((b, name(&child), card));
+                }
+                boxes(&child, page, in_card || card, out);
+            }
+            c = child.next_sibling();
+        }
+    }
+    fn touching(page: &gtk::Widget, out: &mut Vec<String>) {
+        let mut all = Vec::new();
+        boxes(page, page, false, &mut all);
+        for (i, (a, an, ac)) in all.iter().enumerate() {
+            for (b, bn, bc) in &all[i + 1..] {
+                // An open group's title row joins its card on purpose.
+                let open = |n: &str| n.contains(".open.group-toggle") || n.contains(".group-toggle.open");
+                if (!ac && !bc) || open(an) || open(bn) {
+                    continue;
+                }
+                let x_overlap = a.x().max(b.x()) < (a.x() + a.width()).min(b.x() + b.width()) - 20.0;
+                let y_overlap = a.y().max(b.y()) < (a.y() + a.height()).min(b.y() + b.height()) - 10.0;
+                let below = b.y() - (a.y() + a.height());
+                let above = a.y() - (b.y() + b.height());
+                let right = b.x() - (a.x() + a.width());
+                let left = a.x() - (b.x() + b.width());
+                let gap = if x_overlap { below.max(above) } else if y_overlap { right.max(left) } else { continue };
+                if (-0.5..6.0).contains(&gap) {
+                    out.push(format!("TOUCH {gap:.0}px at y {:.0}: {an} / {bn}", a.y().min(b.y())));
+                }
+            }
+        }
+    }
+    if let Some(u) = ui() {
+        let u = u.borrow();
+        if let Some(p) = u.pages.get(u.current) {
+            walk(p.upcast_ref(), &mut out);
+            touching(p.upcast_ref(), &mut out);
+        }
+        wide(u.window.upcast_ref(), &mut out);
+        let a = u.head.tabs_scroll.hadjustment();
+        out.push(format!("TABS {} of {} from {}", a.page_size(), a.upper(), a.value()));
+    }
+    out.join("\n") + "\n"
+}
+
 fn snapshot_and_quit(app: &gtk::Application, out: std::path::PathBuf) {
     let Some(ui) = ui() else { return };
     let window = ui.borrow().window.clone();
@@ -1562,8 +1776,23 @@ fn snapshot_and_quit(app: &gtk::Application, out: std::path::PathBuf) {
         filter(&q);
         apply_compact(false);
     }
-    let wait = std::env::var("SETTINGS_SNAPSHOT_WAIT").ok().and_then(|v| v.parse().ok()).unwrap_or(1800);
+    let wait: u64 = std::env::var("SETTINGS_SNAPSHOT_WAIT").ok().and_then(|v| v.parse().ok()).unwrap_or(1800);
+    // SETTINGS_SNAPSHOT_SCROLL=end scrolls every scroller on the page to its end first, so
+    // the bottom of each column shows.
+    if std::env::var("SETTINGS_SNAPSHOT_SCROLL").as_deref() == Ok("end") {
+        glib::timeout_add_local_once(std::time::Duration::from_millis(wait.saturating_sub(500)), || {
+            for s in current_scrollers() {
+                let a = s.vadjustment();
+                a.set_value(a.upper() - a.page_size());
+            }
+        });
+    }
     glib::timeout_add_local_once(std::time::Duration::from_millis(wait), move || {
+        // SETTINGS_SNAPSHOT_CHECK=FILE writes what's cut off on the page: content taller than
+        // the room it was given, and widgets reaching below their parent.
+        if let Ok(path) = std::env::var("SETTINGS_SNAPSHOT_CHECK") {
+            let _ = std::fs::write(&path, check_fit());
+        }
         // SETTINGS_SNAPSHOT_PAGE=1 renders the whole current page, not just what fits.
         let target = if std::env::var_os("SETTINGS_SNAPSHOT_PAGE").is_some() {
             UI.with(|cell| cell.borrow().clone()).and_then(|u| {

@@ -24,66 +24,15 @@ fn pct(f: f64) -> String {
     format!("{:.0}%", f * 100.0)
 }
 
-fn even_flow(max_per_line: u32) -> gtk::FlowBox {
-    let f = gtk::FlowBox::new();
-    f.set_homogeneous(true);
-    f.set_selection_mode(gtk::SelectionMode::None);
-    f.set_min_children_per_line(1);
-    f.set_max_children_per_line(max_per_line);
-    f.set_column_spacing(12);
-    f.set_row_spacing(12);
-    f.add_css_class("home-flow");
-    f
+/// A card in the controls column or the preview, styled like the preview's cards.
+fn card(class: &str, spacing: i32, vertical: bool) -> gtk::Box {
+    let c = if vertical { widgets::vbox(spacing) } else { widgets::hbox(spacing) };
+    c.add_css_class("cn-hm-card");
+    c.add_css_class(class);
+    c
 }
 
-/// Wrap evenly: five tiles go 5, 3 + 2 or 2 + 2 + 1, never 4 + 1.
-/// Returns a zero-height strip to put beside the flow: it reports width changes.
-fn balance_rows(f: &gtk::FlowBox) -> gtk::DrawingArea {
-    let probe = gtk::DrawingArea::new();
-    probe.set_hexpand(true);
-    probe.set_content_height(0);
-    probe.set_can_target(false);
-    let f = f.clone();
-    probe.connect_resize(move |_, width, _| {
-        if width <= 0 {
-            return;
-        }
-        let n = std::iter::successors(f.first_child(), |c| c.next_sibling()).count() as u32;
-        // The widest tile's natural width, so captions aren't cut short.
-        let tile = std::iter::successors(f.first_child(), |c| c.next_sibling())
-            .map(|c| c.measure(gtk::Orientation::Horizontal, -1).1)
-            .max()
-            .unwrap_or(0)
-            .max(1);
-        let fit = ((width + 12) / (tile + 12)).max(1) as u32;
-        let per = balanced_per_line(n, fit);
-        // Only the most per line: a minimum would make this the page's minimum width,
-        // which keeps the sidebar icon-only once the tiles have room.
-        if f.max_children_per_line() != per {
-            f.set_max_children_per_line(per);
-        }
-    });
-    probe
-}
-
-/// How many to put on each line so `n` items, at most `fit` a line, come out even.
-fn balanced_per_line(n: u32, fit: u32) -> u32 {
-    if n == 0 {
-        return 1;
-    }
-    let fit = fit.clamp(1, n);
-    let lines = n.div_ceil(fit);
-    n.div_ceil(lines)
-}
-
-fn flow_add(f: &gtk::FlowBox, w: &impl IsA<gtk::Widget>) {
-    f.insert(w, -1);
-    if let Some(c) = f.last_child() {
-        c.set_focusable(false);
-    }
-}
-
-// ---------- Hero ----------
+// ---------- This computer ----------
 
 pub(crate) struct Hero {
     pub(crate) count: gtk::Label,
@@ -93,7 +42,7 @@ pub(crate) struct Hero {
 }
 
 fn fact(grid: &gtk::Grid, i: i32, title: &str, value: &str) -> gtk::Label {
-    let cell = widgets::vbox(2);
+    let cell = widgets::vbox(1);
     cell.append(&widgets::label(title, "home-fact-title"));
     let v = widgets::label(value, "home-fact");
     v.set_selectable(true);
@@ -116,16 +65,16 @@ fn short_version(v: &str) -> String {
     }
 }
 
+/// The computer's card (its name, model and the updates badge) and its facts under it.
 fn hero(page: &Page) -> Hero {
-    let card = widgets::hbox(24);
-    card.add_css_class("home-hero");
-    let logo = nyx_ui::widgets::logo(64);
-    logo.set_valign(gtk::Align::Start);
-    card.append(&logo);
-
-    let left = widgets::vbox(14);
-    left.set_hexpand(true);
-    let names = widgets::vbox(2);
+    let g = page.plain_group("");
+    let me = card("cn-hm-me", 14, false);
+    let logo = nyx_ui::widgets::logo(44);
+    logo.set_valign(gtk::Align::Center);
+    me.append(&logo);
+    let names = widgets::vbox(1);
+    names.set_hexpand(true);
+    names.set_valign(gtk::Align::Center);
     names.append(&widgets::label(&sysinfo::hostname(), "home-host"));
     let model = sysinfo::model();
     if !model.is_empty() {
@@ -133,14 +82,38 @@ fn hero(page: &Page) -> Hero {
         // Long model names wrap instead of widening the window.
         m.set_wrap(true);
         m.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+        m.set_xalign(0.0);
         names.append(&m);
     }
-    left.append(&names);
+    me.append(&names);
+
+    let badge = gtk::Button::new();
+    badge.add_css_class("home-badge");
+    badge.set_valign(gtk::Align::Center);
+    let inner = widgets::vbox(0);
+    let count = widgets::label("…", "home-badge-count");
+    count.set_xalign(0.5);
+    let caption = widgets::label("Checking for updates", "home-badge-caption");
+    caption.set_xalign(0.5);
+    caption.set_wrap(true);
+    caption.set_max_width_chars(9);
+    caption.set_justify(gtk::Justification::Center);
+    inner.append(&count);
+    inner.append(&caption);
+    badge.set_child(Some(&inner));
+    me.append(&badge);
+    let about = gtk::Button::with_label("About");
+    about.add_css_class("flat");
+    about.set_valign(gtk::Align::Center);
+    about.connect_clicked(|_| window::navigate("about"));
+    me.append(&about);
+    g.add(&me);
 
     let grid = gtk::Grid::new();
+    grid.add_css_class("cn-hm-facts");
     grid.set_column_homogeneous(true);
-    grid.set_column_spacing(24);
-    grid.set_row_spacing(12);
+    grid.set_column_spacing(16);
+    grid.set_row_spacing(10);
     let omarchy = cmd::output(&["omarchy-version"]).unwrap_or_default();
     let channel = cmd::output(&["omarchy-version-channel"]).unwrap_or_default();
     let full_version = omarchy.clone();
@@ -163,116 +136,94 @@ fn hero(page: &Page) -> Hero {
     if !full_version.is_empty() {
         v.set_tooltip_text(Some(&full_version));
     }
-    fact(&grid, 1, "Memory", &sysinfo::bytes_text(sysinfo::memory().total));
-    fact(&grid, 2, "Kernel", &cmd::output(&["uname", "-r"]).unwrap_or_default());
-    fact(&grid, 3, "Processor", &sysinfo::cpu_model());
+    fact(&grid, 1, "Kernel", &cmd::output(&["uname", "-r"]).unwrap_or_default());
+    fact(&grid, 2, "Processor", &sysinfo::cpu_model());
+    fact(&grid, 3, "Memory", &sysinfo::bytes_text(sysinfo::memory().total));
     fact(&grid, 4, "Hyprland", &hypr);
     let uptime = fact(&grid, 5, "Up for", &sysinfo::duration_text(sysinfo::uptime_secs()));
-    left.append(&grid);
-    card.append(&left);
-
-    let badge = gtk::Button::new();
-    badge.add_css_class("home-badge");
-    badge.set_valign(gtk::Align::Center);
-    let inner = widgets::vbox(0);
-    let count = widgets::label("…", "home-badge-count");
-    count.set_xalign(0.5);
-    let caption = widgets::label("Checking for updates", "home-badge-caption");
-    caption.set_xalign(0.5);
-    inner.append(&count);
-    inner.append(&caption);
-    badge.set_child(Some(&inner));
-    card.append(&badge);
-
-    page.body.append(&card);
+    g.add(&grid);
     Hero { count, caption, badge, uptime }
 }
 
-// ---------- Stat tiles ----------
+// ---------- Gauges ----------
 
 #[derive(Clone)]
-struct Tile {
+struct Gauge {
     ring: Ring,
     value: gtk::Label,
     detail: gtk::Label,
 }
 
-fn tile(flow: &gtk::FlowBox, title: &str, go_to: Option<&'static str>) -> Tile {
-    let card = widgets::vbox(8);
-    card.add_css_class("stat-tile");
-    let ring = charts::ring(92);
-    let value = widgets::label("", "stat-value");
+fn gauge(row: &gtk::Box, title: &str, go_to: Option<&'static str>) -> Gauge {
+    let cell = widgets::vbox(4);
+    cell.add_css_class("cn-hm-gauge");
+    cell.set_hexpand(true);
+    let ring = charts::ring(64);
+    let value = widgets::label("", "cn-hm-gauge-value");
     value.set_xalign(0.5);
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&ring.area));
     overlay.add_overlay(&value);
     overlay.set_halign(gtk::Align::Center);
-    card.append(&overlay);
+    overlay.set_margin_bottom(4);
+    cell.append(&overlay);
     let t = widgets::label(title, "stat-label");
     t.set_xalign(0.5);
-    card.append(&t);
+    cell.append(&t);
     let detail = widgets::label("", "stat-detail");
     detail.set_xalign(0.5);
     detail.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    card.append(&detail);
+    detail.set_max_width_chars(14);
+    cell.append(&detail);
     if let Some(id) = go_to {
-        card.add_css_class("clickable");
-        card.set_cursor_from_name(Some("pointer"));
-        card.set_tooltip_text(Some("Open its settings"));
+        cell.add_css_class("clickable");
+        cell.set_cursor_from_name(Some("pointer"));
+        cell.set_tooltip_text(Some("Open its settings"));
         let click = gtk::GestureClick::new();
         click.connect_released(move |_, _, _, _| window::navigate(id));
-        card.add_controller(click);
+        cell.add_controller(click);
     }
-    flow_add(flow, &card);
-    Tile { ring, value, detail }
+    row.append(&cell);
+    Gauge { ring, value, detail }
 }
 
-struct Tiles {
-    cpu: Tile,
-    memory: Tile,
-    disk: Tile,
-    battery: Option<Tile>,
-    temp: Option<Tile>,
+struct Gauges {
+    cpu: Gauge,
+    memory: Gauge,
+    disk: Gauge,
+    battery: Option<Gauge>,
+    temp: Option<Gauge>,
 }
 
-fn tiles(page: &Page) -> Tiles {
-    let flow = even_flow(5);
-    let cpu = tile(&flow, "Processor", None);
-    let memory = tile(&flow, "Memory", None);
-    let disk = tile(&flow, "Disk", None);
-    let battery = sysinfo::battery().map(|_| tile(&flow, "Battery", Some("power")));
+fn gauges(pv: &widgets::Preview) -> Gauges {
+    let row = card("cn-hm-gauges", 4, false);
+    row.set_homogeneous(true);
+    let cpu = gauge(&row, "Processor", None);
+    let memory = gauge(&row, "Memory", None);
+    let disk = gauge(&row, "Disk", Some("disks"));
+    let battery = sysinfo::battery().map(|_| gauge(&row, "Battery", Some("power")));
     if let Some(b) = &battery {
         b.ring.warn_when_low();
     }
-    let temp = sysinfo::cpu_temp().map(|_| tile(&flow, "Temperature", None));
-    let probe = balance_rows(&flow);
-    let wrap = widgets::vbox(0);
-    wrap.add_css_class("home-block");
-    wrap.append(&probe);
-    wrap.append(&flow);
-    page.body.append(&wrap);
-    Tiles { cpu, memory, disk, battery, temp }
+    let temp = sysinfo::cpu_temp().map(|_| gauge(&row, "Temperature", None));
+    pv.add(&row);
+    Gauges { cpu, memory, disk, battery, temp }
 }
 
 // ---------- Activity ----------
 
-struct Card {
-    value: gtk::Label,
-}
-
 /// A titled card holding a chart, with a live readout on the right.
-fn chart_card(flow: &gtk::FlowBox, title: &str, legend: &[&str], chart: &impl IsA<gtk::Widget>) -> Card {
-    let card = widgets::vbox(10);
-    card.add_css_class("chart-card");
+fn chart_card(title: &str, legend: &[&str], chart: &impl IsA<gtk::Widget>) -> (gtk::Box, gtk::Label) {
+    let c = card("cn-hm-chart", 8, true);
     let head = widgets::hbox(8);
-    let t = widgets::label(title, "settings-option-title");
+    let t = widgets::label(title, "cn-hm-chart-title");
     t.set_hexpand(true);
     head.append(&t);
     let value = widgets::label("", "stat-detail");
     value.set_xalign(1.0);
     head.append(&value);
-    card.append(&head);
-    card.append(chart);
+    c.append(&head);
+    c.append(chart);
     if !legend.is_empty() {
         let l = widgets::hbox(14);
         for (i, name) in legend.iter().enumerate() {
@@ -287,42 +238,43 @@ fn chart_card(flow: &gtk::FlowBox, title: &str, legend: &[&str], chart: &impl Is
             item.append(&widgets::label(name, "stat-detail"));
             l.append(&item);
         }
-        card.append(&l);
+        c.append(&l);
     }
-    flow_add(flow, &card);
-    Card { value }
+    (c, value)
 }
 
 struct Activity {
     cpu: LineChart,
-    cpu_card: Card,
+    cpu_value: gtk::Label,
     cores: gtk::Box,
     core_meters: RefCell<Vec<Meter>>,
     memory: LineChart,
-    memory_card: Card,
+    memory_value: gtk::Label,
     net: LineChart,
-    net_card: Card,
+    net_value: gtk::Label,
 }
 
-fn activity(page: &Page) -> Activity {
-    let g = page.plain_group("Activity");
-    g.note("The last minute, updated every second while this page is open.");
-    let flow = even_flow(2);
-    let cpu = charts::line_chart(1, Some(1.0), 0.0, 120);
-    let cpu_card = chart_card(&flow, "Processor", &[], &cpu.area);
-    let memory = charts::line_chart(2, Some(1.0), 0.0, 120);
-    let memory_card = chart_card(&flow, "Memory", &["Memory", "Swap"], &memory.area);
-    let net = charts::line_chart(2, None, 64.0 * 1024.0, 120);
-    let net_card = chart_card(&flow, "Network", &["Download", "Upload"], &net.area);
+/// The processor with each core on the left; memory and network stacked beside it.
+fn activity(pv: &widgets::Preview) -> Activity {
+    let row = widgets::hbox(12);
+    row.add_css_class("cn-hm-charts");
+    row.set_homogeneous(true);
+    row.set_vexpand(true);
+    let cpu = charts::line_chart(1, Some(1.0), 0.0, 56);
+    let (cpu_card, cpu_value) = chart_card("Processor", &[], &cpu.area);
     let cores = widgets::vbox(6);
-    cores.set_vexpand(true);
-    let cores_card = widgets::vbox(10);
-    cores_card.add_css_class("chart-card");
-    cores_card.append(&widgets::label("Cores", "settings-option-title"));
-    cores_card.append(&cores);
-    flow_add(&flow, &cores_card);
-    g.add(&flow);
-    Activity { cpu, cpu_card, cores, core_meters: RefCell::default(), memory, memory_card, net, net_card }
+    cpu_card.append(&cores);
+    row.append(&cpu_card);
+    let side = widgets::vbox(12);
+    let memory = charts::line_chart(2, Some(1.0), 0.0, 36);
+    let (memory_card, memory_value) = chart_card("Memory", &["Memory", "Swap"], &memory.area);
+    side.append(&memory_card);
+    let net = charts::line_chart(2, None, 64.0 * 1024.0, 36);
+    let (net_card, net_value) = chart_card("Network", &["Download", "Upload"], &net.area);
+    side.append(&net_card);
+    row.append(&side);
+    pv.add(&row);
+    Activity { cpu, cpu_value, cores, core_meters: RefCell::default(), memory, memory_value, net, net_value }
 }
 
 impl Activity {
@@ -337,14 +289,15 @@ impl Activity {
             let grid = gtk::Grid::new();
             grid.set_column_homogeneous(true);
             grid.set_column_spacing(16);
-            grid.set_row_spacing(6);
-            let rows = usage.len().div_ceil(2);
+            grid.set_row_spacing(5);
+            let rows = usage.len().div_ceil(if usage.len() > 8 { 4 } else { 2 });
             for i in 0..usage.len() {
                 let line = widgets::hbox(8);
                 let l = widgets::label(&format!("{:>2}", i + 1), "stat-detail");
                 l.add_css_class("mono");
                 line.append(&l);
-                let m = charts::meter(6);
+                let m = charts::meter(5);
+                m.area.set_hexpand(true);
                 line.append(&m.area);
                 grid.attach(&line, (i / rows) as i32, (i % rows) as i32, 1, 1);
                 meters.push(m);
@@ -359,34 +312,43 @@ impl Activity {
 
 // ---------- Live sampling ----------
 
+/// "13.2 of 32 GB": the unit once when both share it.
+fn of_total(used: u64, total: u64) -> String {
+    let (u, t) = (sysinfo::bytes_text(used), sysinfo::bytes_text(total));
+    match (u.rsplit_once(' '), t.rsplit_once(' ')) {
+        (Some((un, uu)), Some((_, tu))) if uu == tu => format!("{un} of {t}"),
+        _ => format!("{u} of {t}"),
+    }
+}
+
 struct Sampler {
     cpu: Vec<CpuTimes>,
     net: (u64, u64),
     at: Instant,
 }
 
-fn sample(s: &mut Sampler, tiles: &Tiles, act: &Activity, hero: &Hero) {
+fn sample(s: &mut Sampler, gauges: &Gauges, act: &Activity, hero: &Hero) {
     charts::refresh_palette();
     let cpu = sysinfo::cpu_times();
     let usage: Vec<f64> = cpu.iter().zip(&s.cpu).map(|(a, b)| a.usage_since(b)).collect();
     s.cpu = cpu;
     if let Some(total) = usage.first() {
-        tiles.cpu.ring.set(*total);
-        tiles.cpu.value.set_label(&pct(*total));
+        gauges.cpu.ring.set(*total);
+        gauges.cpu.value.set_label(&pct(*total));
         act.cpu.push(&[*total]);
-        act.cpu_card.value.set_label(&pct(*total));
+        act.cpu_value.set_label(&pct(*total));
         act.set_cores(&usage[1..]);
     }
-    tiles.cpu.detail.set_label(&format!("{} cores", usage.len().saturating_sub(1)));
+    gauges.cpu.detail.set_label(&format!("{} cores", usage.len().saturating_sub(1)));
 
     let m = sysinfo::memory();
     let frac = |a: u64, b: u64| if b == 0 { 0.0 } else { a as f64 / b as f64 };
     let mem = frac(m.used, m.total);
-    tiles.memory.ring.set(mem);
-    tiles.memory.value.set_label(&pct(mem));
-    tiles.memory.detail.set_label(&format!("{} of {}", sysinfo::bytes_text(m.used), sysinfo::bytes_text(m.total)));
+    gauges.memory.ring.set(mem);
+    gauges.memory.value.set_label(&pct(mem));
+    gauges.memory.detail.set_label(&of_total(m.used, m.total));
     act.memory.push(&[mem, frac(m.swap_used, m.swap_total)]);
-    act.memory_card.value.set_label(&format!("{} used", sysinfo::bytes_text(m.used)));
+    act.memory_value.set_label(&format!("{} used", sysinfo::bytes_text(m.used)));
 
     let net = sysinfo::net_bytes();
     let secs = s.at.elapsed().as_secs_f64().max(0.001);
@@ -395,29 +357,26 @@ fn sample(s: &mut Sampler, tiles: &Tiles, act: &Activity, hero: &Hero) {
     s.net = net;
     s.at = Instant::now();
     act.net.push(&[down, up]);
-    act.net_card.value.set_label(&format!("↓ {}  ↑ {}", sysinfo::rate_text(down), sysinfo::rate_text(up)));
+    act.net_value.set_label(&format!("↓ {} · ↑ {}", sysinfo::rate_text(down), sysinfo::rate_text(up)));
 
-    if let (Some(t), Some(b)) = (&tiles.battery, sysinfo::battery()) {
+    if let (Some(t), Some(b)) = (&gauges.battery, sysinfo::battery()) {
         t.ring.set(b.percent as f64 / 100.0);
         t.value.set_label(&format!("{}%", b.percent));
-        let mut d = b.status.clone();
-        if let Some(h) = b.health {
-            d = format!("{d} · {h}% health");
-        }
-        t.detail.set_label(&d);
+        t.detail.set_label(&b.status);
+        t.detail.set_tooltip_text(b.health.map(|h| format!("{} · {h}% health", b.status)).as_deref());
     }
-    if let (Some(t), Some(c)) = (&tiles.temp, sysinfo::cpu_temp()) {
+    if let (Some(t), Some(c)) = (&gauges.temp, sysinfo::cpu_temp()) {
         t.ring.set(c / 100.0);
         t.value.set_label(&format!("{:.0}°", units::from_celsius(c)));
-        t.detail.set_label("CPU package");
+        t.detail.set_label("Processor");
     }
     hero.uptime.set_label(&sysinfo::duration_text(sysinfo::uptime_secs()));
 }
 
 /// Sample once a second, only while the page is on screen.
-fn start_sampling(page: &Page, tiles: Tiles, act: Activity, hero: Rc<Hero>) {
+fn start_sampling(page: &Page, gauges: Gauges, act: Activity, hero: Rc<Hero>) {
     let state = Rc::new(RefCell::new(Sampler { cpu: sysinfo::cpu_times(), net: sysinfo::net_bytes(), at: Instant::now() }));
-    let parts = Rc::new((tiles, act));
+    let parts = Rc::new((gauges, act));
     // Fill everything in straight away (CPU since boot until the first tick).
     {
         let mut s = state.borrow_mut();
@@ -449,37 +408,73 @@ fn start_sampling(page: &Page, tiles: Tiles, act: Activity, hero: Rc<Hero>) {
 
 // ---------- Storage ----------
 
-/// Every disk, and the package count. Also fills the root filesystem's tile.
-fn storage(page: &Page, tile: Tile) {
-    let g = page.group("Storage");
+/// Every disk, and the package count, in one card. Also fills the disk gauge.
+fn storage(pv: &widgets::Preview, gauge: Gauge) {
+    let c = card("cn-hm-storage", 10, true);
     // A drive reporting trouble comes first.
     for d in crate::backend::udisks::load().unwrap_or_default().iter().filter(|d| d.health.supported && !d.health.ok()) {
-        let b = widgets::banner(
+        c.append(&widgets::banner(
             &format!("{} reports a problem with its health. Back up what's on it, then see Disks.", d.title()),
             true,
-        );
-        g.top(&b);
+        ));
     }
-    let (r, _) = widgets::button_row("Disks", "Partitions, formatting, drive health and cleaning up space.", "Open", |_| {
-        crate::window::navigate("disks")
-    });
-    g.add(&r);
-    let list = g.list.clone();
+    let disks = gtk::Button::with_label("Disks");
+    disks.connect_clicked(|_| crate::window::navigate("disks"));
+    let head = widgets::icon_row(
+        "drive-harddisk-symbolic",
+        "Storage",
+        "Partitions, formatting, drive health and cleaning up space.",
+        Some(disks.upcast_ref()),
+    );
+    head.add_css_class("cn-hm-storage-head");
+    widgets::keywords("disks partitions formatting drive health cleaning space");
+    // The description becomes the summary once the disks are read.
+    let summary = head.first_child().and_then(|t| t.next_sibling()).and_then(|t| t.last_child()).and_downcast::<gtk::Label>();
+    c.append(&head);
+    let list = gtk::Grid::new();
+    list.add_css_class("cn-hm-disks");
+    list.set_column_spacing(14);
+    list.set_row_spacing(10);
+    c.append(&list);
+    pv.add(&c);
     cmd::background(
         || (sysinfo::disks(), sysinfo::packages()),
         move |(disks, pk)| {
-            list.set_visible(true);
+            let mut parts = Vec::new();
             if let Some(d) = disks.iter().find(|d| d.mount == "/").or(disks.first()) {
                 let f = if d.size == 0 { 0.0 } else { d.used as f64 / d.size as f64 };
-                tile.ring.set(f);
-                tile.value.set_label(&pct(f));
-                tile.detail.set_label(&format!("{} free", sysinfo::bytes_text(d.size.saturating_sub(d.used))));
+                gauge.ring.set(f);
+                gauge.value.set_label(&pct(f));
+                gauge.detail.set_label(&format!("{} free", sysinfo::bytes_text(d.size.saturating_sub(d.used))));
+                parts.push(format!("{} used of {}", sysinfo::bytes_text(d.used), sysinfo::bytes_text(d.size)));
+            }
+            if pk.total > 0 {
+                parts.push(format!("{} packages", pk.total));
+            }
+            if let Some(l) = &summary
+                && !parts.is_empty()
+            {
+                l.set_text(&parts.join(" · "));
             }
             widgets::begin_section("home");
+            let mut n = 0;
+            let mut line = |name: &str, m: &charts::Meter, short: &str, desc: &str| {
+                let l = widgets::label(name, "cn-hm-disk-name");
+                l.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+                l.set_max_width_chars(14);
+                l.set_tooltip_text(Some(desc));
+                list.attach(&l, 0, n, 1, 1);
+                m.area.set_hexpand(true);
+                m.area.set_valign(gtk::Align::Center);
+                m.area.set_tooltip_text(Some(desc));
+                list.attach(&m.area, 1, n, 1, 1);
+                let v = widgets::label(short, "stat-detail");
+                v.set_xalign(1.0);
+                list.attach(&v, 2, n, 1, 1);
+                n += 1;
+            };
             for d in disks {
-                let m = charts::meter(8);
-                m.area.set_size_request(180, -1);
-                m.area.set_hexpand(false);
+                let m = charts::meter(6);
                 let used = if d.size == 0 { 0.0 } else { d.used as f64 / d.size as f64 };
                 m.set(vec![used]);
                 let desc = format!(
@@ -488,18 +483,14 @@ fn storage(page: &Page, tile: Tile) {
                     sysinfo::bytes_text(d.size),
                     sysinfo::bytes_text(d.size.saturating_sub(d.used))
                 );
-                let r = widgets::row(&esc(&d.mount), &desc, Some(m.area.upcast_ref()));
+                line(&d.mount, &m, &format!("{} free", sysinfo::bytes_text(d.size.saturating_sub(d.used))), &desc);
                 widgets::keywords("disk storage space free full drive partition");
-                list.append(&r);
             }
             if pk.total > 0 {
-                let m = charts::meter(8);
-                m.area.set_size_request(180, -1);
-                m.area.set_hexpand(false);
+                let m = charts::meter(6);
                 m.never_warn();
                 let f = pk.explicit as f64 / pk.total as f64;
                 m.set(vec![f, 1.0 - f]);
-                m.area.set_tooltip_text(Some("Installed by name, then dependencies"));
                 let desc = format!(
                     "{} installed · {} by name, {} as dependencies · {} from the AUR",
                     pk.total,
@@ -507,9 +498,8 @@ fn storage(page: &Page, tile: Tile) {
                     pk.total - pk.explicit,
                     pk.foreign
                 );
-                let r = widgets::row("Packages", &desc, Some(m.area.upcast_ref()));
+                line("Packages", &m, &format!("{} from the AUR", pk.foreign), &desc);
                 widgets::keywords("pacman aur installed software");
-                list.append(&r);
             }
         },
     );
@@ -525,17 +515,26 @@ fn package_list(pkgs: &[pkgupdates::Pkg]) -> gtk::Grid {
     grid.set_row_spacing(6);
     for (i, p) in pkgs.iter().enumerate() {
         let i = i as i32;
+        // Long names and versions shorten, so the list never widens the column.
         let name = widgets::label(&p.name, "update-name");
         name.set_hexpand(true);
         name.set_selectable(true);
+        name.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        name.set_tooltip_text(Some(&p.name));
         grid.attach(&name, 0, i, 1, 1);
         let old = widgets::label(&p.old, "mono");
         old.add_css_class("dim");
         old.set_xalign(1.0);
+        old.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+        old.set_max_width_chars(14);
+        old.set_tooltip_text(Some(&p.old));
         grid.attach(&old, 1, i, 1, 1);
         grid.attach(&widgets::label("→", "dim"), 2, i, 1, 1);
         let new = widgets::label(&p.new, "mono");
         new.add_css_class("accent-text");
+        new.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+        new.set_max_width_chars(14);
+        new.set_tooltip_text(Some(&p.new));
         grid.attach(&new, 3, i, 1, 1);
     }
     grid
@@ -612,8 +611,8 @@ fn show_updates(ui: &Rc<UpdatesUi>, s: &pkgupdates::Status, checking: bool) {
     for e in &s.errors {
         desc.push_str(&format!(" {}.", esc(e)));
     }
-    let buttons = widgets::hbox(8);
-    let check = gtk::Button::with_label(if checking { "Checking…" } else { "Check now" });
+    let buttons = widgets::hbox(6);
+    let check = widgets::icon_button("view-refresh-symbolic", if checking { "Checking…" } else { "Check now" });
     check.set_sensitive(!checking);
     {
         let ui = ui.clone();
@@ -621,14 +620,14 @@ fn show_updates(ui: &Rc<UpdatesUi>, s: &pkgupdates::Status, checking: bool) {
     }
     buttons.append(&check);
     if s.count() > 0 {
-        let b = gtk::Button::with_label("Update now");
+        let b = nyx_ui::widgets::labeled_button("folder-download-symbolic", "Update");
         b.add_css_class("suggested-action");
         b.set_tooltip_text(Some("Runs omarchy-update in a terminal"));
         b.connect_clicked(|_| cmd::spawn(&["omarchy-launch-floating-terminal-with-presentation", "omarchy-update"]));
         buttons.append(&b);
     }
-    let r = widgets::row(&title, &desc, Some(buttons.upcast_ref()));
-    widgets::keywords("update upgrade check packages pacman");
+    let r = widgets::icon_row("software-update-available-symbolic", &title, &desc, Some(buttons.upcast_ref()));
+    widgets::keywords("update upgrade check packages pacman update now");
     list.append(&r);
 
     if let Some(o) = &s.omarchy {
@@ -682,10 +681,11 @@ pub(crate) fn updates_group(page: &Page, hero: Rc<Hero>) {
     }
     let (root, target) = (page.root.clone(), g.wrapper.clone());
     hero.badge.connect_clicked(move |_| {
-        if let Some(child) = root.child()
+        let scroller = widgets::scroller_for(target.upcast_ref()).unwrap_or_else(|| root.clone());
+        if let Some(child) = scroller.child()
             && let Some(p) = target.compute_point(&child, &gtk::graphene::Point::new(0.0, 0.0))
         {
-            root.vadjustment().set_value(p.y() as f64);
+            scroller.vadjustment().set_value(p.y() as f64);
         }
     });
 }
@@ -694,42 +694,46 @@ pub(crate) fn updates_group(page: &Page, hero: Rc<Hero>) {
 
 fn quick_actions(page: &Page) {
     let g = page.plain_group("Quick actions");
-    // A flow, so the buttons go two by two in a narrow window.
+    // A flow, so the buttons go two by two in a narrow column.
     let row = gtk::FlowBox::new();
     row.set_selection_mode(gtk::SelectionMode::None);
     row.set_homogeneous(true);
     row.set_min_children_per_line(2);
     row.set_max_children_per_line(4);
-    row.set_column_spacing(12);
-    row.set_row_spacing(12);
-    row.add_css_class("quick-actions");
-    row.add_css_class("home-flow");
-    let snap = gtk::Button::with_label("Create snapshot");
-    snap.set_tooltip_text(Some("Save the system as it is now, so you can roll back"));
-    snap.connect_clicked(|b| {
-        b.set_sensitive(false);
-        let b = b.clone();
-        cmd::run_async(&["omarchy-snapshot", "create"], move |r| {
-            b.set_sensitive(true);
-            match r {
-                Ok(_) => window::toast("Snapshot created"),
-                Err(e) => window::toast(&format!("{e}")),
-            }
-        });
-    });
-    // Omarchy's snapshots; NyxOS rolls back to an earlier system (Updates) instead.
-    if crate::platform::PLATFORM == crate::platform::Platform::Omarchy {
-        row.insert(&snap, -1);
-    }
-    let lock = gtk::Button::with_label("Lock");
+    row.set_column_spacing(8);
+    row.set_row_spacing(8);
+    row.add_css_class("cn-hm-actions");
+    let lock = nyx_ui::widgets::labeled_button("system-lock-screen-symbolic", "Lock");
     lock.connect_clicked(|_| cmd::spawn(crate::platform::lock_command()));
     row.insert(&lock, -1);
+    // Omarchy's snapshots; NyxOS rolls back to an earlier system (Updates) instead.
+    if crate::platform::PLATFORM == crate::platform::Platform::Omarchy {
+        let snap = nyx_ui::widgets::labeled_button("document-open-recent-symbolic", "Snapshot");
+        snap.set_tooltip_text(Some("Save the system as it is now, so you can roll back"));
+        snap.connect_clicked(|b| {
+            b.set_sensitive(false);
+            let b = b.clone();
+            cmd::run_async(&["omarchy-snapshot", "create"], move |r| {
+                b.set_sensitive(true);
+                match r {
+                    Ok(_) => window::toast("Snapshot created"),
+                    Err(e) => window::toast(&format!("{e}")),
+                }
+            });
+        });
+        row.insert(&snap, -1);
+    }
     let restart = widgets::confirm_button("Restart", "Click again to restart", |_| cmd::spawn(crate::platform::session_command("reboot")));
-    restart.add_css_class("destructive-action");
+    restart.add_css_class("cn-hm-danger");
     row.insert(&restart, -1);
     let off = widgets::confirm_button("Shut down", "Click again to shut down", |_| cmd::spawn(crate::platform::session_command("shutdown")));
-    off.add_css_class("destructive-action");
+    off.add_css_class("cn-hm-danger");
     row.insert(&off, -1);
+    let mut c = row.first_child();
+    while let Some(child) = c {
+        child.set_focusable(false);
+        c = child.next_sibling();
+    }
     g.add(&row);
     widgets::keywords("snapshot lock restart reboot shut down power off");
 }
@@ -747,7 +751,7 @@ fn quick_settings(page: &Page) {
     if has_dnd {
         let (r, _) = widgets::switch_row(
             "Do not disturb",
-            "Silence notifications until you turn it back on.",
+            "Silence notifications until you turn it off.",
             crate::backend::notify::dnd(),
             |on| {
                 cmd::background(
@@ -761,6 +765,8 @@ fn quick_settings(page: &Page) {
             },
         );
         widgets::keywords("dnd silence notifications quiet");
+        r.prepend(&widgets::tile("notifications-disabled-symbolic"));
+        r.add_css_class("with-tile");
         g.add(&r);
     }
     if !profiles.is_empty() {
@@ -768,7 +774,7 @@ fn quick_settings(page: &Page) {
         let label = |p: &str| match p {
             "power-saver" => "Saver".to_string(),
             "balanced" => "Balanced".to_string(),
-            "performance" => "Performance".to_string(),
+            "performance" => "Fast".to_string(),
             other => other.to_string(),
         };
         let options: Vec<(String, String)> = profiles.iter().map(|p| (p.clone(), label(p))).collect();
@@ -779,39 +785,36 @@ fn quick_settings(page: &Page) {
                 }
             });
         });
-        g.add(&widgets::row(
-            "Power profile",
-            "Battery life or speed, right now. Power &amp; Battery sets it per power source.",
+        g.add(&widgets::icon_row(
+            "power-profile-balanced-symbolic",
+            "Power",
+            "For now",
             Some(seg.upcast_ref()),
         ));
-        widgets::keywords("performance balanced power saver battery");
+        widgets::keywords("power profile performance balanced power saver battery power source");
     }
 }
 
 pub fn build(page: &Page) {
+    // The live picture on the right: gauges, activity and storage.
+    let pv = page.split();
+    pv.head("Right now", "The last minute, updated every second while Home is open.", &[]);
+    let gauges = gauges(&pv);
+    let disk = gauges.disk.clone();
+    let act = activity(&pv);
+    storage(&pv, disk);
+
+    // What you'd do, on the left: this computer, quick settings, updates, the session.
     let hero = Rc::new(hero(page));
     quick_settings(page);
-    let tiles = tiles(page);
-    let disk = tiles.disk.clone();
-    let act = activity(page);
-    start_sampling(page, tiles, act, hero.clone());
-    storage(page, disk);
-    crate::platform::home_updates(page, hero);
+    crate::platform::home_updates(page, hero.clone());
     quick_actions(page);
+    start_sampling(page, gauges, act, hero);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn even_rows() {
-        assert_eq!(balanced_per_line(5, 5), 5);
-        assert_eq!(balanced_per_line(5, 4), 3);
-        assert_eq!(balanced_per_line(5, 2), 2);
-        assert_eq!(balanced_per_line(4, 3), 2);
-        assert_eq!(balanced_per_line(3, 9), 3);
-    }
 
     #[test]
     fn versions() {

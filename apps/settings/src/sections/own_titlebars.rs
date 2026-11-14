@@ -4,7 +4,6 @@
 
 use crate::backend::{store, titlebars};
 use crate::widgets::{self, Page};
-use crate::window;
 use gtk::gio;
 use gtk::prelude::*;
 
@@ -31,7 +30,7 @@ fn name_of(id: &str, apps: &[(String, String)]) -> String {
 fn set_list(list: Vec<String>) {
     store::update(true, move |s| s.own_titlebar_apps = Some(list));
     store::flush();
-    window::rebuild("workspaces");
+    super::workspaces::refresh_sub();
 }
 
 fn set_hover(on: bool) {

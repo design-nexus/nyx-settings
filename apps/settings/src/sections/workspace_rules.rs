@@ -14,6 +14,8 @@ use std::rc::Rc;
 #[derive(Clone)]
 struct Screen {
     name: String,
+    /// "Laptop screen", or the model.
+    label: String,
     x: f64,
     y: f64,
     w: f64,
@@ -25,8 +27,18 @@ fn screens() -> Vec<Screen> {
     list.iter()
         .filter_map(|m| {
             let scale = m.get("scale")?.as_f64().unwrap_or(1.0).max(0.1);
+            let name = m.get("name")?.as_str()?.to_string();
+            let model = m.get("model").and_then(|v| v.as_str()).unwrap_or("").trim();
+            let label = if name.starts_with("eDP") || name.starts_with("LVDS") {
+                "Laptop screen".to_string()
+            } else if !model.is_empty() && model != "0x0000" {
+                model.to_string()
+            } else {
+                name.clone()
+            };
             Some(Screen {
-                name: m.get("name")?.as_str()?.to_string(),
+                name,
+                label,
                 x: m.get("x")?.as_f64()?,
                 y: m.get("y")?.as_f64()?,
                 w: m.get("width")?.as_f64()? / scale,
@@ -252,7 +264,136 @@ fn keys_for(description: &str) -> Option<String> {
     })
 }
 
-pub fn build(page: &Page) {
+/// How many workspaces always exist (0: Hyprland decides).
+pub(super) fn persistent() -> u32 {
+    store::read(|s| s.persistent_workspaces)
+}
+
+/// The workspaces with a layout, name, gaps or bare windows of their own.
+fn own_rules() -> Vec<WorkspaceRule> {
+    rules().into_iter().filter(|r| r.name.is_some() || r.mode.is_some() || r.gaps.is_some() || r.no_border).collect()
+}
+
+pub(super) fn own_count() -> usize {
+    own_rules().len()
+}
+
+/// The workspace with keyboard focus now.
+fn active_workspace() -> Option<i64> {
+    hypr::json(&["activeworkspace"])?.get("id")?.as_i64()
+}
+
+/// The workspaces on each screen, as numbered chips: filled when they always exist,
+/// outlined for the one you're on, with a name or a layout of their own.
+pub(super) fn strip_card(open: impl Fn() + 'static) -> gtk::Box {
+    let card = widgets::vbox(10);
+    card.add_css_class("preview-card");
+    card.add_css_class("ws-strip");
+    let head = widgets::hbox(8);
+    head.append(&widgets::label("Workspaces", "ws-strip-title"));
+    let n = persistent();
+    let about = widgets::label(
+        &match n {
+            0 => "They come and go as you use them.".to_string(),
+            1 => "1 always there; the rest come and go.".to_string(),
+            n => format!("1–{n} always there; the rest come and go."),
+        },
+        "ws-strip-sub",
+    );
+    about.set_hexpand(true);
+    about.set_xalign(0.0);
+    about.set_wrap(true);
+    head.append(&about);
+    let change = gtk::Button::new();
+    change.add_css_class("flat");
+    change.add_css_class("ws-link");
+    let cl = widgets::hbox(4);
+    cl.append(&gtk::Label::new(Some("Change")));
+    cl.append(&gtk::Image::from_icon_name("go-next-symbolic"));
+    change.set_child(Some(&cl));
+    change.connect_clicked(move |_| open());
+    head.append(&change);
+    card.append(&head);
+
+    let screens = screens();
+    let rules = rules();
+    let current = active_workspace();
+    let pinned_to = |id: u32| rules.iter().find(|r| r.workspace == id).and_then(|r| r.monitor.clone()).filter(|m| screens.iter().any(|s| s.name == *m));
+    let mut columns: Vec<(String, &str, Vec<u32>)> = Vec::new();
+    // Only screens with workspaces of their own get a column; the rest share "Any screen".
+    for s in &screens {
+        let ids: Vec<u32> = (1..=10).filter(|id| pinned_to(*id).as_deref() == Some(s.name.as_str())).collect();
+        if !ids.is_empty() {
+            columns.push((s.label.clone(), "video-display-symbolic", ids));
+        }
+    }
+    let free: Vec<u32> = (1..=10).filter(|id| pinned_to(*id).is_none()).collect();
+    if columns.is_empty() {
+        let name = match screens.as_slice() {
+            [one] => one.label.clone(),
+            _ => "Any screen".into(),
+        };
+        columns.push((name, "video-display-symbolic", free));
+    } else if !free.is_empty() {
+        columns.push(("Any screen".into(), "object-flip-horizontal-symbolic", free));
+    }
+    let row = widgets::hbox(8);
+    row.set_homogeneous(columns.len() > 1);
+    for (name, icon, ids) in columns {
+        let col = widgets::vbox(6);
+        col.add_css_class("ws-screen");
+        col.set_hexpand(true);
+        let h = widgets::hbox(6);
+        h.append(&gtk::Image::from_icon_name(icon));
+        let l = widgets::label(&name, "ws-screen-name");
+        l.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        h.append(&l);
+        col.append(&h);
+        let flow = gtk::FlowBox::new();
+        flow.set_selection_mode(gtk::SelectionMode::None);
+        flow.set_column_spacing(5);
+        flow.set_row_spacing(5);
+        flow.set_max_children_per_line(10);
+        flow.set_homogeneous(false);
+        for id in ids {
+            let r = rules.iter().find(|r| r.workspace == id);
+            let chip = widgets::hbox(4);
+            chip.add_css_class("ws-chip");
+            super::desktop::tint(&chip);
+            if id <= n {
+                chip.add_css_class("always");
+            }
+            if current == Some(id as i64) {
+                chip.add_css_class("cur");
+            }
+            chip.append(&widgets::label(&id.to_string(), "ws-chip-n"));
+            if let Some(name) = r.and_then(|r| r.name.clone()) {
+                chip.append(&widgets::label(&name, "ws-chip-name"));
+            }
+            if let Some(m) = r.and_then(|r| r.mode.clone()) {
+                let icon = match m.as_str() {
+                    "scrolling" => "view-dual-symbolic",
+                    "master" => "view-sidebar-start-symbolic",
+                    "floating" => "window-new-symbolic",
+                    _ => "view-grid-symbolic",
+                };
+                chip.append(&gtk::Image::from_icon_name(icon));
+            }
+            if let Some(r) = r {
+                let d = describe(r);
+                chip.set_tooltip_text(Some(d.as_str()).filter(|d| !d.is_empty()));
+            }
+            flow.append(&chip);
+        }
+        col.append(&flow);
+        row.append(&col);
+    }
+    card.append(&row);
+    card
+}
+
+/// One level down: which screen each workspace is on, and how many always exist.
+pub(super) fn screens_page(page: &Page) {
     let screens = screens();
     let g = page.group("Workspaces and screens");
     let strip = screen_strip(screens.clone());
@@ -294,13 +435,30 @@ pub fn build(page: &Page) {
     } else {
         g.note("With a second screen plugged in, you can choose which workspaces open on it here.");
     }
+    let g = page.group("Going between them");
+    g.add(&pictured(
+        "binds.workspace_back_and_forth",
+        "Press again to go back",
+        "Choosing the workspace you're on takes you back to the one you came from.",
+        Sketch::BackAndForth,
+    ));
+}
 
+fn pictured(key: &'static str, title: &str, desc: &str, s: Sketch) -> gtk::Box {
+    let r = widgets::hypr_switch(key, title, desc);
+    widgets::sketched(&r, s);
+    r
+}
+
+/// One level down: the workspaces with settings of their own.
+pub(super) fn own_page(page: &Page) {
     let g = page.group("Workspaces with their own settings");
+    g.note("A layout, name, gaps or bare windows for one workspace: a scrolling workspace for writing, a floating one for tools.");
     let list = widgets::vbox(0);
     g.add(&list);
     // The list redraws itself after a change, so it holds a (weak) handle on itself.
     let refresh: Refresh = {
-        let (list, strip) = (list.clone(), strip.clone());
+        let list = list.clone();
         let me: Rc<std::cell::RefCell<std::rc::Weak<dyn Fn()>>> =
             Rc::new(std::cell::RefCell::new(std::rc::Weak::<Box<dyn Fn()>>::new()));
         let me2 = me.clone();
@@ -309,10 +467,9 @@ pub fn build(page: &Page) {
                 list.remove(&c);
             }
             let refresh = me2.borrow().upgrade();
-            let own: Vec<WorkspaceRule> =
-                rules().into_iter().filter(|r| r.name.is_some() || r.mode.is_some() || r.gaps.is_some() || r.no_border).collect();
+            let own = own_rules();
             if own.is_empty() {
-                list.append(&widgets::row("None yet", "Give one workspace its own layout, name, gaps or bare windows: a scrolling workspace for writing, a floating one for tools.", None));
+                list.append(&widgets::row("None yet", "Every workspace follows the rest of the page.", None));
             }
             for r in own {
                 let id = r.workspace;
@@ -347,9 +504,12 @@ pub fn build(page: &Page) {
                 });
                 buttons.append(&e);
                 buttons.append(&x);
-                list.append(&widgets::row(&title, &describe(&r), Some(buttons.upcast_ref())));
+                let row = widgets::row(&title, &describe(&r), Some(buttons.upcast_ref()));
+                let n = widgets::label(&id.to_string(), "ws-num");
+                n.set_valign(gtk::Align::Center);
+                row.prepend(&n);
+                list.append(&row);
             }
-            strip.queue_draw();
         });
         *me.borrow_mut() = Rc::downgrade(&f);
         f
@@ -364,7 +524,13 @@ pub fn build(page: &Page) {
     );
     widgets::keywords("workspace rule layout name gaps decorations floating scrolling override");
     g.add(&r);
+    // What "Same as everywhere" means: the layout and gaps every other workspace has.
+    let g = page.group("Everywhere else");
+    g.add(&crate::preview::tiling());
+}
 
+/// One level down: the scratchpad, and small habits of windows.
+pub(super) fn scratchpad_page(page: &Page) {
     let g = page.group("Scratchpad");
     let card = gtk::Box::new(gtk::Orientation::Horizontal, 16);
     card.add_css_class("settings-option");
@@ -398,6 +564,20 @@ pub fn build(page: &Page) {
     );
     widgets::sketched(&r, Sketch::Scratchpad);
     g.add(&r);
+
+    let g = page.group("Small habits");
+    g.add(&pictured(
+        "misc.enable_swallow",
+        "Terminal swallowing",
+        "A window app started from a terminal takes the terminal's place, and gives it back when it closes.",
+        Sketch::Swallow,
+    ));
+    g.add(&pictured(
+        "misc.middle_click_paste",
+        "Middle-click paste",
+        "Selected text pastes with the middle mouse button.",
+        Sketch::MiddlePaste,
+    ));
 }
 
 fn glib_escape(s: &str) -> String {

@@ -7,6 +7,7 @@ mod bragi;
 mod descriptor;
 mod extension;
 mod hidraw;
+mod mock;
 mod models;
 mod probe;
 mod usb;
@@ -23,6 +24,8 @@ fn run(args: &[String]) -> Result<()> {
                 println!("{reply}");
             }
         }
+        // Simulated lights following the theme take its colour when drawn.
+        "theme-changed" if mock::on() => {}
         "theme-changed" => nyx_ext::lighting::theme_changed()?,
         "probe" => {
             let ask = !args.iter().any(|a| a == "--no-query");

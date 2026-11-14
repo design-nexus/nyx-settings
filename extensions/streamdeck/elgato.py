@@ -130,32 +130,42 @@ def setup_rows():
     return rows
 
 
-def key_rows(profile, page, count):
+def page_keys(profile, page, count):
     doc = read_toml(os.path.join(PROFILES, profile + ".toml"))
     keys = next((list(p.get("keys", [])) for p in doc.get("page", []) if p.get("name") == page), [])
     keys += [{}] * (count - len(keys))
+    return keys[:count]
+
+
+def editor_rows(i, spec, names):
+    action = action_of(spec)
+    value = spec.get(action, "") if action != "none" else ""
+    inner = [
+        {"kind": "entry", "key": f"ekey:{i}:label", "title": "Label", "value": spec.get("label", ""), "placeholder": "Shown on the key"},
+        {"kind": "choice", "key": f"ekey:{i}:action", "title": "Does", "options": ACTIONS, "value": action, "refresh": True},
+    ]
+    if action in ("keys", "key"):
+        inner.append({"kind": "entry", "key": f"ekey:{i}:value", "title": "Shortcut", "value": value, "placeholder": "CTRL+SHIFT+T"})
+    elif action == "exec":
+        inner.append({"kind": "entry", "key": f"ekey:{i}:value", "title": "Command", "value": value, "placeholder": "firefox"})
+    elif action == "media":
+        inner.append({"kind": "choice", "key": f"ekey:{i}:value", "title": "Media", "options": MEDIA, "value": value})
+    elif action == "page":
+        inner.append({"kind": "choice", "key": f"ekey:{i}:value", "title": "Page", "options": [[n, n] for n in names], "value": value})
+    elif action == "profile":
+        inner.append({"kind": "choice", "key": f"ekey:{i}:value", "title": "Profile", "options": [[p, p] for p in profiles()], "value": value})
+    return inner
+
+
+def key_summary(spec):
+    action = action_of(spec)
+    return spec.get("label") or (dict(ACTIONS).get(action, "") if action != "none" else "Nothing")
+
+
+def key_rows(profile, page, count):
     names = page_names(profile)
-    rows = []
-    for i, spec in enumerate(keys[:count]):
-        action = action_of(spec)
-        value = spec.get(action, "") if action != "none" else ""
-        inner = [
-            {"kind": "entry", "key": f"ekey:{i}:label", "title": "Label", "value": spec.get("label", ""), "placeholder": "Shown on the key"},
-            {"kind": "choice", "key": f"ekey:{i}:action", "title": "Does", "options": ACTIONS, "value": action, "refresh": True},
-        ]
-        if action in ("keys", "key"):
-            inner.append({"kind": "entry", "key": f"ekey:{i}:value", "title": "Shortcut", "value": value, "placeholder": "CTRL+SHIFT+T"})
-        elif action == "exec":
-            inner.append({"kind": "entry", "key": f"ekey:{i}:value", "title": "Command", "value": value, "placeholder": "firefox"})
-        elif action == "media":
-            inner.append({"kind": "choice", "key": f"ekey:{i}:value", "title": "Media", "options": MEDIA, "value": value})
-        elif action == "page":
-            inner.append({"kind": "choice", "key": f"ekey:{i}:value", "title": "Page", "options": [[n, n] for n in names], "value": value})
-        elif action == "profile":
-            inner.append({"kind": "choice", "key": f"ekey:{i}:value", "title": "Profile", "options": [[p, p] for p in profiles()], "value": value})
-        summary = spec.get("label") or (dict(ACTIONS).get(action, "") if action != "none" else "Nothing")
-        rows.append({"kind": "disclosure", "title": f"Key {i + 1} · {summary}", "rows": inner})
-    return rows
+    return [{"kind": "disclosure", "title": f"Key {i + 1} · {key_summary(spec)}", "rows": editor_rows(i, spec, names)}
+            for i, spec in enumerate(page_keys(profile, page, count))]
 
 
 def recall(state, name):
@@ -172,7 +182,80 @@ def remember(state, name, value):
         f.write(value)
 
 
+def preview_supported():
+    return "preview" in (os.environ.get("SETTINGS_KINDS") or "").split(" ")
+
+
+ACTION_ICONS = {"key": "preferences-desktop-keyboard-shortcuts-symbolic", "keys": "preferences-desktop-keyboard-shortcuts-symbolic",
+                "exec": "system-run-symbolic", "page": "go-next-symbolic", "profile": "view-list-symbolic"}
+MEDIA_ICONS = {"play-pause": "media-playback-start-symbolic", "next": "media-skip-forward-symbolic",
+               "previous": "media-skip-backward-symbolic", "stop": "media-playback-stop-symbolic"}
+
+
+def key_icon(spec):
+    """The pane draws GTK icons; a key's own icon is a picture, so this shows what it does."""
+    action = action_of(spec)
+    if action == "media":
+        return MEDIA_ICONS.get(spec.get("media"), "media-playback-start-symbolic")
+    return ACTION_ICONS.get(action, "")
+
+
+def describe_a(state):
+    """Style A: the switch, brightness and profiles on the left; the deck in the
+    pane, and the picked key's label and action under it."""
+    decks = present()
+    groups = []
+    banners = []
+    if not decks:
+        banners.append({"text": "No Elgato Stream Deck is connected right now. Changes are saved for when it is.", "warning": False})
+    pid = decks[0][0] if decks else "0080"
+    name, count, cols = MODELS.get(pid, ("Stream Deck", 15, 5))
+    setup = setup_rows()
+    for row in setup:
+        row["icon"] = "system-software-install-symbolic" if row["key"] == "elgato-install" else "channel-secure-symbolic"
+    if setup:
+        groups.append({"title": "Set up", "rows": setup})
+    ensure_starter()
+    cfg = read_toml(CONFIG)
+    groups.append({"title": "Stream Deck", "rows": [
+        {"kind": "switch", "key": "elgato-run", "title": "Running", "icon": "system-shutdown-symbolic", "value": service_active(),
+         "desc": "nyx-deck runs it in the background, at every sign-in"},
+        {"kind": "slider", "key": "elgato-brightness", "title": "Brightness", "icon": "display-brightness-symbolic",
+         "value": int(cfg.get("brightness", 70)), "min": 0, "max": 100, "step": 5, "unit": " %", "on_release": True},
+    ]})
+    profile = recall(state, "profile")
+    if profile not in profiles():
+        profile = cfg.get("start_profile") or (profiles() or [""])[0]
+    names = page_names(profile)
+    page = recall(state, "page")
+    if page not in names:
+        page = names[0] if names else ""
+    groups.append({"title": "Profile", "rows": [
+        {"kind": "choice", "key": "elgato-edit-profile", "title": "Profile to edit", "icon": "view-list-symbolic",
+         "options": [[p, p] for p in profiles()], "value": profile, "refresh": True},
+        {"kind": "choice", "key": "elgato-edit-page", "title": "Page to edit", "icon": "view-grid-symbolic",
+         "options": [[p, p] for p in names], "value": page, "refresh": True},
+        {"kind": "entry", "key": "elgato-new-page", "title": "Add a page", "icon": "list-add-symbolic", "value": "", "placeholder": "Page name"},
+    ]})
+    if pid == "0084":
+        groups.append({"title": "Dials", "note": "Turning a dial changes the volume; pressing it mutes.", "rows": []})
+    keys = page_keys(profile, page, count)
+    try:
+        sel = max(0, min(count - 1, int(recall(state, "key") or 0)))
+    except ValueError:
+        sel = 0
+    pane = {"title": f"Keys on “{page}”", "line": f"{name} · {count} keys, {cols} across", "blocks": [
+        {"kind": "deck", "key": "elgato-pick", "columns": cols, "selected": sel, "dials": 4 if pid == "0084" else 0,
+         "keys": [{"icon": key_icon(k), "label": k.get("label", "")} for k in keys]},
+        {"kind": "rows", "title": f"Key {sel + 1} · {key_summary(keys[sel])}", "rows": editor_rows(sel, keys[sel], names)},
+    ]}
+    return {"subtitle": f"<b>{name}</b>", "banners": banners, "groups": [g for g in groups if g["rows"] or g.get("note")],
+            "preview": pane}
+
+
 def describe(state):
+    if preview_supported():
+        return describe_a(state)
     decks = present()
     groups = []
     banners = []
@@ -271,6 +354,9 @@ def set_value(state, key, value, start_terminal):
     if key == "elgato-edit-page":
         remember(state, "page", value)
         return {"refresh": True}
+    if key == "elgato-pick":
+        remember(state, "key", str(int(value)))
+        return {"refresh": True}
     profile = recall(state, "profile") or (profiles() or [""])[0]
     if key == "elgato-new-page":
         name = value.strip()
@@ -310,5 +396,5 @@ def set_value(state, key, value, start_terminal):
                         spec[act] = value
                 keys[index] = {k: v for k, v in spec.items() if v != "" or k in FIELDS}
         edit_profile(profile, change)
-        return {"refresh": True} if field == "action" else None
+        return {"refresh": True} if field in ("action", "label") else None
     raise SystemExit(f"unknown setting {key}")

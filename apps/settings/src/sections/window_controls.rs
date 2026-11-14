@@ -120,7 +120,7 @@ pub fn build(page: &Page) {
 /// The per-app rules, saved whole (app ids hold dots, which a settings key can't).
 fn save(apps: serde_json::Map<String, Value>) {
     report(wc::set_apps(apps));
-    window::rebuild("workspaces");
+    super::workspaces::refresh_sub();
 }
 
 fn per_app(page: &Page, s: &Value) {

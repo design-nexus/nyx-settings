@@ -88,8 +88,8 @@ impl Logo {
 pub fn logo_for_provider(provider_type: &str) -> Logo {
     match provider_type {
         "google" => Logo::Google,
-        "fastmail" => Logo::Fastmail,
-        "zoho" => Logo::Zoho,
+        "fastmail" => Preset::Fastmail.into(),
+        "zoho" => Preset::Zoho.into(),
         "microsoft_personal" => Logo::Microsoft,
         "nextcloud" => Logo::Nextcloud,
         "imap_smtp" => Logo::Mail,

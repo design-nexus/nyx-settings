@@ -3,7 +3,7 @@
 //! when a row or the reply says so, and every `poll` seconds while it's showing.
 
 use super::PageRef;
-use super::protocol::{self, Kind, PageDesc, Row};
+use super::protocol::{self, BlockKind, Kind, PageDesc, Row};
 use crate::widgets::{self, Debounce, Page};
 use crate::{cmd, fangraph, units, window};
 use gtk::glib;
@@ -31,6 +31,8 @@ struct State {
     next_row: Cell<usize>,
     row_widgets: RefCell<HashMap<usize, gtk::Widget>>,
     info_labels: RefCell<HashMap<usize, gtk::Label>>,
+    /// The preview's readings (value, sub), in order, updated in place by polls.
+    item_labels: RefCell<Vec<(gtk::Label, gtk::Label)>>,
 }
 
 type Shared = Rc<State>;
@@ -57,6 +59,7 @@ pub fn build(page: &Page, section: &'static str, r: Rc<PageRef>) {
         next_row: Cell::new(0),
         row_widgets: RefCell::default(),
         info_labels: RefCell::default(),
+        item_labels: RefCell::default(),
     });
     load(&st, false);
 }
@@ -128,7 +131,18 @@ fn status_shape(text: &str) -> Option<serde_json::Value> {
             _ => {}
         }
     }
-    let mut value = serde_json::from_str(text).ok()?;
+    let mut value: serde_json::Value = serde_json::from_str(text).ok()?;
+    if let Some(blocks) = value.pointer_mut("/preview/blocks").and_then(|b| b.as_array_mut()) {
+        for block in blocks {
+            for item in block.get_mut("items").and_then(|i| i.as_array_mut()).into_iter().flatten() {
+                if let Some(o) = item.as_object_mut() {
+                    o.remove("value");
+                    o.remove("sub");
+                    o.remove("tone");
+                }
+            }
+        }
+    }
     strip(&mut value);
     Some(value)
 }
@@ -162,8 +176,26 @@ fn update_status(st: &State, text: &str, desc: &PageDesc) -> bool {
         }
     }
     let mut index = 0;
+    let blocks = desc.preview.as_ref().map(|p| p.blocks.as_slice()).unwrap_or_default();
+    for b in blocks.iter().filter(|b| b.kind == BlockKind::Rows) {
+        visit(st, &b.rows, &mut index);
+    }
     for group in &desc.groups {
         visit(st, &group.rows, &mut index);
+    }
+    let labels = st.item_labels.borrow();
+    let items = blocks.iter().filter(|b| has_readings(b.kind)).flat_map(|b| b.items.iter());
+    for ((value, sub), item) in labels.iter().zip(items) {
+        if value.text().as_str() != item.value {
+            value.set_text(&item.value);
+        }
+        if sub.text().as_str() != item.sub {
+            sub.set_text(&item.sub);
+            sub.set_visible(!item.sub.is_empty());
+        }
+        for t in ["good", "warn", "bad", "accent"] {
+            if t == item.tone { value.add_css_class(&format!("ext-{t}")) } else { value.remove_css_class(&format!("ext-{t}")) }
+        }
     }
     true
 }
@@ -172,6 +204,7 @@ fn clear(st: &Shared) {
     st.next_row.set(0);
     st.row_widgets.borrow_mut().clear();
     st.info_labels.borrow_mut().clear();
+    st.item_labels.borrow_mut().clear();
     widgets::forget_rows(&st.content);
     while let Some(c) = st.content.first_child() {
         st.content.remove(&c);
@@ -202,7 +235,11 @@ fn render(st: &Shared, desc: &PageDesc) {
             label.set_markup(&format!("{base}\n{}", desc.subtitle));
         }
     }
-    let page = Page { root: st.root.clone(), body: st.content.clone() };
+    let page = Page::new(st.root.clone(), st.content.clone());
+    match &desc.preview {
+        Some(pv) => preview(st, &page.split(), pv),
+        None => st.content.remove_css_class("split-body"),
+    }
     for b in &desc.banners {
         page.banner(&b.text, b.warning);
     }
@@ -278,6 +315,20 @@ fn sender(st: &Shared, row: &Row) -> Rc<dyn Fn(String)> {
 }
 
 fn decorate(r: &gtk::Box, row: &Row) {
+    if !row.icon.is_empty() && r.orientation() == gtk::Orientation::Horizontal && !r.has_css_class("with-tile") {
+        r.prepend(&widgets::tile(&row.icon));
+        r.add_css_class("with-tile");
+    }
+    // Beside a wide control (segments, chips) a title mustn't break inside a short word.
+    if r.orientation() == gtk::Orientation::Horizontal {
+        let mut texts = r.first_child();
+        while let Some(t) = texts.as_ref().filter(|t| t.has_css_class("row-tile")) {
+            texts = t.next_sibling();
+        }
+        if let Some(title) = texts.and_then(|t| t.first_child()).and_downcast::<gtk::Label>() {
+            title.set_width_chars(title.text().chars().count().min(10) as i32);
+        }
+    }
     if !row.keywords.is_empty() {
         widgets::keywords(&row.keywords);
     }
@@ -347,7 +398,7 @@ fn row_widget_inner(st: &Shared, row: &Row, id: usize) -> gtk::Widget {
             let seg = widgets::segmented(&row.options, &row.str_value(), move |v| send(v));
             let r = if row.title.is_empty() && row.desc.is_empty() {
                 widgets::stacked_row("", "", seg.upcast_ref())
-            } else if row.options.len() > 4 {
+            } else if row.options.len() > 4 || row.options.iter().map(|(_, l)| l.chars().count()).sum::<usize>() > 28 {
                 widgets::stacked_row(&row.title, &row.desc, seg.upcast_ref())
             } else {
                 widgets::row(&row.title, &row.desc, Some(seg.upcast_ref()))
@@ -404,7 +455,11 @@ fn row_widget_inner(st: &Shared, row: &Row, id: usize) -> gtk::Widget {
         Kind::Chips => {
             let labels: Vec<&str> = row.labels.iter().map(String::as_str).collect();
             let chips = widgets::chip_toggles(&labels, &row.bools(), move |v| send(protocol::encode_bools(&v)));
-            let r = widgets::row(&row.title, &row.desc, Some(chips.upcast_ref()));
+            let r = if labels.iter().map(|l| l.chars().count()).sum::<usize>() > 24 {
+                widgets::stacked_row(&row.title, &row.desc, chips.upcast_ref())
+            } else {
+                widgets::row(&row.title, &row.desc, Some(chips.upcast_ref()))
+            };
             decorate(&r, row);
             r.upcast()
         }
@@ -426,6 +481,12 @@ fn row_widget_inner(st: &Shared, row: &Row, id: usize) -> gtk::Widget {
         }
         Kind::Disclosure => {
             let (wrapper, content) = widgets::disclosure(&row.title, &row.desc);
+            if !row.icon.is_empty()
+                && let Some(inner) = wrapper.first_child().and_then(|b| b.first_child()).and_downcast::<gtk::Box>()
+            {
+                inner.prepend(&widgets::tile(&row.icon));
+                wrapper.add_css_class("with-tile");
+            }
             if !row.keywords.is_empty() {
                 widgets::keywords(&row.keywords);
             }
@@ -471,6 +532,8 @@ fn slider(st: &Shared, row: &Row, send: Rc<dyn Fn(String)>) -> gtk::Box {
     };
     let (lo, hi) = (show(row.min), show(row.max.max(row.min + step)));
     let (slider_box, s) = widgets::slider(lo, hi, step, show(row.f64_value()).clamp(lo, hi), row.digits, &unit);
+    // Beside an icon, a title and the value, a slider fits the controls column narrower.
+    s.scale.set_width_request(110);
 
     if row.on_release {
         let click = gtk::GestureClick::new();
@@ -496,11 +559,14 @@ fn slider(st: &Shared, row: &Row, send: Rc<dyn Fn(String)>) -> gtk::Box {
     let r = if row.marks.is_empty() {
         widgets::row(&row.title, &row.desc, Some(slider_box.upcast_ref()))
     } else {
-        // Quick picks beside a full-width slider.
+        // A full-width slider, its quick picks under it (a narrow column can't fit both).
         slider_box.set_hexpand(true);
         s.scale.set_hexpand(true);
-        let line = widgets::hbox(12);
+        let line = widgets::vbox(8);
         line.append(&slider_box);
+        let picks = widgets::hbox(8);
+        picks.set_halign(gtk::Align::End);
+        line.append(&picks);
         for m in &row.marks {
             let b = gtk::Button::with_label(&widgets::format_value(show(*m), row.digits, &unit));
             b.add_css_class("chip");
@@ -513,7 +579,7 @@ fn slider(st: &Shared, row: &Row, send: Rc<dyn Fn(String)>) -> gtk::Box {
                     send(back(show(m)));
                 }
             });
-            line.append(&b);
+            picks.append(&b);
         }
         widgets::stacked_row(&row.title, &row.desc, line.upcast_ref())
     };
@@ -591,9 +657,7 @@ fn curve(st: &Shared, row: &Row) -> gtk::Box {
             copy.set_label(&copy_label(i));
         }));
     }
-    let spacer = widgets::hbox(0);
-    spacer.set_hexpand(true);
-    head.append(&spacer);
+    let tools = widgets::hbox(10);
     if row.presets {
         for (id, label) in [("quiet", "Quiet"), ("balanced", "Balanced"), ("max", "Maximum")] {
             let b = gtk::Button::with_label(label);
@@ -612,10 +676,13 @@ fn curve(st: &Shared, row: &Row) -> gtk::Box {
                 graph.set(series.borrow()[i].points.clone());
                 send_later(i);
             });
-            head.append(&b);
+            tools.append(&b);
         }
     }
     if n > 1 {
+        let spacer = widgets::hbox(0);
+        spacer.set_hexpand(true);
+        head.append(&spacer);
         copy.set_label(&copy_label(0));
         copy.add_css_class("chip");
         let (series, selected, send_later) = (series.clone(), selected.clone(), send_later.clone());
@@ -636,6 +703,9 @@ fn curve(st: &Shared, row: &Row) -> gtk::Box {
         body.append(&head);
     }
     body.append(&graph.area);
+    if tools.first_child().is_some() {
+        body.append(&tools);
+    }
     let hint = if row.hint.is_empty() {
         "Drag a point up or down for speed, left or right for temperature. Speeds can't drop as it gets hotter."
     } else {
@@ -649,6 +719,261 @@ fn curve(st: &Shared, row: &Row) -> gtk::Box {
     r
 }
 
+/// Blocks whose items are readings a poll updates in place.
+fn has_readings(kind: BlockKind) -> bool {
+    matches!(kind, BlockKind::Device | BlockKind::Stats | BlockKind::Facts | BlockKind::List | BlockKind::Picture)
+}
+
+fn accent_of(b: &protocol::Block) -> Option<crate::sketch::Rgb> {
+    let hex = b.accent.trim_start_matches('#');
+    (hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit())).then(|| fangraph::rgb(&b.accent))
+}
+
+/// A device drawn in the theme's colours, its lit parts in the block's accent (or the
+/// theme's).
+fn picture(b: &protocol::Block, height: i32) -> gtk::DrawingArea {
+    let (kind, accent) = (b.picture.clone(), accent_of(b));
+    widgets::drawing(height, move |cr, p, _, w, h| super::pictures::draw(cr, p, accent.unwrap_or(p.accent), &kind, w, h))
+}
+
+/// A reading: its label small, the value large in its tone, a line under it.
+fn reading(st: &Shared, item: &protocol::Item) -> gtk::Box {
+    let b = widgets::vbox(1);
+    b.add_css_class("ext-reading");
+    let l = widgets::label(&item.label, "ext-reading-label");
+    l.set_xalign(0.0);
+    l.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    b.append(&l);
+    let v = widgets::label(&item.value, "ext-reading-value");
+    v.set_xalign(0.0);
+    v.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    if !item.tone.is_empty() {
+        v.add_css_class(&format!("ext-{}", item.tone));
+    }
+    b.append(&v);
+    let sub = widgets::label(&item.sub, "ext-reading-sub");
+    sub.set_xalign(0.0);
+    sub.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    sub.set_visible(!item.sub.is_empty());
+    b.append(&sub);
+    st.item_labels.borrow_mut().push((v, sub));
+    b
+}
+
+fn readings(st: &Shared, items: &[protocol::Item], most: usize) -> gtk::Grid {
+    let g = gtk::Grid::new();
+    g.add_css_class("ext-readings");
+    g.set_column_homogeneous(true);
+    g.set_column_spacing(14);
+    g.set_row_spacing(10);
+    // Four readings sit two by two; a narrow pane can't fit four across.
+    let cols = if items.len() == 4 { 2 } else { items.len().clamp(1, most.min(3)) };
+    for (i, item) in items.iter().enumerate() {
+        g.attach(&reading(st, item), (i % cols) as i32, (i / cols) as i32, 1, 1);
+    }
+    g
+}
+
+/// The preview pane: the device or app, its readings, and what the page's pictures
+/// show (a list, a colour, a curve, a deck's keys).
+fn preview(st: &Shared, pv: &widgets::Preview, d: &protocol::PreviewDesc) {
+    if !d.title.is_empty() {
+        pv.head(&d.title, &d.line, &[]);
+    }
+    for b in &d.blocks {
+        match b.kind {
+            BlockKind::Device => {
+                let card = widgets::hbox(14);
+                card.add_css_class("preview-card");
+                card.add_css_class("ext-device");
+                let pic = picture(b, 96);
+                pic.set_content_width(150);
+                pic.set_hexpand(false);
+                pic.set_valign(gtk::Align::Center);
+                card.append(&pic);
+                let text = widgets::vbox(2);
+                text.set_hexpand(true);
+                text.set_valign(gtk::Align::Center);
+                if !b.title.is_empty() {
+                    let t = widgets::label(&b.title, "ext-device-name");
+                    t.set_xalign(0.0);
+                    t.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                    text.append(&t);
+                }
+                if !b.line.is_empty() {
+                    let l = widgets::label(&b.line, "ext-device-line");
+                    l.set_xalign(0.0);
+                    l.set_wrap(true);
+                    text.append(&l);
+                }
+                if !b.items.is_empty() {
+                    let r = readings(st, &b.items, 2);
+                    r.set_margin_top(10);
+                    text.append(&r);
+                }
+                card.append(&text);
+                pv.add(&card);
+            }
+            BlockKind::Picture => {
+                let card = widgets::hbox(16);
+                card.add_css_class("preview-card");
+                card.add_css_class("ext-picture");
+                if !b.items.is_empty() {
+                    let labels = widgets::vbox(10);
+                    labels.set_valign(gtk::Align::Center);
+                    for item in &b.items {
+                        labels.append(&reading(st, item));
+                    }
+                    card.append(&labels);
+                }
+                let pic = picture(b, 170);
+                card.append(&pic);
+                pv.add(&card);
+            }
+            BlockKind::Stats => {
+                let card = widgets::vbox(0);
+                card.add_css_class("preview-card");
+                card.add_css_class("ext-stats");
+                card.append(&readings(st, &b.items, 4));
+                pv.add(&card);
+            }
+            BlockKind::Facts => {
+                let card = widgets::vbox(0);
+                card.add_css_class("preview-card");
+                card.add_css_class("ext-facts");
+                let g = gtk::Grid::new();
+                g.set_column_homogeneous(true);
+                g.set_column_spacing(14);
+                g.set_row_spacing(10);
+                for (i, item) in b.items.iter().enumerate() {
+                    g.attach(&reading(st, item), (i % 2) as i32, (i / 2) as i32, 1, 1);
+                }
+                card.append(&g);
+                pv.add(&card);
+            }
+            BlockKind::List => {
+                let list = widgets::vbox(8);
+                if !b.title.is_empty() {
+                    let t = widgets::label(&b.title, "ext-caption");
+                    t.set_xalign(0.0);
+                    list.append(&t);
+                }
+                for item in &b.items {
+                    let row = widgets::hbox(12);
+                    row.add_css_class("preview-card");
+                    row.add_css_class("ext-list-row");
+                    if !item.icon.is_empty() {
+                        row.append(&widgets::tile(&item.icon));
+                    }
+                    let text = widgets::vbox(1);
+                    text.set_hexpand(true);
+                    text.set_valign(gtk::Align::Center);
+                    let t = widgets::label(&item.label, "ext-list-title");
+                    t.set_xalign(0.0);
+                    t.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                    text.append(&t);
+                    let sub = widgets::label(&item.sub, "ext-reading-sub");
+                    sub.set_xalign(0.0);
+                    sub.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                    sub.set_visible(!item.sub.is_empty());
+                    text.append(&sub);
+                    row.append(&text);
+                    let v = widgets::label(&item.value, "ext-list-value");
+                    v.set_valign(gtk::Align::Center);
+                    if !item.tone.is_empty() {
+                        v.add_css_class(&format!("ext-{}", item.tone));
+                    }
+                    row.append(&v);
+                    st.item_labels.borrow_mut().push((v, sub));
+                    list.append(&row);
+                }
+                pv.add(&list);
+            }
+            BlockKind::Banner => pv.add(&widgets::banner(&b.text, b.warning)),
+            BlockKind::Caption => {
+                let l = widgets::label(&b.text, "ext-caption");
+                l.set_xalign(0.0);
+                l.set_wrap(true);
+                pv.add(&l);
+            }
+            BlockKind::Rows => {
+                let holder = widgets::vbox(0);
+                holder.add_css_class("ext-pane-rows");
+                let page = Page::new(st.root.clone(), holder.clone());
+                let g = page.group(&b.title);
+                for row in &b.rows {
+                    g.add(&row_widget(st, row));
+                }
+                pv.add(&holder);
+            }
+            BlockKind::Deck => pv.add(&deck(st, b)),
+            BlockKind::Unknown => {}
+        }
+    }
+    if !d.foot.is_empty() {
+        pv.foot(if d.foot_icon.is_empty() { "dialog-information-symbolic" } else { &d.foot_icon }, &d.foot);
+    }
+}
+
+/// A deck as it looks: its screen, its keys (click one to pick it) and its dials.
+fn deck(st: &Shared, b: &protocol::Block) -> gtk::Box {
+    let d = widgets::hbox(14);
+    d.add_css_class("ext-deck");
+    d.set_halign(gtk::Align::Center);
+    if !b.screen.is_empty() {
+        let screen = widgets::vbox(2);
+        screen.add_css_class("ext-deck-screen");
+        screen.set_valign(gtk::Align::Center);
+        for (i, line) in b.screen.iter().enumerate() {
+            let l = widgets::label(line, if i == 1 { "ext-deck-big" } else { "ext-deck-line" });
+            screen.append(&l);
+        }
+        d.append(&screen);
+    }
+    let grid = gtk::Grid::new();
+    grid.set_column_spacing(8);
+    grid.set_row_spacing(8);
+    grid.set_valign(gtk::Align::Center);
+    let cols = b.columns.max(1) as usize;
+    for (i, k) in b.keys.iter().enumerate() {
+        let key = gtk::Button::new();
+        key.add_css_class("ext-deck-key");
+        if b.selected == Some(i as u32) {
+            key.add_css_class("selected");
+        }
+        let inner = widgets::vbox(2);
+        inner.set_valign(gtk::Align::Center);
+        if !k.icon.is_empty() {
+            inner.append(&gtk::Image::from_icon_name(&k.icon));
+        }
+        if !k.label.is_empty() {
+            let l = widgets::label(&k.label, "ext-deck-label");
+            l.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            l.set_max_width_chars(7);
+            inner.append(&l);
+        }
+        key.set_child(Some(&inner));
+        key.set_tooltip_text(Some(&if k.label.is_empty() { format!("Key {}", i + 1) } else { format!("Key {}: {}", i + 1, k.label) }));
+        if !b.key.is_empty() {
+            let (st, name) = (st.clone(), b.key.clone());
+            key.connect_clicked(move |_| send(&st, &name, i.to_string(), true));
+        }
+        grid.attach(&key, (i % cols) as i32, (i / cols) as i32, 1, 1);
+    }
+    d.append(&grid);
+    if b.dials > 0 {
+        let dials = widgets::vbox(14);
+        dials.set_valign(gtk::Align::Center);
+        for _ in 0..b.dials {
+            let dial = widgets::hbox(0);
+            dial.add_css_class("ext-deck-dial");
+            dials.append(&dial);
+        }
+        d.append(&dials);
+    }
+    d
+}
+
 #[cfg(test)]
 mod status_tests {
     use super::status_shape;
@@ -658,5 +983,12 @@ mod status_tests {
         let b = r#"{"groups":[{"rows":[{"kind":"info","key":"ai-status","value":"Downloading 50%"},{"kind":"choice","key":"theme","disabled":false}]}]}"#;
         assert_eq!(status_shape(a), status_shape(b));
         assert_ne!(status_shape(a), status_shape(r#"{"groups":[]}"#));
+    }
+
+    #[test]
+    fn changing_readings_does_not_change_layout() {
+        let a = r#"{"groups":[],"preview":{"blocks":[{"kind":"stats","items":[{"label":"Fan","value":"2,400 rpm"}]}]}}"#;
+        let b = r#"{"groups":[],"preview":{"blocks":[{"kind":"stats","items":[{"label":"Fan","value":"2,600 rpm","tone":"warn"}]}]}}"#;
+        assert_eq!(status_shape(a), status_shape(b));
     }
 }

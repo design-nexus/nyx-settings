@@ -1,7 +1,7 @@
 id = "headset"
 name = "Headsets"
-version = "1.1.0"
-description = "Battery, sidetone, lights, equalizer presets and auto power-off for gaming headsets."
+version = "1.2.0"
+description = "Battery, sidetone, lights, equalizer presets and auto power-off for gaming headsets, and the ASTRO A50 X through Gearbench."
 exec = "./settings-headset"
-needs = ["headsetcontrol", "python3"]
-needs_hint = "Needs <tt>headsetcontrol</tt>: <tt>yay -S headsetcontrol</tt> (it installs the udev rules the headset needs)."
+needs = ["python3"]
+needs_hint = "Needs <tt>python3</tt>. Most headsets also need <tt>headsetcontrol</tt>: <tt>yay -S headsetcontrol</tt> (it installs the udev rules the headset needs); the ASTRO A50 X needs Gearbench."

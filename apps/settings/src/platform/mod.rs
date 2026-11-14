@@ -45,6 +45,12 @@ pub fn has_updates() -> bool {
     PLATFORM == Platform::NyxOS
 }
 
+/// Nyx Bar is NyxOS's bar; on Omarchy, Omarchy's shell has the bar, even when a
+/// nyx-bar happens to be installed.
+pub fn has_nyx_bar() -> bool {
+    PLATFORM == Platform::NyxOS
+}
+
 pub fn updates(page: &Page) {
     if PLATFORM == Platform::NyxOS {
         nyxos::updates::page(page);

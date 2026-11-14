@@ -2,14 +2,17 @@
 //! each one signs you in. Everything goes through `nyx-authctl`: it reports the state as
 //! JSON, and its commands do the enrolling and the PAM changes, asking for approval in
 //! their own prompts. Nothing here edits system files.
+//!
+//! The ways to sign in are rows on the left; the right side is a table of every place
+//! you sign in against every way, ticked where it works.
 
 use gtk::prelude::*;
 use serde_json::Value;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use super::accounts::terminal;
-use crate::widgets::{self, Group, Page};
+use super::accounts::{clear, head, pill, pill_row, roomy, terminal};
+use crate::widgets::{self, Page};
 use crate::{cmd, window};
 
 const CTL: &str = "nyx-authctl";
@@ -17,29 +20,6 @@ const ID: &str = "sign-in";
 
 pub fn available() -> bool {
     cmd::present(CTL)
-}
-
-fn holder(group: &Group, placeholder: &str) -> gtk::Box {
-    let h = widgets::vbox(0);
-    if !placeholder.is_empty() {
-        h.append(&widgets::label(placeholder, "dim"));
-    }
-    group.add(&h);
-    h
-}
-
-fn clear(h: &gtk::Box) {
-    widgets::forget_rows(h);
-    while let Some(c) = h.first_child() {
-        h.remove(&c);
-    }
-}
-
-fn ok_tag(row: &gtk::Box, text: &str, ok: bool) {
-    widgets::tag_row(row, text);
-    if let Some(tag) = row.first_child().and_then(|t| t.first_child()).and_then(|l| l.last_child()) {
-        tag.add_css_class(if ok { "ok-tag" } else { "warn-tag" });
-    }
 }
 
 /// Run an `nyx-authctl` command in the background, then refresh the page.
@@ -66,6 +46,10 @@ fn in_terminal(command: &str) {
     gtk::glib::timeout_add_seconds_local_once(20, || window::rebuild_if_built(ID));
 }
 
+fn fingers(fp: &Value) -> usize {
+    fp["readers"].as_array().into_iter().flatten().map(|r| r["fingers"].as_array().map_or(0, Vec::len)).sum()
+}
+
 /// What's set up, in a line ("Face, 2 fingerprints. Your password works too."), for
 /// the Accounts page's card.
 pub fn summary(done: impl FnOnce(String) + 'static) {
@@ -79,12 +63,7 @@ pub fn summary(done: impl FnOnce(String) + 'static) {
         if v["face"]["ready"] == true {
             parts.push("Face".to_string());
         }
-        let fingers: usize = v["fingerprint"]["readers"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|r| r["fingers"].as_array().map_or(0, Vec::len))
-            .sum();
+        let fingers = fingers(&v["fingerprint"]);
         if fingers > 0 {
             parts.push(format!("{fingers} fingerprint{}", if fingers == 1 { "" } else { "s" }));
         }
@@ -95,6 +74,50 @@ pub fn summary(done: impl FnOnce(String) + 'static) {
         });
     });
 }
+
+/// The ways besides a password that are set up for you: "Face", "Fingerprint", "Security key".
+pub fn methods(done: impl FnOnce(Vec<&'static str>) + 'static) {
+    cmd::run_async(&[CTL, "status", "--json"], move |result| {
+        let v: Value = result.ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        done(METHODS.iter().filter(|(m, _, _)| have(&v, m)).map(|(_, name, _)| *name).collect());
+    });
+}
+
+/// The ways to sign in besides a password: (policy key, name, icon).
+const METHODS: [(&str, &str, &str); 3] = [
+    ("face", "Face", "camera-web-symbolic"),
+    ("fingerprint", "Fingerprint", "auth-fingerprint-symbolic"),
+    ("security-key", "Security key", "media-flash-symbolic"),
+];
+
+fn have(status: &Value, m: &str) -> bool {
+    match m {
+        "face" => status["face"]["ready"] == true,
+        "fingerprint" => fingers(&status["fingerprint"]) > 0,
+        _ => status["keys"].as_array().is_some_and(|k| !k.is_empty()),
+    }
+}
+
+/// The places sign-in happens use a picture of their own.
+fn surface_icon(key: &str) -> &'static str {
+    match key {
+        "login" => "avatar-default-symbolic",
+        "lock-screen" | "lock" => "system-lock-screen-symbolic",
+        "sudo" => "utilities-terminal-symbolic",
+        "polkit" => "security-high-symbolic",
+        k if k.contains("pass") || k.contains("vault") => "dialog-password-symbolic",
+        _ => "dialog-password-symbolic",
+    }
+}
+
+/// The scan styles, by the name the lock screen reads.
+const STYLES: [(&str, &str); 5] = [
+    ("halo", "Halo"),
+    ("circular", "Circular face scan"),
+    ("cyberpunk", "Cyberpunk scanner"),
+    ("minimal", "Minimal"),
+    ("edge", "Edge glow"),
+];
 
 pub fn build(page: &Page) {
     if !available() {
@@ -107,42 +130,96 @@ pub fn build(page: &Page) {
         widgets::keywords("biometrics face fingerprint security key");
         return;
     }
+    let status: Rc<RefCell<Value>> = Rc::default();
 
+    // The picture: every place against every way.
+    let pv = page.split();
+    let undo = widgets::labeled_button("edit-undo-symbolic", "Undo last change");
+    undo.add_css_class("acc-small");
+    undo.set_tooltip_text(Some("Put the sign-in files back the way they were before the last change"));
+    undo.connect_clicked(|_| in_terminal("nyx-authctl pam restore"));
+    let content = roomy(&pv);
+    content.append(&head("What unlocks what", "Each place tries the ways in order. Your password always works too.", &[undo.upcast()]));
+    let table = widgets::vbox(0);
+    table.add_css_class("preview-card");
+    table.add_css_class("sgn-table");
+    table.append(&widgets::label("Checking this computer…", "dim"));
+    content.append(&table);
+    let banners = widgets::vbox(10);
+    content.append(&banners);
+    let foot = pv.foot(
+        "dialog-information-symbolic",
+        "Changes to sign-in open a terminal that shows exactly what changes and tests it before keeping it.",
+    );
+
+    // The ways to sign in.
     let ways = page.group("Ways to sign in");
-    ways.note("Your password always works too, everywhere.");
-    let ways_h = holder(&ways, "Checking this computer…");
-    let uses = page.group("Where they're used");
-    uses.note("Changes to sign-in open a terminal that shows exactly what changes and tests it before keeping it.");
-    let uses_h = holder(&uses, "");
-    let ssh = page.group("SSH keys on a security key");
-    ssh.note(
-        "The private key stays on the security key; each use needs a touch. Keys kept in the vault are Nyx Passwords' to serve.",
-    );
-    let ssh_h = holder(&ssh, "");
-    let hw = page.collapsible("This computer", false);
-    let hw_h = holder(&hw, "");
+    let ways_h = widgets::vbox(0);
+    ways_h.append(&widgets::label("Checking this computer…", "dim"));
+    ways.add(&ways_h);
 
-    look_group(page);
-
-    let undo = page.group("If something goes wrong");
-    let (r, _) = widgets::button_row(
-        "Undo the last change",
-        "Put the sign-in files back the way they were before the last change.",
-        "Undo…",
-        |_| in_terminal("nyx-authctl pam restore"),
+    // The rarer things, a level down.
+    let more = page.group("More");
+    let style = overlay()["lock-screen"]["style"].as_str().unwrap_or("halo").to_string();
+    let (r, _) = widgets::nav_row(
+        Some("view-reveal-symbolic"),
+        "How a scan looks",
+        "On the lock screen, prompts and sudo",
+        STYLES.iter().find(|(k, _)| *k == style).map_or("Halo", |(_, n)| n),
+        || {
+            widgets::subpage("How a scan looks", 560, look_group);
+        },
     );
+    widgets::keywords("overlay style circular cyberpunk minimal edge glow halo animation lock screen look polkit sudo intensity login screen sddm greeter theme");
+    more.add(&r);
+    let (r, ssh_count) = widgets::nav_row(Some("utilities-terminal-symbolic"), "SSH keys on a security key", "", "", {
+        let status = status.clone();
+        move || {
+            let keys = status.borrow()["ssh_keys"].clone();
+            widgets::subpage("SSH keys on a security key", 600, move |p| {
+                let g = p.group("SSH keys on a security key");
+                g.note(
+                    "The private key stays on the security key; each use needs a touch. Keys kept in the vault are Nyx Passwords' to serve.",
+                );
+                let h = widgets::vbox(0);
+                g.add(&h);
+                ssh_rows(&h, &keys);
+            });
+        }
+    });
+    widgets::keywords("ssh key security key fido2 new create github load resident");
+    more.add(&r);
+    let (r, hw_value) = widgets::nav_row(Some("computer-symbolic"), "This computer", "Camera, reader and helper", "", {
+        let status = status.clone();
+        move || {
+            let findings = status.borrow()["findings"].clone();
+            widgets::subpage("This computer", 600, move |p| {
+                let g = p.group("This computer");
+                for f in findings.as_array().into_iter().flatten() {
+                    let r = widgets::row(f["message"].as_str().unwrap_or_default(), "", None);
+                    match f["status"].as_str() {
+                        Some("ok") => pill_row(&r, "OK", "ok"),
+                        Some("warn" | "missing" | "error") => pill_row(&r, "Check", "warn"),
+                        _ => {}
+                    }
+                    g.add(&r);
+                }
+            });
+        }
+    });
+    widgets::keywords("camera reader helper hardware check");
+    more.add(&r);
+    let (r, _) = widgets::nav_row(Some("edit-undo-symbolic"), "If something goes wrong", "Undo the last change, or recover", "", || {
+        widgets::subpage("If something goes wrong", 600, recovery);
+    });
     widgets::keywords("undo restore rollback pam recovery");
-    undo.add(&r);
-    undo.note(
-        "If sudo and administrator prompts both stop working, press Ctrl+Alt+F3, sign in with your password, \
-         and run <tt>/usr/local/lib/nyx-biometrics/nyx-auth-helper pam-rollback ID</tt> with the newest ID from \
-         <tt>/var/lib/nyx-biometrics/pam-backups</tt>.",
-    );
+    more.add(&r);
 
     cmd::run_async(&[CTL, "status", "--json"], move |result| {
         widgets::begin_section(ID);
         clear(&ways_h);
-        let status: Value = match result.map(|t| serde_json::from_str(&t)) {
+        clear(&table);
+        let parsed: Value = match result.map(|t| serde_json::from_str(&t)) {
             Ok(Ok(v)) => v,
             Ok(Err(e)) => {
                 ways_h.append(&widgets::row("Couldn't read the status", &e.to_string(), None));
@@ -153,7 +230,9 @@ pub fn build(page: &Page) {
                 return;
             }
         };
-        if status["helper"] != "ready" {
+        *status.borrow_mut() = parsed.clone();
+        let s = &parsed;
+        if s["helper"] != "ready" {
             let (r, _) = widgets::button_row(
                 "Finish installing",
                 "Nyx Biometrics needs its small administrator helper to make sign-in changes.",
@@ -162,34 +241,203 @@ pub fn build(page: &Page) {
             );
             ways_h.append(&r);
         }
-        face_row(&ways_h, &status["face"]);
-        fingerprint_row(&ways_h, &status["fingerprint"]);
-        keys_rows(&ways_h, &status["keys"]);
-        let r = widgets::row("Password", "Always works, everywhere.", None);
-        ok_tag(&r, "On", true);
+        let surfaces: Vec<Value> = s["surfaces"].as_array().cloned().unwrap_or_default();
+        let places = |m: &str| surfaces.iter().filter(|x| x["methods"].as_array().is_some_and(|ms| ms.iter().any(|v| v == m))).count();
+        face_row(&ways_h, &s["face"], places("face"));
+        fingerprint_row(&ways_h, &s["fingerprint"], places("fingerprint"));
+        keys_row(&ways_h, &s["keys"]);
+        let r = widgets::icon_row("dialog-password-symbolic", "Password", "Always works, everywhere", None);
+        pill_row(&r, "On", "ok");
         widgets::keywords("password");
         ways_h.append(&r);
 
-        surface_rows(&uses_h, &status);
-        ssh_rows(&ssh_h, &status["ssh_keys"]);
+        let n_ssh = s["ssh_keys"].as_array().map_or(0, Vec::len);
+        ssh_count.set_text(&n_ssh.to_string());
+        ssh_count.set_visible(n_ssh > 0);
+        let checks = s["findings"].as_array().into_iter().flatten().filter(|f| matches!(f["status"].as_str(), Some("warn" | "missing" | "error"))).count();
+        hw_value.set_text(&if checks == 0 { "All good".to_string() } else { format!("{checks} to check") });
+        hw_value.remove_css_class(if checks == 0 { "sgn-check" } else { "sgn-good" });
+        hw_value.add_css_class(if checks == 0 { "sgn-good" } else { "sgn-check" });
+        hw_value.set_visible(s["findings"].as_array().is_some_and(|f| !f.is_empty()));
 
-        for f in status["findings"].as_array().into_iter().flatten() {
-            let msg = f["message"].as_str().unwrap_or_default();
-            let r = widgets::row(msg, "", None);
-            match f["status"].as_str() {
-                Some("ok") => ok_tag(&r, "OK", true),
-                Some("warn") | Some("missing") | Some("error") => ok_tag(&r, "Check", false),
-                _ => {}
-            }
-            hw_h.append(&r);
+        unlock_table(&table, s);
+        apply_banners(&banners, s);
+        if s["autologin"] == true {
+            foot.set_text("Login: autologin is on, so this screen only appears after you log out.");
         }
     });
 }
 
-fn face_row(h: &gtk::Box, face: &Value) {
+/// The table: a column per way, a row per place, a tick where that way works there.
+fn unlock_table(table: &gtk::Box, status: &Value) {
+    const CELL: i32 = 76;
+    let head = widgets::hbox(0);
+    head.add_css_class("sgn-head");
+    let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    spacer.set_hexpand(true);
+    head.append(&spacer);
+    let columns: Vec<(&str, &str, &str)> =
+        METHODS.iter().copied().chain(std::iter::once(("password", "Password", "dialog-password-symbolic"))).collect();
+    for (_, name, icon) in &columns {
+        let c = widgets::vbox(4);
+        c.set_size_request(CELL, -1);
+        c.set_hexpand(false);
+        let i = gtk::Image::from_icon_name(icon);
+        i.add_css_class("sgn-col-icon");
+        c.append(&i);
+        let l = gtk::Label::new(Some(name));
+        l.add_css_class("sgn-col-name");
+        c.append(&l);
+        head.append(&c);
+    }
+    table.append(&head);
+
+    let autologin = status["autologin"] == true;
+    for s in status["surfaces"].as_array().into_iter().flatten() {
+        let key = s["key"].as_str().unwrap_or_default().to_string();
+        let methods: Vec<String> =
+            s["methods"].as_array().into_iter().flatten().filter_map(|m| m.as_str().map(String::from)).collect();
+        let mut order = methods.clone();
+        if !order.iter().any(|m| m == "password") {
+            order.push("password".into());
+        }
+        let names: Vec<String> = order
+            .iter()
+            .enumerate()
+            .map(|(i, m)| {
+                let name = METHODS.iter().find(|(k, _, _)| k == m).map(|(_, n, _)| *n).unwrap_or("Password");
+                if i == 0 { name.to_string() } else { name.to_lowercase() }
+            })
+            .collect();
+        let mut desc: Vec<String> = vec![names.join(", then ")];
+        let system = s["system"] == true;
+        if let Some(err) = s["in_effect"]["error"].as_str() {
+            desc.push(err.to_string());
+        }
+        if s["check"]["ok"] == false {
+            desc.extend(s["check"]["errors"].as_array().into_iter().flatten().filter_map(Value::as_str).map(String::from));
+        }
+
+        let row = widgets::hbox(0);
+        row.add_css_class("sgn-row");
+        let lead = widgets::hbox(12);
+        lead.set_hexpand(true);
+        lead.append(&widgets::tile(surface_icon(&key)));
+        let text = widgets::vbox(2);
+        text.set_valign(gtk::Align::Center);
+        text.set_hexpand(true);
+        let line = widgets::hbox(8);
+        let title = widgets::label(s["label"].as_str().unwrap_or_default(), "sgn-place");
+        title.set_wrap(true);
+        title.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+        line.append(&title);
+        if system && s["in_effect"] == "no" {
+            line.append(&pill("Not applied", "warn"));
+        } else if !system {
+            line.append(&pill("App", "accent"));
+        }
+        text.append(&line);
+        let d = widgets::label(&desc.join(". "), "sgn-order");
+        d.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        d.set_tooltip_text(Some(&desc.join(". ")));
+        text.append(&d);
+        if !system {
+            text.set_tooltip_text(Some("Nyx Passwords and other apps will use this as they add support."));
+        } else if key == "login" && autologin {
+            text.set_tooltip_text(Some("Autologin is on, so this screen only appears after you log out."));
+        }
+        lead.append(&text);
+        row.append(&lead);
+
+        for (m, name, _) in &columns {
+            let cell = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+            cell.set_size_request(CELL, -1);
+            cell.set_hexpand(false);
+            if *m == "password" {
+                let lock = widgets::hbox(0);
+                lock.add_css_class("sgn-always");
+                lock.set_halign(gtk::Align::Center);
+                lock.set_valign(gtk::Align::Center);
+                lock.set_hexpand(true);
+                let icon = gtk::Image::from_icon_name("system-lock-screen-symbolic");
+                icon.set_hexpand(true);
+                icon.set_halign(gtk::Align::Center);
+                lock.append(&icon);
+                lock.set_tooltip_text(Some("Your password always works too"));
+                cell.append(&lock);
+            } else {
+                let check = gtk::CheckButton::new();
+                check.set_halign(gtk::Align::Center);
+                check.set_valign(gtk::Align::Center);
+                check.set_hexpand(true);
+                check.set_active(methods.iter().any(|x| x == m));
+                if have(status, m) {
+                    check.set_tooltip_text(Some(&format!("{name} for {}", s["label"].as_str().unwrap_or_default())));
+                    let (key, m) = (key.clone(), m.to_string());
+                    check.connect_toggled(move |c| {
+                        let on = if c.is_active() { "on" } else { "off" };
+                        ctl(vec!["policy".into(), "set".into(), key.clone(), m.clone(), on.into()], "");
+                    });
+                } else {
+                    check.set_sensitive(false);
+                    check.set_tooltip_text(Some(&format!("Set up {} first", name.to_lowercase())));
+                }
+                cell.append(&check);
+            }
+            row.append(&cell);
+        }
+        table.append(&row);
+    }
+}
+
+/// One banner per place whose new settings aren't in use yet, with its Apply button.
+fn apply_banners(banners: &gtk::Box, status: &Value) {
+    clear(banners);
+    for s in status["surfaces"].as_array().into_iter().flatten() {
+        if s["system"] != true || s["in_effect"] != "no" {
+            continue;
+        }
+        let key = s["key"].as_str().unwrap_or_default().to_string();
+        let label = gtk::glib::markup_escape_text(s["label"].as_str().unwrap_or_default());
+        let b = widgets::banner(
+            &format!(
+                "<b>{label} is ready to apply</b>\nA terminal shows exactly what changes and tests it before keeping it."
+            ),
+            true,
+        );
+        b.add_css_class("sgn-apply");
+        let apply = gtk::Button::with_label("Apply…");
+        apply.set_valign(gtk::Align::Center);
+        if !(key == "login" && status["autologin"] == true) {
+            apply.add_css_class("suggested-action");
+        }
+        apply.connect_clicked(move |_| in_terminal(&format!("nyx-authctl pam apply {key}")));
+        b.append(&apply);
+        banners.append(&b);
+    }
+}
+
+fn recovery(page: &Page) {
+    let g = page.group("If something goes wrong");
+    let (r, _) = widgets::button_row(
+        "Undo the last change",
+        "Put the sign-in files back the way they were before the last change.",
+        "Undo…",
+        |_| in_terminal("nyx-authctl pam restore"),
+    );
+    widgets::keywords("undo restore rollback pam recovery");
+    g.add(&r);
+    g.note(
+        "If sudo and administrator prompts both stop working, press Ctrl+Alt+F3, sign in with your password, \
+         and run <tt>/usr/local/lib/nyx-biometrics/nyx-auth-helper pam-rollback ID</tt> with the newest ID from \
+         <tt>/var/lib/nyx-biometrics/pam-backups</tt>.",
+    );
+}
+
+fn face_row(h: &gtk::Box, face: &Value, places: usize) {
     let controls = widgets::hbox(8);
-    let (title, desc, on) = if face.is_null() {
-        ("Face", "No camera found.".to_string(), false)
+    let (desc, on, reach) = if face.is_null() {
+        ("No camera found".to_string(), false, String::new())
     } else if face["ready"] == true {
         let camera = face["camera"].as_str().unwrap_or("camera");
         let reach = if face["level"] == "one-factor" {
@@ -200,69 +448,73 @@ fn face_row(h: &gtk::Box, face: &Value) {
         let b = gtk::Button::with_label("Manage…");
         b.connect_clicked(|_| in_terminal("nyx-authctl face manage"));
         controls.append(&b);
-        ("Face", format!("{} on the {camera} camera. {reach}", face["backend"].as_str().unwrap_or("")), true)
+        let backend = face["backend"].as_str().unwrap_or("");
+        let mut parts = vec![format!("{backend} · {camera} camera").trim_start_matches(" · ").to_string()];
+        if places > 0 {
+            parts.push(format!("{places} place{}", if places == 1 { "" } else { "s" }));
+        }
+        (parts.join(" · "), true, reach.to_string())
     } else if face["installed"] == true {
         let b = gtk::Button::with_label("Set up…");
         b.add_css_class("suggested-action");
         b.connect_clicked(|_| in_terminal("nyx-authctl face enroll"));
         controls.append(&b);
-        (
-            "Face",
-            format!("{} is installed. Look at the camera to enroll your face.", face["backend"].as_str().unwrap_or("")),
-            false,
-        )
+        (format!("{} is installed. Look at the camera to enroll your face.", face["backend"].as_str().unwrap_or("")), false, String::new())
     } else {
         let backend = face["backend"].as_str().unwrap_or("Irlume").to_lowercase();
         let b = gtk::Button::with_label("Install…");
         b.connect_clicked(move |_| in_terminal(&format!("yay -S {backend}")));
         controls.append(&b);
-        ("Face", face["reason"].as_str().unwrap_or("").to_string(), false)
+        (face["reason"].as_str().unwrap_or("").to_string(), false, String::new())
     };
-    let r = widgets::row(title, &desc, Some(controls.upcast_ref()));
+    let r = widgets::icon_row("camera-web-symbolic", "Face", &desc, Some(controls.upcast_ref()));
+    if !reach.is_empty() {
+        r.set_tooltip_text(Some(&reach));
+    }
     if on {
-        ok_tag(&r, "On", true);
+        pill_row(&r, "On", "ok");
     }
     widgets::keywords("face recognition irlume gaze camera infrared windows hello");
     h.append(&r);
 }
 
-fn fingerprint_row(h: &gtk::Box, fp: &Value) {
+fn fingerprint_row(h: &gtk::Box, fp: &Value, places: usize) {
     let controls = widgets::hbox(8);
-    let mut on = false;
+    let n = fingers(fp);
     let desc = match fp["state"].as_str() {
         Some("ready") => {
             let readers = fp["readers"].as_array().cloned().unwrap_or_default();
-            let fingers: usize = readers.iter().map(|r| r["fingers"].as_array().map_or(0, Vec::len)).sum();
             let name = readers.first().and_then(|r| r["name"].as_str()).unwrap_or("Fingerprint reader").to_string();
-            let b = gtk::Button::with_label(if fingers == 0 { "Set up…" } else { "Add a finger…" });
+            let b = gtk::Button::with_label(if n == 0 { "Set up…" } else { "Add a finger…" });
             b.connect_clicked(|_| in_terminal("nyx-authctl finger enroll"));
             controls.append(&b);
-            on = fingers > 0;
-            if fingers == 0 {
-                format!("{name}. No fingers enrolled yet.")
+            if n == 0 {
+                format!("{name} · no fingers yet")
             } else {
-                format!("{name}, {fingers} finger(s) enrolled.")
+                let mut d = format!("{name} · {n} finger{}", if n == 1 { "" } else { "s" });
+                if places > 0 {
+                    d.push_str(&format!(" · {places} place{}", if places == 1 { "" } else { "s" }));
+                }
+                d
             }
         }
         Some("not-installed") => {
             let b = gtk::Button::with_label("Install…");
             b.connect_clicked(|_| in_terminal("sudo pacman -S --needed fprintd libfprint"));
             controls.append(&b);
-            "A reader is connected, but fprintd isn't installed.".to_string()
+            "A reader is connected, but fprintd isn't installed".to_string()
         }
         Some("error") => format!("The fingerprint service didn't answer: {}", fp["message"].as_str().unwrap_or("")),
-        _ => "No fingerprint reader found. A supported USB reader works too.".to_string(),
+        _ => "No reader found. A supported USB reader works too".to_string(),
     };
-    let r = widgets::row("Fingerprint", &desc, Some(controls.upcast_ref()));
+    let r = widgets::icon_row("auth-fingerprint-symbolic", "Fingerprint", &desc, Some(controls.upcast_ref()));
     // No reader and nothing set up: nothing to do here until one is plugged in.
     crate::capability::rebuild_on(&["hw:fingerprint"], "sign-in");
-    let configured =
-        fp["readers"].as_array().is_some_and(|rs| rs.iter().any(|r| r["fingers"].as_array().is_some_and(|f| !f.is_empty())));
-    if !configured && !matches!(fp["state"].as_str(), Some("ready" | "not-installed" | "error")) {
+    if n == 0 && !matches!(fp["state"].as_str(), Some("ready" | "not-installed" | "error")) {
         crate::capability::bind(&r, &["hw:fingerprint"]);
     }
-    if on {
-        ok_tag(&r, "On", true);
+    if n > 0 {
+        pill_row(&r, "On", "ok");
     }
     widgets::keywords("fingerprint fprintd reader finger biometric");
     h.append(&r);
@@ -277,22 +529,47 @@ fn safe_name(name: &str) -> Option<String> {
     ok.then(|| name.to_string())
 }
 
-fn keys_rows(h: &gtk::Box, keys: &Value) {
+/// The security keys, as one row that opens their own page.
+fn keys_row(h: &gtk::Box, keys: &Value) {
     let keys = keys.as_array().cloned().unwrap_or_default();
-    for k in &keys {
+    let names: Vec<String> = keys
+        .iter()
+        .map(|k| {
+            let name = k["name"].as_str().unwrap_or("Security key");
+            if k["role"] == "backup" { format!("{name} as backup") } else { name.to_string() }
+        })
+        .collect();
+    let desc = match names.len() {
+        0 => "Register a YubiKey or another FIDO2 key".to_string(),
+        1 => format!("{}. Add a backup too", names[0]),
+        _ => names.join(", "),
+    };
+    let value = if keys.is_empty() { String::new() } else { keys.len().to_string() };
+    let (r, _) = widgets::nav_row(Some("media-flash-symbolic"), "Security keys", &desc, &value, move || {
+        let keys = keys.clone();
+        widgets::subpage("Security keys", 600, move |p| keys_page(p, &keys));
+    });
+    widgets::keywords("security key yubikey fido2 u2f add register backup remove");
+    h.append(&r);
+}
+
+fn keys_page(page: &Page, keys: &[Value]) {
+    let g = page.group("Security keys");
+    for k in keys {
         let id = k["id"].as_str().unwrap_or_default().to_string();
         let role = if k["role"] == "backup" { "Backup" } else { "Primary" };
         let pin = if k["pin"] == true { "asks for its PIN" } else { "touch only" };
         let remove = widgets::confirm_button("Remove", "Remove it", move |_| {
             ctl(vec!["keys".into(), "remove".into(), id.clone()], "Security key removed");
         });
-        let r = widgets::row(
+        let r = widgets::icon_row(
+            "media-flash-symbolic",
             k["name"].as_str().unwrap_or("Security key"),
             &format!("{role} security key, {pin}."),
             Some(remove.upcast_ref()),
         );
         widgets::keywords("security key yubikey fido2 remove");
-        h.append(&r);
+        g.add(&r);
     }
     let desc = match keys.len() {
         0 => "Register a YubiKey or another FIDO2 key, then register a backup.".to_string(),
@@ -310,14 +587,13 @@ fn keys_rows(h: &gtk::Box, keys: &Value) {
         },
     );
     widgets::keywords("security key yubikey fido2 pin touch");
-    h.append(&r);
-    let (r, _) =
-        widgets::entry_row("Add a security key", &desc, "", "name, such as Primary YubiKey", move |name| match safe_name(&name) {
-            Some(n) => in_terminal(&format!("nyx-authctl keys add '{n}'{}", if ask_pin.get() { " --pin" } else { "" })),
-            None => window::toast("Use letters, numbers, spaces, dashes or dots in the name"),
-        });
+    g.add(&r);
+    let (r, _) = widgets::entry_row("Add a security key", &desc, "", "name, such as Primary YubiKey", move |name| match safe_name(&name) {
+        Some(n) => in_terminal(&format!("nyx-authctl keys add '{n}'{}", if ask_pin.get() { " --pin" } else { "" })),
+        None => window::toast("Use letters, numbers, spaces, dashes or dots in the name"),
+    });
     widgets::keywords("security key yubikey fido2 u2f add register backup pin");
-    h.append(&r);
+    g.add(&r);
 }
 
 /// The plain SSH key names `nyx-authctl ssh-key create` accepts.
@@ -358,82 +634,6 @@ fn ssh_rows(h: &gtk::Box, keys: &Value) {
     );
     widgets::keywords("ssh key security key load resident");
     h.append(&r);
-}
-
-const METHODS: [(&str, &str); 3] = [("face", "Face"), ("fingerprint", "Fingerprint"), ("security-key", "Security key")];
-
-fn surface_rows(h: &gtk::Box, status: &Value) {
-    clear(h);
-    let have = |m: &str| match m {
-        "face" => status["face"]["ready"] == true,
-        "fingerprint" => status["fingerprint"]["readers"]
-            .as_array()
-            .is_some_and(|rs| rs.iter().any(|r| r["fingers"].as_array().is_some_and(|f| !f.is_empty()))),
-        _ => status["keys"].as_array().is_some_and(|k| !k.is_empty()),
-    };
-    for s in status["surfaces"].as_array().into_iter().flatten() {
-        let key = s["key"].as_str().unwrap_or_default().to_string();
-        let methods: Vec<String> =
-            s["methods"].as_array().into_iter().flatten().filter_map(|m| m.as_str().map(String::from)).collect();
-        let names: Vec<String> = methods
-            .iter()
-            .enumerate()
-            .map(|(i, m)| {
-                let name = METHODS.iter().find(|(k, _)| k == m).map(|(_, n)| *n).unwrap_or("Password");
-                if i == 0 { name.to_string() } else { name.to_lowercase() }
-            })
-            .collect();
-        let mut desc = names.join(", then ");
-        let system = s["system"] == true;
-        if !system {
-            desc.push_str(". Nyx Passwords and other apps will use this as they add support.");
-        } else if s["in_effect"] == "no" {
-            desc.push_str(". Not applied yet.");
-        } else if let Some(err) = s["in_effect"]["error"].as_str() {
-            desc = format!("{desc}. {err}");
-        }
-        if key == "login" && status["autologin"] == true {
-            desc.push_str(" Autologin is on, so this screen only appears after you log out.");
-        }
-        if s["check"]["ok"] == false {
-            let errs: Vec<&str> = s["check"]["errors"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
-            desc = format!("{desc} {}", errs.join(" "));
-        }
-
-        let controls = widgets::hbox(6);
-        for (m, label) in METHODS {
-            if !have(m) {
-                continue;
-            }
-            let pair = widgets::hbox(6);
-            pair.append(&widgets::label(label, "dim"));
-            let sw = gtk::Switch::new();
-            sw.set_valign(gtk::Align::Center);
-            sw.set_active(methods.iter().any(|x| x == m));
-            let key = key.clone();
-            sw.connect_active_notify(move |sw| {
-                let on = if sw.is_active() { "on" } else { "off" };
-                ctl(vec!["policy".into(), "set".into(), key.clone(), m.into(), on.into()], "");
-            });
-            pair.append(&sw);
-            controls.append(&pair);
-        }
-        if system && s["in_effect"] == "no" {
-            let apply = gtk::Button::with_label("Apply…");
-            if !(key == "login" && status["autologin"] == true) {
-                apply.add_css_class("suggested-action");
-            }
-            let key = key.clone();
-            apply.connect_clicked(move |_| in_terminal(&format!("nyx-authctl pam apply {key}")));
-            controls.append(&apply);
-        }
-        let r = widgets::row(s["label"].as_str().unwrap_or_default(), &desc, Some(controls.upcast_ref()));
-        if system && s["in_effect"] == "yes" && methods.len() > 1 {
-            ok_tag(&r, "In use", true);
-        }
-        widgets::keywords("sudo polkit administrator lock screen login passwords vault pam policy");
-        h.append(&r);
-    }
 }
 
 #[cfg(test)]
@@ -493,6 +693,10 @@ fn set_overlay(surface: &str, key: &str, value: Value) {
     }
 }
 
+fn style_options(with_minimal: bool) -> Vec<(String, String)> {
+    STYLES.iter().filter(|(k, _)| with_minimal || *k != "minimal").map(|(k, n)| (k.to_string(), n.to_string())).collect()
+}
+
 /// How scanning looks on the lock screen. The lock screen reads the file as it changes.
 fn look_group(page: &Page) {
     let g = page.group("Look");
@@ -500,30 +704,18 @@ fn look_group(page: &Page) {
     let current = overlay();
     let lock = &current["lock-screen"];
     let style = lock["style"].as_str().unwrap_or("halo").to_string();
-    let options = vec![
-        ("halo".to_string(), "Halo".to_string()),
-        ("circular".to_string(), "Circular face scan".to_string()),
-        ("cyberpunk".to_string(), "Cyberpunk scanner".to_string()),
-        ("minimal".to_string(), "Minimal".to_string()),
-        ("edge".to_string(), "Edge glow".to_string()),
-    ];
-    let (r, _) = widgets::choice_row("Lock screen style", "", options, &style, |id| {
+    let (r, _) = widgets::choice_row("Lock screen style", "", style_options(true), &style, |id| {
         set_overlay("lock-screen", "style", Value::from(id));
+        window::rebuild_if_built(ID);
     });
     widgets::keywords("overlay style circular cyberpunk minimal edge glow animation lock screen look");
     g.add(&r);
 
     let polkit_style = current["polkit"]["style"].as_str().unwrap_or("halo").to_string();
-    let options = vec![
-        ("halo".to_string(), "Halo".to_string()),
-        ("circular".to_string(), "Circular face scan".to_string()),
-        ("cyberpunk".to_string(), "Cyberpunk scanner".to_string()),
-        ("edge".to_string(), "Edge glow".to_string()),
-    ];
     let (r, _) = widgets::choice_row(
         "Administrator prompt style",
         "With the Nyx administrator prompt in use.",
-        options,
+        style_options(false),
         &polkit_style,
         |id| set_overlay("polkit", "style", Value::from(id)),
     );
@@ -531,17 +723,10 @@ fn look_group(page: &Page) {
     g.add(&r);
 
     let sudo_style = current["sudo"]["style"].as_str().unwrap_or("halo").to_string();
-    let options = vec![
-        ("halo".to_string(), "Halo".to_string()),
-        ("circular".to_string(), "Circular face scan".to_string()),
-        ("cyberpunk".to_string(), "Cyberpunk scanner".to_string()),
-        ("minimal".to_string(), "Minimal".to_string()),
-        ("edge".to_string(), "Edge glow".to_string()),
-    ];
     let (r, _) = widgets::choice_row(
         "Terminal (sudo) style",
         "Shown on screen while sudo checks your face in a terminal.",
-        options,
+        style_options(true),
         &sudo_style,
         |id| set_overlay("sudo", "style", Value::from(id)),
     );
@@ -608,4 +793,9 @@ const LOGIN_THEME_CONF: &str = "/etc/sddm.conf.d/zz-nyx-biometrics.conf";
 
 fn login_theme_on() -> bool {
     std::fs::read_to_string(LOGIN_THEME_CONF).is_ok_and(|t| t.lines().any(|l| l.trim() == "Current=nyx-biometrics"))
+}
+
+/// Whether the login screen takes your face (for Boot & Login's picture of it).
+pub fn login_face() -> bool {
+    std::path::Path::new(LOGIN_THEME_DIR).is_dir() && login_theme_on()
 }

@@ -1,0 +1,322 @@
+/* nyxos pages: their own parts, on top of style.css. */
+
+/* A system setting, applied with a rebuild: a small mark after a row's title. */
+.nx-sys {
+  color: @theme_text_tertiary;
+  -gtk-icon-size: 12px;
+}
+
+/* Home: what needs you leads the column, apart from the computer's card under it. */
+.settings-group.nx-needs {
+  margin-bottom: 14px;
+}
+
+/* Home: how many things need you, beside the group's title. */
+.nx-count {
+  font-size: 0.8em;
+  font-weight: 600;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: alpha(@theme_danger, 0.16);
+  color: @theme_danger;
+}
+
+/* ---------- Applying changes: the bar at the foot of a system page ---------- */
+
+.changes-bar.nxa-bar {
+  margin: 0;
+  padding: 12px 20px;
+  border-radius: 0;
+  background: mix(@theme_bg, @theme_card, 0.7);
+  box-shadow: inset 0 1px alpha(@theme_text, 0.08);
+}
+
+.changes-bar.nxa-bar.ok {
+  background: mix(@theme_bg, @theme_success, 0.1);
+  box-shadow: inset 0 1px alpha(@theme_success, 0.3);
+}
+
+.changes-bar.nxa-bar.failed {
+  background: mix(@theme_bg, @theme_danger, 0.08);
+  box-shadow: inset 0 1px alpha(@theme_danger, 0.3);
+}
+
+.nxa-tile {
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 8px;
+  background: alpha(@theme_accent, 0.14);
+  color: @theme_accent;
+}
+
+.nxa-bar.ok .nxa-tile {
+  background: alpha(@theme_success, 0.16);
+  color: @theme_success;
+}
+
+.nxa-bar.failed .nxa-tile {
+  background: alpha(@theme_danger, 0.14);
+  color: @theme_danger;
+}
+
+.nxa-tile > image {
+  -gtk-icon-size: 16px;
+}
+
+.nxa-chips {
+  margin-top: 4px;
+}
+
+.nxa-chips > flowboxchild {
+  padding: 0;
+}
+
+.nxa-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: alpha(@theme_text, 0.06);
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.08);
+  font-size: 0.885em;
+}
+
+.nxa-chip > image {
+  -gtk-icon-size: 12px;
+  color: @theme_dim_text;
+}
+
+.nxa-was {
+  color: @theme_text_tertiary;
+  text-decoration-line: line-through;
+}
+
+.nxa-chip > image.nxa-arrow {
+  -gtk-icon-size: 10px;
+}
+
+.nxa-now {
+  font-weight: 600;
+}
+
+progressbar.nxa-progress {
+  margin-top: 6px;
+}
+
+progressbar.nxa-progress trough,
+progressbar.nxa-progress progress {
+  min-height: 4px;
+  border-radius: 2px;
+}
+
+progressbar.nxa-progress progress {
+  background: @theme_accent;
+}
+
+/* A changed row: a dot before its title. */
+.nxa-dot {
+  min-width: 7px;
+  min-height: 7px;
+  border-radius: 999px;
+  background: @theme_accent;
+}
+
+/* ---------- Time & Language: the map, the clock and the samples ---------- */
+
+.nxr-clock {
+  font-size: 1.85em;
+  font-weight: 600;
+  color: @theme_danger;
+}
+
+.preview-card.nxr-map {
+  padding: 10px 12px 12px;
+}
+
+.nxr-legend {
+  margin: 6px 4px 0;
+}
+
+.nxr-legend-text {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.nxr-key {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 999px;
+}
+
+.nxr-key.zone {
+  background: @theme_danger;
+}
+
+.nxr-key.now {
+  min-width: 6px;
+  min-height: 6px;
+  box-shadow: inset 0 0 0 2px @theme_dim_text;
+}
+
+.nxr-key.night {
+  border-radius: 2px;
+  background: alpha(@theme_text, 0.22);
+}
+
+.nxr-cols > flowboxchild {
+  padding: 0;
+}
+
+.nxr-col-title {
+  font-weight: 600;
+  font-size: 0.923em;
+}
+
+.nxr-after {
+  font-size: 0.8em;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: alpha(@theme_accent, 0.14);
+  color: @theme_accent;
+}
+
+.nxr-fmt-icon {
+  color: @theme_dim_text;
+  -gtk-icon-size: 14px;
+}
+
+.nxr-fmt-key {
+  color: @theme_dim_text;
+  font-size: 0.885em;
+}
+
+.nxr-fmt-value {
+  font-weight: 600;
+}
+
+.nxr-fmt-was {
+  color: @theme_text_tertiary;
+  font-size: 0.846em;
+  text-decoration-line: line-through;
+}
+
+.nxr-note {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.nxr-name {
+  font-weight: 600;
+  font-size: 1.08em;
+}
+
+.nxr-net .nxr-fmt-key {
+  margin-top: 8px;
+}
+
+.nxr-address {
+  font-weight: 600;
+}
+
+/* ---------- Users and Accounts: faces, people, the person picked ---------- */
+
+.nxu-face {
+  border-radius: 999px;
+}
+
+.settings-option.nxu-you,
+.settings-option.nxu-person,
+.settings-option.nxu-add {
+  padding-left: 12px;
+}
+
+.nxu-you .settings-option-title,
+.nxu-me-name {
+  font-weight: 600;
+}
+
+.nxu-me {
+  padding: 12px 14px 6px;
+}
+
+.settings-option.nxu-person.picked {
+  background: mix(@theme_card, @theme_accent, 0.08);
+  box-shadow: inset 3px 0 @theme_success;
+}
+
+.nxu-shield {
+  color: @theme_success;
+  -gtk-icon-size: 12px;
+}
+
+.nxu-plus {
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 999px;
+  color: @theme_accent;
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.5);
+  -gtk-icon-size: 14px;
+}
+
+.nxu-add .settings-option-title {
+  color: @theme_accent;
+}
+
+.nxu-head {
+  margin-bottom: 4px;
+}
+
+.nxu-name {
+  font-size: 1.385em;
+  font-weight: 600;
+}
+
+.nxu-line {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+window.settings-window button.nxu-back {
+  color: @theme_accent;
+  padding: 2px 8px;
+}
+
+.nxu-lab {
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: @theme_dim_text;
+  margin-top: 4px;
+}
+
+.nxu-choice {
+  padding: 12px 14px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.06);
+}
+
+.nxu-choice.on {
+  background: mix(@theme_card, @theme_accent, 0.1);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.6);
+}
+
+.nxu-choice-title {
+  font-weight: 600;
+}
+
+.nxu-choice-icon {
+  color: @theme_success;
+  -gtk-icon-size: 14px;
+}
+
+.settings-card.nxu-remove {
+  padding: 12px 14px;
+}
+
+.nxu-danger {
+  color: @theme_danger;
+}
+
+.nxu-note {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}

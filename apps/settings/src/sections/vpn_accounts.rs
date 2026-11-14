@@ -1,5 +1,5 @@
-//! VPN services, under Online Accounts: the ones set up, and adding one. The Control
-//! Center's VPN tile then works with whatever is set up here.
+//! VPN services, under Online Accounts and on Network: the ones set up, and adding one.
+//! The Control Center's VPN tile then works with whatever is set up here.
 //!
 //! - Services with their own Linux tool (NordVPN, ExpressVPN, Private Internet Access,
 //!   Mullvad, Proton VPN): install it, then sign in the way that tool does.
@@ -23,6 +23,12 @@ pub fn adding() -> bool {
 fn show_add(on: bool) {
     ADDING.with(|a| a.set(on));
     window::rebuild("online-accounts");
+}
+
+/// Redraw the pages that show VPN services, after one is added or removed.
+fn refresh() {
+    window::rebuild_if_built("online-accounts");
+    window::rebuild_if_built("network");
 }
 
 /// How a service is installed.
@@ -240,17 +246,82 @@ fn set_chosen(id: &str) {
     }
 }
 
-/// The VPN group on the Online Accounts page.
+/// The VPN group on the Online Accounts page: which VPN the Control Center's tile
+/// connects, and adding one. Signing in and out of each is under Network › VPN services.
 pub fn build(page: &Page) {
     let g = page.group("VPN");
-    g.note("The Control Center's VPN tile shows the one chosen here.");
-    // Every service set up, as (id, name), the way the Control Center names them.
+    let services = installed();
+    if services.is_empty() {
+        g.add(&widgets::icon_row(
+            "security-high-symbolic",
+            "No VPN yet",
+            "NordVPN, ExpressVPN, Proton, PIA, Mullvad, or a WireGuard or OpenVPN file",
+            None,
+        ));
+    } else {
+        let current = chosen().filter(|c| services.iter().any(|(id, _)| id == c)).unwrap_or_else(|| services[0].0.clone());
+        let name = services.iter().find(|(id, _)| *id == current).map(|(_, n)| n.clone()).unwrap_or_default();
+        let control: gtk::Widget = if services.len() > 1 {
+            let dd = widgets::dropdown(&services, &current);
+            let options = services.clone();
+            dd.connect_selected_notify(move |d| {
+                if let Some((id, _)) = options.get(d.selected() as usize) {
+                    set_chosen(id);
+                    refresh();
+                }
+            });
+            dd.upcast()
+        } else {
+            widgets::label(&name, "dim").upcast()
+        };
+        control.set_valign(gtk::Align::Center);
+        g.add(&widgets::icon_row(
+            "security-high-symbolic",
+            "Control Center tile",
+            &format!("Connects {}", gtk::glib::markup_escape_text(&name)),
+            Some(&control),
+        ));
+    }
+    g.add(&super::accounts::add_row("Add a VPN", || show_add(true)));
+    widgets::keywords("vpn control center tile nordvpn expressvpn proton pia private internet access mullvad surfshark windscribe wireguard openvpn");
+}
+
+/// Every service set up, as (id, name), the way the Control Center names them.
+fn installed() -> Vec<(String, String)> {
     let mut services: Vec<(String, String)> = PROVIDERS
         .iter()
         .filter(|p| p.tool.is_some_and(cmd::present))
         .map(|p| (p.id.to_string(), if p.id == "pia" { "Private Internet Access".to_string() } else { p.name.to_string() }))
         .collect();
     services.extend(nm_vpns().into_iter().map(|(name, uuid, _)| (format!("nm:{uuid}"), name)));
+    services
+}
+
+/// The VPN services set up, as a page one level down (from Network).
+pub fn subpage() {
+    widgets::subpage("VPN services", 560, |p| {
+        services(p, || {
+            widgets::subpage("Add a VPN", 560, providers);
+        })
+    });
+}
+
+/// How many VPN services are set up.
+pub fn count() -> usize {
+    PROVIDERS.iter().filter(|p| p.tool.is_some_and(cmd::present)).count() + nm_vpns().len()
+}
+
+/// NetworkManager's VPN connections, as (name, uuid), and which the Control Center uses
+/// (`nm:<uuid>` or a service's id).
+pub fn nm_connections() -> (Vec<(String, String)>, Option<String>) {
+    (nm_vpns().into_iter().map(|(name, uuid, _)| (name, uuid)).collect(), chosen())
+}
+
+/// Each VPN set up, with signing in and out or removing it (Network › VPN services).
+fn services(page: &Page, on_add: impl Fn() + 'static) {
+    let g = page.group("VPN");
+    g.note("The Control Center's VPN tile shows the one chosen here.");
+    let services = installed();
     if services.len() > 1 {
         let current = chosen().filter(|c| services.iter().any(|(id, _)| id == c)).unwrap_or_else(|| services[0].0.clone());
         let (r, _) =
@@ -288,7 +359,7 @@ pub fn build(page: &Page) {
             cmd::run_async(&["nmcli", "connection", "delete", "uuid", &uuid], move |r| match r {
                 Ok(_) => {
                     window::toast(&format!("Removed {n3}"));
-                    window::rebuild("online-accounts");
+                    refresh();
                 }
                 Err(e) => window::toast(&format!("Couldn't remove {n3}: {e}")),
             });
@@ -299,8 +370,8 @@ pub fn build(page: &Page) {
         g.add(&widgets::row("No VPN set up", "Add NordVPN, ExpressVPN, Proton, PIA, Mullvad or a WireGuard/OpenVPN file.", None));
     }
     let (r, _) =
-        widgets::button_row("Add a VPN", "Choose a service, then install and sign in, or import its file.", "Add…", |_| {
-            show_add(true)
+        widgets::button_row("Add a VPN", "Choose a service, then install and sign in, or import its file.", "Add…", move |_| {
+            on_add()
         });
     g.add(&r);
     widgets::keywords("vpn nordvpn expressvpn proton pia private internet access mullvad surfshark windscribe wireguard openvpn");
@@ -315,6 +386,11 @@ pub fn add_page(page: &Page) {
     back.set_halign(gtk::Align::Start);
     back.connect_clicked(|_| show_add(false));
     page.body.append(&back);
+    providers(page);
+}
+
+/// Every service there is to add.
+fn providers(page: &Page) {
     let g = page.group("Add a VPN");
     g.note("Services with their own app are installed and signed in here; others come as a file from your account page.");
     for p in PROVIDERS {
@@ -378,7 +454,7 @@ fn sign_in(p: Provider) {
                     match run(&code) {
                         Ok(()) => {
                             window::toast(&format!("Signed in to {name}"));
-                            window::rebuild("online-accounts");
+                            refresh();
                             None
                         }
                         Err(e) => Some(format!("{e:#}")),
@@ -433,7 +509,10 @@ fn import_file(provider: &'static str, page: Option<&'static str>) {
                     cmd::spawn(&["nmcli", "connection", "modify", "uuid", uuid, "connection.autoconnect", "no"]);
                 }
                 window::toast("Imported. Connect it from the Control Center's VPN tile");
-                show_add(false);
+                refresh();
+                if adding() {
+                    show_add(false);
+                }
             }
             Err(e) => window::toast(&format!("Couldn't import: {e}")),
         });

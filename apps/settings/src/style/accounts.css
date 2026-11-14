@@ -1,0 +1,526 @@
+/* accounts pages: their own parts, on top of style.css. Also Time & Language, Boot &
+ * Login and Default Apps, which share their parts. */
+
+/* ---------- Shared parts ---------- */
+
+.acc-pill {
+  font-size: 0.8em;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: alpha(@theme_text, 0.08);
+  color: @theme_dim_text;
+}
+
+.acc-pill.ok {
+  background: alpha(@theme_success, 0.15);
+  color: @theme_success;
+}
+
+.acc-pill.warn {
+  background: alpha(@theme_warning, 0.16);
+  color: @theme_warning;
+}
+
+.acc-pill.accent {
+  background: alpha(@theme_accent, 0.15);
+  color: @theme_accent;
+}
+
+.acc-pill.danger {
+  background: alpha(@theme_danger, 0.15);
+  color: @theme_danger;
+}
+
+.acc-pill.muted {
+  background: alpha(@theme_text, 0.07);
+  color: @theme_text_tertiary;
+}
+
+.acc-fact-key {
+  font-size: 0.846em;
+  color: @theme_text_tertiary;
+}
+
+.acc-fact-value {
+  font-weight: 600;
+}
+
+.acc-facts flowboxchild {
+  padding: 0;
+  background: none;
+}
+
+.acc-subhead {
+  margin-top: 4px;
+}
+
+.acc-subhead-title {
+  font-weight: 600;
+}
+
+.acc-subhead-line {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.acc-title-line {
+  margin: 14px 0 2px;
+  min-height: 28px;
+}
+
+.acc-title-line .group-title {
+  margin: 0 0 0 2px;
+}
+
+.split-controls > .settings-group:first-child .acc-title-line,
+.settings-page > .settings-group:first-child .acc-title-line {
+  margin-top: 0;
+}
+
+.acc-count,
+.acc-title-end.dim {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.settings-option.acc-clickable:hover {
+  background: @row_hover;
+}
+
+.settings-option.acc-clickable.selected {
+  background: mix(@theme_card, @theme_accent, 0.08);
+  box-shadow: inset 3px 0 0 alpha(@theme_accent, 0.8);
+}
+
+.acc-add-row .settings-option-title {
+  color: @theme_accent;
+  font-weight: 500;
+}
+
+.acc-add-icon {
+  color: @theme_accent;
+  min-width: 30px;
+  -gtk-icon-size: 16px;
+}
+
+.acc-avatar {
+  margin-right: 2px;
+}
+
+.acc-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid alpha(@theme_text, 0.12);
+  font-size: 0.885em;
+  color: @theme_dim_text;
+}
+
+.acc-chip image {
+  -gtk-icon-size: 12px;
+}
+
+.acc-status.ok {
+  color: @theme_success;
+  font-weight: 600;
+}
+
+.acc-status.muted {
+  color: @theme_text_tertiary;
+  font-weight: 600;
+}
+
+.acc-status image {
+  -gtk-icon-size: 14px;
+}
+
+window.settings-window button.acc-danger-text {
+  color: @theme_danger;
+}
+
+/* ---------- Users ---------- */
+
+.acc-card {
+  padding: 18px 18px;
+}
+
+.acc-card-name {
+  font-size: 1.231em;
+  font-weight: 700;
+}
+
+.acc-ability {
+  padding: 10px 12px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.05);
+}
+
+.acc-ability.on {
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.22);
+}
+
+.acc-ability-title {
+  font-weight: 600;
+}
+
+.acc-ability-line {
+  font-size: 0.885em;
+  color: @theme_dim_text;
+}
+
+.acc-ability-warn {
+  font-size: 0.885em;
+  color: @theme_warning;
+}
+
+.acc-signin {
+  padding: 12px 16px;
+}
+
+.acc-signin-col {
+  margin-left: 18px;
+}
+
+.acc-foot button {
+  padding: 3px 10px;
+}
+
+/* ---------- Sign-in & Security ---------- */
+
+.sgn-table {
+  padding: 0;
+}
+
+.sgn-head {
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid alpha(@theme_text, 0.06);
+}
+
+.sgn-col-icon {
+  color: @theme_success;
+  -gtk-icon-size: 15px;
+}
+
+.sgn-col-name {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.sgn-row {
+  padding: 10px 12px;
+  min-height: 34px;
+}
+
+.sgn-row + .sgn-row {
+  border-top: 1px solid alpha(@theme_text, 0.06);
+}
+
+.sgn-place {
+  font-weight: 600;
+}
+
+.sgn-order {
+  font-size: 0.885em;
+  color: @theme_dim_text;
+}
+
+.sgn-always {
+  min-width: 26px;
+  min-height: 26px;
+  border-radius: 7px;
+  background: alpha(@theme_text, 0.07);
+  color: @theme_text_tertiary;
+}
+
+.sgn-always image {
+  -gtk-icon-size: 13px;
+}
+
+.sgn-good {
+  color: @theme_success;
+}
+
+.sgn-check {
+  color: @theme_warning;
+}
+
+/* ---------- Online Accounts ---------- */
+
+.oac-status {
+  font-size: 0.885em;
+  font-weight: 600;
+  color: @theme_dim_text;
+}
+
+.oac-status.ok {
+  color: @theme_success;
+}
+
+.oac-status.warn {
+  color: @theme_warning;
+}
+
+.oac-dot {
+  min-width: 7px;
+  min-height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.oac-source {
+  padding: 16px 12px;
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.25);
+}
+
+.oac-source-name {
+  font-weight: 700;
+}
+
+.oac-source-id {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.oac-app,
+window.settings-window button.oac-provider {
+  padding: 10px 12px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.05);
+}
+
+.oac-app.on {
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.2);
+}
+
+.oac-app-title {
+  font-weight: 600;
+}
+
+.oac-app-line {
+  font-size: 0.885em;
+  color: @theme_dim_text;
+}
+
+window.settings-window button.oac-provider:hover {
+  background: mix(@theme_card, @theme_text, 0.04);
+}
+
+.oac-providers flowboxchild {
+  padding: 0;
+  background: none;
+}
+
+.oac-facts,
+.oac-files {
+  padding: 12px 16px;
+}
+
+/* Connection settings, in the picture's place. */
+.oac-crumbs {
+  margin: -4px 0 -6px -6px;
+}
+
+.oac-crumb {
+  font-weight: 600;
+}
+
+.oac-parts {
+  margin-top: 2px;
+}
+
+.oac-settings > .settings-group:first-child,
+.oac-settings > box > .settings-group:first-child {
+  margin-top: 0;
+}
+
+.oac-checked {
+  margin: 2px 14px 8px 54px;
+  font-size: 0.885em;
+  color: @theme_success;
+}
+
+.oac-savebar {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid @theme_divider;
+}
+
+window.settings-window button.acc-small {
+  padding: 3px 10px;
+  min-height: 26px;
+  font-size: 0.923em;
+}
+
+window.settings-window button.acc-small image {
+  -gtk-icon-size: 13px;
+}
+
+/* ---------- Time & Language ---------- */
+
+.rgn-now-time {
+  font-size: 2em;
+  font-weight: 700;
+}
+
+.rgn-now-ampm {
+  color: @theme_dim_text;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.rgn-map {
+  padding: 12px 12px 8px;
+}
+
+.rgn-samples {
+  padding: 14px 16px;
+}
+
+/* ---------- Boot & Login ---------- */
+
+.bts-step {
+  padding: 12px 16px 12px 12px;
+}
+
+.bts-step.skipped .bts-art,
+.bts-step.skipped .bts-title {
+  opacity: 0.6;
+}
+
+.bts-num {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 999px;
+  background: alpha(currentColor, 0.15);
+  color: @theme_accent;
+  font-weight: 700;
+}
+
+.acc-pill.bts-pill {
+  background: alpha(currentColor, 0.15);
+  color: @theme_accent;
+}
+
+.bts-step.skipped .bts-num {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px alpha(@theme_text, 0.35);
+  color: @theme_dim_text;
+}
+
+.bts-num.done {
+  background: @theme_success;
+  color: @theme_bg;
+}
+
+.bts-num image {
+  -gtk-icon-size: 14px;
+  margin: 0 8px;
+}
+
+.bts-art {
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.1);
+}
+
+.bts-title {
+  font-weight: 600;
+}
+
+.bts-desc {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+/* ---------- Default Apps ---------- */
+
+.dfa-dropdown image {
+  -gtk-icon-size: 16px;
+}
+
+menubutton.dfa-kind > button {
+  min-height: 24px;
+  padding: 3px 10px;
+  border-radius: var(--nyx-radius-small);
+  background: @theme_card;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.06);
+  min-width: 190px;
+}
+
+menubutton.dfa-kind > button:hover {
+  background: mix(@theme_card, @theme_text, 0.04);
+}
+
+menubutton.dfa-kind.hot > button,
+menubutton.dfa-kind > button:checked {
+  box-shadow: inset 0 0 0 1.5px @theme_accent;
+  background: mix(@theme_card, @theme_accent, 0.08);
+}
+
+.dfa-kind image {
+  color: @theme_dim_text;
+  -gtk-icon-size: 14px;
+}
+
+.dfa-kind-name {
+  font-weight: 500;
+}
+
+.dfa-ending {
+  font-family: monospace;
+  font-size: 0.846em;
+  color: @theme_text_tertiary;
+}
+
+.dfa-app {
+  padding: 4px 12px 4px 8px;
+  border-radius: var(--nyx-radius-small);
+  background: @theme_card;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.06);
+  min-width: 140px;
+}
+
+.dfa-app.hot {
+  box-shadow: inset 0 0 0 1.5px @theme_accent;
+}
+
+.dfa-app.none {
+  background: none;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.12);
+}
+
+.dfa-app-name {
+  font-weight: 500;
+}
+
+.dfa-app.none .dfa-app-name {
+  color: @theme_dim_text;
+}
+
+.dfa-chooser-head {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+  margin: 4px 8px 6px;
+}
+
+.dfa-chooser button.dfa-choice {
+  padding: 6px 8px;
+  min-width: 200px;
+}
+
+.dfa-chooser button.dfa-choice.current {
+  background: alpha(@theme_accent, 0.12);
+}
+
+window.settings-window button.oac-provider label {
+  font-weight: normal;
+}
+
+window.settings-window button.oac-provider label.oac-app-title {
+  font-weight: 600;
+}
+
+window.settings-window dropdown.dfa-dropdown > button {
+  min-width: 124px;
+}

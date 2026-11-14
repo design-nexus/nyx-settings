@@ -18,11 +18,25 @@ pub fn install() {
             ".settings-dialog-main .settings-page",
             ".settings-dialog-main .settings-page.narrow",
         ],
-        css: include_str!("style.css"),
+        // style.css, then each section's own parts (style/).
+        css: concat!(
+            include_str!("style.css"),
+            include_str!("style/connections.css"),
+            include_str!("style/hardware.css"),
+            include_str!("style/personalization.css"),
+            include_str!("style/desktop.css"),
+            include_str!("style/input.css"),
+            include_str!("style/accounts.css"),
+            include_str!("style/assistant.css"),
+            include_str!("style/ai.css"),
+            include_str!("style/system.css"),
+            include_str!("style/nyxos.css"),
+            include_str!("style/nyxos2.css")
+        ),
         no_glow_css: "\n.theme-card.selected, .toast { box-shadow: 0 0 0 1px alpha(@theme_accent, 0.6); }\n\
              window.settings-window scale > trough > slider, window.settings-window .fader-scale > trough > slider \
              { box-shadow: 0 0 0 1px alpha(@theme_accent, 0.72); }\n",
-        extra_colors: None,
+        extra_colors: Some(swatch_colors),
         prefs: || {
             let p = prefs::get();
             ThemePrefs { mode: p.mode, theme: p.theme, glow: p.glow, reduce_motion: p.reduce_motion }
@@ -34,6 +48,20 @@ pub fn install() {
             })
         }),
     });
+}
+
+/// The theme's swatches as `@cc_blue`, `@cc_green`…, the colours the Control Center's
+/// tiles use, so its picture matches. Every name is defined (the accent stands in for
+/// one a theme lacks).
+fn swatch_colors(p: &Palette) -> String {
+    let swatches = nyx_theme::swatches();
+    ["blue", "violet", "pink", "red", "coral", "amber", "green", "teal"]
+        .iter()
+        .map(|name| {
+            let c = swatches.iter().find(|(n, _)| n == name).map(|(_, c)| c.clone()).unwrap_or_else(|| p.accent.clone());
+            format!("@define-color cc_{name} {c};\n")
+        })
+        .collect()
 }
 
 /// Icons the icon themes don't have, shipped inside the program.

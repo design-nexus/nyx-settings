@@ -1,0 +1,392 @@
+/* nyxos2 pages: their own parts, on top of style.css. NyxOS's Services, Software,
+ * Boot & Sign-in, Updates and Lock Screen (`nx2-`). */
+
+/* ---------- Shared ---------- */
+
+/* A group title with something at its right: the line holds the title's spacing. */
+.nx2-group-head .group-title {
+  margin: 0 2px;
+}
+
+.nx2-group-head {
+  margin: 14px 0 2px;
+  min-height: 28px;
+}
+
+.split-controls > .settings-group:first-child .nx2-group-head {
+  margin-top: 0;
+}
+
+.nx2-head-note {
+  color: @theme_dim_text;
+  font-size: 0.885em;
+}
+
+.nx2-sub-head {
+  margin-top: 2px;
+}
+
+.nx2-sub {
+  font-weight: 600;
+}
+
+.nx2-dim {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.nx2-caps {
+  color: @theme_dim_text;
+  font-size: 0.769em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.nx2-big {
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.nx2-faded {
+  opacity: 0.55;
+}
+
+.nx2-mono {
+  font-family: monospace;
+  font-size: 0.885em;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: alpha(@theme_text, 0.07);
+}
+
+.nx2-empty {
+  color: @theme_dim_text;
+  padding: 14px 16px;
+}
+
+.nx2-dot {
+  min-width: 7px;
+  min-height: 7px;
+  border-radius: 99px;
+  background: alpha(@theme_dim_text, 0.7);
+}
+
+.nx2-dot.ok {
+  background: @theme_success;
+}
+
+.nx2-dot.wait {
+  background: @theme_accent;
+}
+
+.nx2-pill {
+  font-size: 0.769em;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  color: @theme_dim_text;
+  background: alpha(@theme_text, 0.08);
+}
+
+.nx2-pill.accent {
+  color: @theme_accent;
+  background: alpha(@theme_accent, 0.16);
+}
+
+.nx2-pill.ok {
+  color: @theme_success;
+  background: alpha(@theme_success, 0.16);
+}
+
+.nx2-pill.warn {
+  color: @theme_warning;
+  background: alpha(@theme_warning, 0.16);
+}
+
+window.settings-window button.nx2-link {
+  padding: 2px 6px;
+  min-height: 0;
+  background: none;
+  box-shadow: none;
+  border: none;
+  color: @theme_accent;
+  font-size: 0.923em;
+}
+
+window.settings-window button.nx2-link:hover {
+  background: alpha(@theme_accent, 0.1);
+}
+
+window.settings-window button.nx2-link.armed {
+  color: @theme_danger;
+}
+
+.nx2-warn {
+  color: @theme_warning;
+  font-size: 0.885em;
+}
+
+.nx2-warn > image {
+  -gtk-icon-size: 14px;
+}
+
+.nx2-facts {
+  padding: 12px 16px;
+}
+
+.nx2-fact-key {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.nx2-fact-value {
+  font-weight: 600;
+}
+
+/* A larger tile: an app's own picture stand-in, the Updates badge. */
+.row-tile.nx2-big-tile {
+  min-width: 64px;
+  min-height: 64px;
+  border-radius: 16px;
+}
+
+.row-tile.nx2-big-tile > image {
+  -gtk-icon-size: 30px;
+  margin: 0 17px;
+}
+
+/* A row that's picked from a list and shown in the preview. */
+.settings-option.nx2-picked {
+  background: mix(@theme_card, @theme_accent, 0.1);
+  box-shadow: inset 3px 0 0 @theme_accent;
+}
+
+/* ---------- Services ---------- */
+
+window.settings-window button.nx2-svc-tile {
+  padding: 8px 10px;
+  border-radius: var(--nyx-radius-card);
+  background: @theme_card;
+  border: none;
+  box-shadow: none;
+}
+
+window.settings-window button.nx2-svc-tile:hover {
+  background: mix(@theme_card, @theme_accent, 0.05);
+}
+
+window.settings-window button.nx2-svc-tile:checked {
+  background: mix(@theme_card, @theme_accent, 0.1);
+  box-shadow: inset 0 0 0 1.5px alpha(@theme_accent, 0.75);
+}
+
+.nx2-svc-name {
+  font-weight: 600;
+}
+
+.nx2-svc-line {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+}
+
+.nx2-svc-flip {
+  padding: 12px 16px;
+}
+
+.nx2-svc-arrow {
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 99px;
+  background: alpha(@theme_text, 0.07);
+  color: @theme_dim_text;
+}
+
+.nx2-svc-arrow > image {
+  margin: 0 6px;
+}
+
+.nx2-person {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+/* ---------- Software ---------- */
+
+.nx2-wide-seg {
+  margin-bottom: 0;
+}
+
+.nx2-sft-icon {
+  margin: 0 2px;
+}
+
+.nx2-sft-hero {
+  padding: 16px 18px;
+}
+
+.nx2-sft-name {
+  font-size: 1.3em;
+  font-weight: 600;
+}
+
+.nx2-chips {
+  margin-top: 4px;
+}
+
+window.settings-window button.nx2-quiet-danger {
+  color: @theme_danger;
+}
+
+.nx2-sft-source {
+  padding: 12px 14px;
+}
+
+.nx2-sft-source-title {
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* ---------- Boot & Sign-in ---------- */
+
+.settings-option.nx2-bt-pick {
+  padding: 10px;
+}
+
+window.settings-window button.nx2-bt-swatch {
+  padding: 3px 3px 4px;
+  border-radius: 8px;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+window.settings-window button.nx2-bt-swatch:hover {
+  background: alpha(@theme_text, 0.05);
+}
+
+window.settings-window button.nx2-bt-swatch:checked {
+  background: alpha(@theme_accent, 0.1);
+  box-shadow: inset 0 0 0 1.5px @theme_accent;
+}
+
+.nx2-bt-swatch-name {
+  font-size: 0.846em;
+  color: @theme_dim_text;
+  margin-left: 2px;
+}
+
+window.settings-window button.nx2-bt-swatch:checked .nx2-bt-swatch-name {
+  color: @theme_text;
+  font-weight: 600;
+}
+
+/* ---------- Updates ---------- */
+
+.nx2-upd-ready {
+  padding: 12px 14px;
+}
+
+.row-tile.nx2-upd-badge {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 12px;
+  margin: 6px 6px 0 0;
+}
+
+.row-tile.nx2-upd-badge > image {
+  -gtk-icon-size: 20px;
+  margin: 0 12px;
+}
+
+.nx2-upd-count {
+  font-size: 0.769em;
+  font-weight: 700;
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0 4px;
+  border-radius: 99px;
+  color: @theme_bg;
+  background: @theme_text;
+}
+
+.nx2-upd-title {
+  font-weight: 600;
+  font-size: 1.077em;
+}
+
+.nx2-upd-checked {
+  padding: 2px 4px;
+}
+
+.nx2-upd-checked > image {
+  color: @theme_success;
+  -gtk-icon-size: 14px;
+}
+
+.settings-option-description.nx2-upd-has {
+  color: @theme_warning;
+}
+
+.nx2-upd-node {
+  margin-bottom: 10px;
+}
+
+.nx2-upd-gen {
+  padding: 10px 14px;
+}
+
+.nx2-upd-gen-title {
+  font-weight: 600;
+}
+
+.nx2-upd-gen.nx2-upd-running {
+  box-shadow: inset 0 0 0 1px alpha(@theme_success, 0.6);
+}
+
+.nx2-upd-gen.nx2-upd-next {
+  background: mix(@theme_card, @theme_accent, 0.06);
+  box-shadow: inset 0 0 0 1.5px alpha(@theme_accent, 0.55);
+}
+
+.nx2-upd-more {
+  margin-top: 4px;
+}
+
+/* ---------- Lock Screen ---------- */
+
+.nx2-lks-name {
+  font-weight: 600;
+  font-size: 0.923em;
+  margin-top: 2px;
+}
+
+.nx2-lks-when {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.nx2-lks-when.hot {
+  color: @theme_success;
+  font-weight: 600;
+}
+
+.nx2-lks-arrow {
+  color: @theme_dim_text;
+  -gtk-icon-size: 12px;
+}
+
+.nx2-lks-axis {
+  padding: 6px 12px 4px;
+}
+
+.nx2-lks-note {
+  padding: 12px 14px;
+}
+
+.nx2-lks-note > image {
+  color: @theme_dim_text;
+}
+
+.settings-group.nx2-gap {
+  margin-top: 14px;
+}

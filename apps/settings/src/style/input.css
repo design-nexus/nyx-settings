@@ -1,0 +1,644 @@
+/* input pages: their own parts, on top of style.css. Also the Desktop pages built
+ * alongside them: Workspace Profiles (wp-), Keyboard Shortcuts (ks-), Startup & Rules
+ * (rl-) and Capture & Tools (cp-). */
+
+/* ---------- Keyboard (kb-) ---------- */
+
+.kb-flag {
+  min-width: 30px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  font-size: 0.769em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: @theme_accent;
+  background: alpha(@theme_accent, 0.14);
+}
+
+.kb-grip {
+  color: @theme_text_tertiary;
+  -gtk-icon-size: 14px;
+}
+
+.settings-card > box > .settings-option.kb-add {
+  min-height: 0;
+  padding-top: 10px;
+  padding-bottom: 12px;
+}
+
+.kb-add > image {
+  color: @theme_accent;
+}
+
+.kb-add-text {
+  color: @theme_accent;
+}
+
+.kb-card {
+  padding: 12px;
+}
+
+.kb-legend {
+  margin-top: 10px;
+}
+
+/* Shared by every page here: the holder that lets a chip shrink, legends. */
+scrolledwindow.in-fit,
+scrolledwindow.in-fit > viewport {
+  background: none;
+}
+
+flowbox.in-flow > flowboxchild {
+  padding: 0;
+  background: none;
+}
+
+.in-legend-text {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.in-dot {
+  min-width: 10px;
+  min-height: 10px;
+  border-radius: 3px;
+}
+
+.kb-dot-hot {
+  background: alpha(@theme_accent, 0.6);
+  box-shadow: inset 0 0 0 1px @theme_accent;
+}
+
+.kb-dot-switch {
+  box-shadow: inset 0 0 0 1.5px @theme_accent;
+}
+
+.kb-try {
+  padding: 12px 14px;
+}
+
+.kb-try > * + * {
+  margin-top: 8px;
+}
+
+.kb-try-title {
+  font-weight: 600;
+}
+
+.kb-try-hint {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.kb-pick-list {
+  background: transparent;
+}
+
+/* ---------- Mouse (ms-) ---------- */
+
+.ms-card {
+  padding: 12px 14px;
+}
+
+.ms-chart-title,
+.ms-pad-title {
+  font-weight: 600;
+}
+
+.ms-chart-line,
+.ms-pad-hint {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.ms-dot-adaptive {
+  min-height: 3px;
+  margin: 3px 0;
+  background: @theme_accent;
+}
+
+.ms-dot-flat {
+  min-height: 2px;
+  margin: 4px 0;
+  background: alpha(@theme_dim_text, 0.7);
+}
+
+.ms-pad {
+  padding: 12px 14px;
+}
+
+/* ---------- Trackpad (tp-) ---------- */
+
+.tp-stage {
+  padding: 12px;
+}
+
+.tp-caption {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.tp-cell {
+  min-width: 0;
+}
+
+window.settings-window dropdown.tp-action > button {
+  min-width: 96px;
+  padding-left: 10px;
+  padding-right: 8px;
+}
+
+.tp-follow {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.tp-follow > image {
+  -gtk-icon-size: 14px;
+}
+
+window.settings-window button.tp-chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.923em;
+}
+
+window.settings-window button.tp-chip:checked {
+  background: mix(@theme_card, @theme_accent, 0.18);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.55);
+}
+
+window.settings-window button.tp-link {
+  color: @theme_accent;
+  padding: 4px 6px;
+}
+
+.tp-more-note {
+  margin: 8px 4px 0;
+}
+
+.in-more > .settings-card + .group-title {
+  margin-top: 14px;
+}
+
+/* ---------- Keyboard Shortcuts (ks-) ---------- */
+
+.ks-dot0, .ks-g0 { background: #548ff7; }
+.ks-dot1, .ks-g1 { background: #946bf5; }
+.ks-dot2, .ks-g2 { background: #d95cd9; }
+.ks-dot3, .ks-g3 { background: #2ebdb3; }
+.ks-dot4, .ks-g4 { background: #f5a833; }
+.ks-dot5, .ks-g5 { background: #4dc766; }
+
+.ks-dot-free {
+  box-shadow: inset 0 0 0 1px alpha(@theme_dim_text, 0.6);
+}
+
+.ks-dot-clash {
+  box-shadow: inset 0 0 0 1.5px @theme_warning;
+}
+
+.ks-chip-dot {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 999px;
+}
+
+window.settings-window button.ks-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.923em;
+  font-weight: normal;
+}
+
+window.settings-window button.ks-chip label {
+  font-weight: normal;
+}
+
+window.settings-window button.ks-chip:checked {
+  background: mix(@theme_card, @theme_accent, 0.18);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.55);
+}
+
+.ks-chip-count {
+  color: @theme_text_tertiary;
+  font-size: 0.846em;
+}
+
+.ks-chips {
+  margin-top: -4px;
+}
+
+.ks-list-head {
+  margin: 2px 4px 0;
+}
+
+.ks-list-title {
+  font-weight: 600;
+}
+
+window.settings-window button.ks-add {
+  padding: 3px 10px;
+  font-size: 0.923em;
+}
+
+.settings-card > .settings-option.ks-row {
+  min-height: 38px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.ks-row .key-cap {
+  font-size: 0.846em;
+}
+
+.ks-row.ks-picked {
+  background: alpha(@theme_accent, 0.10);
+  box-shadow: inset 3px 0 0 @theme_accent;
+}
+
+.ks-board {
+  padding: 12px;
+}
+
+.ks-pop {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid @theme_divider;
+  min-height: 40px;
+}
+
+.ks-pop-hint {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.ks-glyph {
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 8px;
+  font-weight: 700;
+  color: white;
+}
+
+.ks-g-free {
+  background: none;
+  color: @theme_text;
+  box-shadow: inset 0 0 0 1.5px alpha(@theme_dim_text, 0.6);
+}
+
+.ks-pop-title {
+  font-weight: 600;
+}
+
+.ks-pop-line {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+window.settings-window button.ks-layer {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: @theme_card;
+  box-shadow: inset 0 0 0 1px @theme_divider;
+}
+
+window.settings-window button.ks-layer.ks-on {
+  background: mix(@theme_card, @theme_accent, 0.10);
+  box-shadow: inset 0 0 0 1.5px alpha(@theme_accent, 0.6);
+}
+
+.ks-layer-name {
+  font-weight: 600;
+  font-size: 0.923em;
+}
+
+.ks-layer-count {
+  color: @theme_text_tertiary;
+  font-size: 0.846em;
+}
+
+.ks-form-clash {
+  margin: 8px 14px;
+}
+
+/* ---------- Workspace Profiles (wp-) ---------- */
+
+.wp-profiles .settings-option > checkbutton {
+  margin-right: 2px;
+}
+
+.wp-profiles .settings-option.wp-picked {
+  background: alpha(@theme_accent, 0.08);
+}
+
+.wp-active {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.846em;
+  font-weight: 600;
+  color: @theme_success;
+  background: alpha(@theme_success, 0.14);
+}
+
+.settings-card > .settings-option.wp-add {
+  min-height: 0;
+  padding-top: 10px;
+  padding-bottom: 12px;
+}
+
+.wp-add > image,
+.wp-add-text {
+  color: @theme_accent;
+}
+
+
+.wp-ws {
+  padding: 10px;
+  border-radius: 12px;
+  min-height: 150px;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.08);
+}
+
+.wp-ws0 { background: linear-gradient(170deg, mix(@theme_card, #3d7a5a, 0.45), mix(@theme_card, #8a7a2f, 0.45)); }
+.wp-ws1 { background: linear-gradient(170deg, mix(@theme_card, #2f6f7a, 0.45), mix(@theme_card, #6f7a2f, 0.45)); }
+.wp-ws2 { background: linear-gradient(170deg, mix(@theme_card, #2f4f7a, 0.45), mix(@theme_card, #2f7a4a, 0.45)); }
+.wp-ws3 { background: linear-gradient(170deg, mix(@theme_card, #3f3f7a, 0.45), mix(@theme_card, #2f6a5a, 0.45)); }
+.wp-ws4 { background: linear-gradient(170deg, mix(@theme_card, #5a3f7a, 0.45), mix(@theme_card, #3f6a3f, 0.45)); }
+.wp-ws5 { background: linear-gradient(170deg, mix(@theme_card, #7a3f4f, 0.45), mix(@theme_card, #5a6a2f, 0.45)); }
+
+.wp-ws.wp-over,
+.wp-tray.wp-over {
+  box-shadow: inset 0 0 0 2px @theme_accent;
+}
+
+.wp-num {
+  min-width: 20px;
+  padding: 1px 4px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.846em;
+  background: alpha(black, 0.35);
+  color: white;
+}
+
+.wp-ws-name {
+  font-weight: 600;
+  color: white;
+}
+
+.wp-screen {
+  color: alpha(white, 0.75);
+  font-size: 0.769em;
+}
+
+window.settings-window menubutton.wp-chip > button {
+  padding: 3px 8px 3px 4px;
+  min-height: 0;
+  border-radius: 8px;
+  background: alpha(black, 0.38);
+  color: white;
+  font-size: 0.923em;
+}
+
+window.settings-window .wp-tray menubutton.wp-chip > button {
+  background: alpha(@theme_text, 0.08);
+  color: @theme_text;
+}
+
+.wp-drop-hint {
+  color: alpha(white, 0.6);
+  font-size: 0.846em;
+}
+
+.wp-tray .wp-drop-hint {
+  color: @theme_dim_text;
+}
+
+.wp-tray {
+  padding: 8px 10px 8px 14px;
+}
+
+.wp-tray-title {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.wp-menu {
+  padding: 2px;
+}
+
+.wp-empty {
+  padding: 16px;
+}
+
+.wp-empty > * + * {
+  margin-top: 12px;
+}
+
+.wp-empty-text {
+  color: @theme_dim_text;
+}
+
+button.wp-copy-go {
+  margin-top: 12px;
+}
+
+.settings-group.wp-more {
+  margin-top: 12px;
+}
+
+/* ---------- Startup & Rules (rl-) ---------- */
+
+.rl-icon {
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 9px;
+  background: alpha(@theme_text, 0.06);
+}
+
+.rl-icon > image {
+  margin: 0 6px;
+}
+
+.rl-icon-big {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 11px;
+}
+
+.rl-icon-big > image {
+  margin: 0 7px;
+}
+
+.settings-card > .settings-option.rl-row {
+  min-height: 0;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.rl-row.rl-picked {
+  background: alpha(@theme_accent, 0.10);
+  box-shadow: inset 3px 0 0 @theme_accent;
+}
+
+.rl-tag {
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 0.769em;
+  color: @theme_dim_text;
+  background: alpha(@theme_text, 0.07);
+}
+
+.rl-tag.rl-tag-off {
+  color: @theme_text_tertiary;
+}
+
+window.settings-window menubutton.rl-add > button,
+.settings-card > .settings-option.rl-add-row {
+  min-height: 0;
+  padding: 10px 14px 12px;
+  border-radius: 0;
+}
+
+menubutton.rl-add image,
+.rl-add-row > image,
+.rl-add-text {
+  color: @theme_accent;
+}
+
+.rl-menu {
+  padding: 2px;
+}
+
+.rl-head {
+  margin-bottom: 2px;
+}
+
+.rl-h {
+  font-weight: 600;
+  margin: 2px 4px -6px;
+}
+
+.rl-h-small {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.rl-where {
+  padding: 10px 12px 12px;
+}
+
+.rl-where > * + * {
+  margin-top: 0;
+}
+
+.rl-empty {
+  padding: 4px 2px;
+}
+
+.rl-caption {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+window.settings-window button.rl-pick {
+  padding: 4px 10px 4px 6px;
+  border-radius: 8px;
+}
+
+window.settings-window button.rl-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.923em;
+  font-weight: normal;
+}
+
+window.settings-window button.rl-chip:checked {
+  background: mix(@theme_card, @theme_accent, 0.18);
+  box-shadow: inset 0 0 0 1px alpha(@theme_accent, 0.55);
+}
+
+.rl-empty-line {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+/* ---------- Capture & Tools (cp-) ---------- */
+
+.cp-tabs {
+  margin-bottom: 4px;
+}
+
+window.settings-window button.cp-mode {
+  padding: 10px 4px 8px;
+  border-radius: 10px;
+  background: @theme_card;
+  box-shadow: inset 0 0 0 1px @theme_divider;
+}
+
+window.settings-window button.cp-mode:checked {
+  background: mix(@theme_card, @theme_accent, 0.14);
+  box-shadow: inset 0 0 0 1.5px alpha(@theme_accent, 0.7);
+}
+
+.cp-mode-name {
+  font-size: 0.846em;
+}
+
+.cp-line {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.cp-or {
+  color: @theme_text_tertiary;
+  font-size: 0.846em;
+}
+
+.cp-hud {
+  padding: 4px 6px;
+  border-radius: 12px;
+  background: @theme_card;
+  box-shadow: inset 0 0 0 1px @theme_divider;
+}
+
+window.settings-window button.cp-hud-mode:checked {
+  background: alpha(@theme_accent, 0.18);
+  color: @theme_accent;
+}
+
+.cp-hud-sep {
+  margin: 6px 4px;
+}
+
+window.settings-window button.cp-tool {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: @theme_card;
+}
+
+.cp-tool-title {
+  font-weight: 600;
+  font-size: 0.923em;
+}
+
+.cp-tool-desc {
+  color: @theme_dim_text;
+  font-size: 0.769em;
+}
+
+.settings-group.cp-gap {
+  margin-top: 12px;
+}
+
+window.settings-window dropdown.cp-target > button {
+  min-width: 0;
+  padding-left: 10px;
+  padding-right: 8px;
+}
+
+window.settings-window button.cp-hud-mode {
+  min-width: 30px;
+  padding: 6px 8px;
+}

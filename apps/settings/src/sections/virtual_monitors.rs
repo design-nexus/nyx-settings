@@ -33,13 +33,21 @@ fn rebuild_soon() {
     glib::timeout_add_local_once(std::time::Duration::from_millis(700), || window::rebuild("displays"));
 }
 
+/// Whether screens can be split here (Nyx's Hyprland), and if so whether one is split now.
+pub fn summary() -> Option<bool> {
+    let hypr = Instance::find().ok()?;
+    vm::status(&hypr).ok()?;
+    let settings = Settings::load(&Paths::default_paths().ok()?).ok()?;
+    Some(settings.enabled && settings.displays.iter().any(|d| d.enabled && d.layout.regions() > 1))
+}
+
 pub fn build(page: &Page, monitors: &[Value]) {
     // Only Nyx's Hyprland has virtual monitors; on any other the section isn't shown.
     let Ok(hypr) = Instance::find() else { return };
     let Ok(status) = vm::status(&hypr) else { return };
     let Ok(paths) = Paths::default_paths() else { return };
 
-    let g = page.group("Virtual monitors (experimental)");
+    let g = page.group("Split screens");
     widgets::keywords("virtual monitors split ultrawide wide screen regions divide three two experimental");
     let settings = match Settings::load(&paths) {
         Ok(s) => s,
@@ -52,12 +60,12 @@ pub fn build(page: &Page, monitors: &[Value]) {
         }
     };
     g.note(
-        "Split one wide screen into two or three monitors side by side, each with its own workspaces, windows and fullscreen. \
-         Experimental: not yet tried on every screen, and a layout change that isn't confirmed may not always go back by itself.",
+        "Split one wide screen into two or three regions side by side, each with its own workspaces, windows and full screen. \
+         Experimental: not yet tried on every screen, and a change that isn't kept may not always go back by itself.",
     );
 
     let h = hypr.clone();
-    let (r, _) = widgets::switch_row("Virtual monitors", "Off gives every screen back whole.", settings.enabled, move |on| {
+    let (r, _) = widgets::switch_row("Split screens", "Off gives every screen back whole.", settings.enabled, move |on| {
         set_enabled(&h, on)
     });
     g.add(&r);
@@ -70,9 +78,9 @@ pub fn build(page: &Page, monitors: &[Value]) {
     }
 
     let (r, _) = widgets::choice_row(
-        "Workspace shortcuts act on",
-        "Which virtual monitor switching workspaces and swiping change.",
-        widgets::opts(&[("focus", "The one with the focused window"), ("pointer", "The one under the pointer")]),
+        "Shortcuts act on",
+        "Which region switching workspaces and swiping change.",
+        widgets::opts(&[("focus", "Where the focus is"), ("pointer", "Under the pointer")]),
         match settings.workspace_target {
             Target::Focus => "focus",
             Target::Pointer => "pointer",
@@ -81,9 +89,9 @@ pub fn build(page: &Page, monitors: &[Value]) {
     );
     g.add(&r);
     let (r, _) = widgets::choice_row(
-        "Fullscreen",
-        "What fullscreen does on a virtual monitor. The whole screen joins the regions back until fullscreen ends.",
-        widgets::opts(&[("region", "Fills the virtual monitor"), ("physical", "Fills the whole screen")]),
+        "Full screen fills",
+        "With the whole screen, the regions join until full screen ends.",
+        widgets::opts(&[("region", "Its region"), ("physical", "The whole screen")]),
         match settings.fullscreen {
             Fullscreen::Region => "region",
             Fullscreen::Physical => "physical",
@@ -245,7 +253,7 @@ fn screen(page: &Page, hypr: &Instance, settings: &Settings, status: &vm::Status
     });
     let live = status.groups.iter().find(|g| g.host == name);
 
-    let g = page.group(&format!("{name} · virtual monitors"));
+    let g = page.group(&name);
     g.note(&glib::markup_escape_text(&description));
     if rotated {
         g.note("Rotated screens can't be split yet.");
@@ -359,7 +367,7 @@ fn screen(page: &Page, hypr: &Instance, settings: &Settings, status: &vm::Status
     let counts: Vec<(String, String)> = (1..=10).map(|n| (n.to_string(), n.to_string())).collect();
     let (r, _) = widgets::choice_row(
         "Workspaces on each region",
-        "The leftmost region keeps your usual workspaces; the others get their own, numbered from 1.",
+        "The left region keeps your usual workspaces; the others get their own, numbered from 1.",
         counts,
         &display.workspaces.to_string(),
         move |v| commit(&h, Display { workspaces: v.parse().unwrap_or(10), ..d.clone() }, false),

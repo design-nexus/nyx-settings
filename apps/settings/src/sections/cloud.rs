@@ -1,4 +1,5 @@
 //! rclone accounts managed by the independent Cloud user service.
+use super::accounts::{add_row, clickable, title_end};
 use crate::{
     cmd,
     widgets::{self, Page},
@@ -35,8 +36,15 @@ fn clear(holder: &gtk::Box) {
 
 pub fn build(page: &Page) {
     watch_once();
-    let accounts = page.group("Storage-only accounts");
-    accounts.note("Connect cloud accounts to browse them in Files. Account removal never deletes cloud files.");
+    let accounts = page.group("Storage only");
+    let ends = widgets::hbox(2);
+    let find = widgets::icon_button("system-search-symbolic", "Find rclone accounts already on this computer, to show them in Files too");
+    find.connect_clicked(|_| discover());
+    ends.append(&find);
+    let again = widgets::icon_button("view-refresh-symbolic", "Check again: current connections and mount status");
+    again.connect_clicked(|_| refresh());
+    ends.append(&again);
+    title_end(&accounts, &ends);
     let holder = widgets::vbox(0);
     holder.append(&widgets::label("Looking for cloud accounts…", "dim"));
     accounts.add(&holder);
@@ -50,12 +58,10 @@ pub fn build(page: &Page) {
                 .collect())
         },
         move |result: anyhow::Result<Vec<Remote>>| {
+            widgets::begin_section("online-accounts");
             clear(&holder);
             match result {
                 Ok(remotes) => {
-                    if remotes.is_empty() {
-                        holder.append(&widgets::label("No storage-only accounts.", "dim"));
-                    }
                     for remote in remotes {
                         append_account(&holder, remote);
                     }
@@ -67,40 +73,72 @@ pub fn build(page: &Page) {
                     ));
                 }
             }
-            let (row, _) = widgets::button_row(
-                "Add storage-only account",
-                "Google Drive, Dropbox, OneDrive, Nextcloud, WebDAV, SFTP or another rclone provider.",
-                "Add",
-                |_| onboarding(None, None),
-            );
-            holder.append(&row);
-            let (row, _) = widgets::button_row(
-                "Existing rclone accounts",
-                "Choose which existing accounts appear in Files. Configuration stays unchanged.",
-                "Discover",
-                |_| discover(),
-            );
-            holder.append(&row);
-            let (row, _) =
-                widgets::button_row("Refresh status", "Show current connections and mount status.", "Refresh", |_| refresh());
-            holder.append(&row);
+            holder.append(&add_row("Add cloud storage", || onboarding(None, None)));
+            widgets::keywords("add storage-only account google drive dropbox onedrive nextcloud webdav sftp rclone discover existing remotes refresh status");
         },
     );
 }
+
+/// The logo a storage provider takes.
+fn logo(provider: &str) -> super::account_icons::Logo {
+    use super::account_icons::Logo;
+    match provider {
+        "drive" => Logo::Google,
+        "onedrive" => Logo::Microsoft,
+        "webdav" => Logo::WebDav,
+        _ => Logo::Generic,
+    }
+}
+
 fn append_account(holder: &gtk::Box, remote: Remote) {
-    let status = format!(
-        "{} · {} · {}{}",
-        remote.provider,
-        remote.connection.replace('_', " "),
-        remote.mount_status,
-        if remote.error.is_empty() { String::new() } else { format!(" · {}", remote.error) }
-    );
-    let controls = widgets::hbox(6);
-    let button = gtk::Button::with_label("Settings…");
-    let r = remote.clone();
-    button.connect_clicked(move |_| account_dialog(r.clone()));
-    controls.append(&button);
-    holder.append(&widgets::row(&remote.name, &glib::markup_escape_text(&status), Some(controls.upcast_ref())));
+    let provider = match remote.provider.as_str() {
+        "drive" => "Google Drive".to_string(),
+        "onedrive" => "OneDrive".to_string(),
+        "dropbox" => "Dropbox".to_string(),
+        "webdav" => "WebDAV".to_string(),
+        "sftp" => "SFTP".to_string(),
+        "s3" => "S3".to_string(),
+        other => {
+            let mut c = other.chars();
+            c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
+        }
+    };
+    let mut desc = vec![provider];
+    if !remote.error.is_empty() {
+        desc.push(remote.error.clone());
+    } else if remote.mount_status == "mounted" {
+        desc.push(if remote.storage_enabled { "in Files".into() } else { "connected".into() });
+        desc.push(format!("{} kept here", if remote.preferences.cache_mib >= 1024 && remote.preferences.cache_mib % 1024 == 0 { format!("{} GB", remote.preferences.cache_mib / 1024) } else { format!("{} MB", remote.preferences.cache_mib) }));
+    } else if remote.preferences.mount_on_login {
+        desc.push("connects when you sign in".into());
+    } else {
+        desc.push("connects when you open it".into());
+    }
+    let r = widgets::row(&remote.name, &glib::markup_escape_text(&desc.join(" · ")), None);
+    r.add_css_class("with-tile");
+    r.prepend(&super::account_icons::image(logo(&remote.provider), 32));
+    let ok = remote.error.is_empty() && remote.connection == "connected";
+    let status = widgets::hbox(6);
+    status.add_css_class("oac-status");
+    status.add_css_class(if ok { "ok" } else if remote.error.is_empty() { "idle" } else { "warn" });
+    status.set_valign(gtk::Align::Center);
+    let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    dot.add_css_class("oac-dot");
+    dot.set_valign(gtk::Align::Center);
+    status.append(&dot);
+    let word = if !remote.error.is_empty() {
+        "Needs attention".to_string()
+    } else {
+        let c = remote.connection.replace('_', " ");
+        let mut chars = c.chars();
+        chars.next().map(|f| f.to_uppercase().collect::<String>() + chars.as_str()).unwrap_or_default()
+    };
+    status.append(&gtk::Label::new(Some(&word)));
+    r.append(&status);
+    r.set_tooltip_text(Some("Settings: services, connection, cache and removing it"));
+    clickable(&r, move || account_dialog(remote.clone()));
+    widgets::keywords("cloud storage files rclone mount");
+    holder.append(&r);
 }
 pub(super) fn dialog(title: &str) -> (gtk::Window, gtk::Box) {
     // Stay a transient dialog, not another Settings application window.
@@ -266,7 +304,7 @@ fn discover() {
         },
     );
 }
-fn onboarding(replace: Option<Remote>, link_account: Option<String>) {
+pub(super) fn onboarding(replace: Option<Remote>, link_account: Option<String>) {
     let (w, body) = dialog("Add storage-only account");
     if replace.is_some() {
         body.append(&widgets::banner("Disconnect this account before signing in again. Your current credentials are kept until the new connection passes its test.", false));
@@ -590,111 +628,6 @@ fn append_connection_controls(body: &gtk::Box, remote: &Remote) {
     }
     controls.append(&refresh);
     body.append(&controls);
-}
-/// Storage and Notes use Cloud even when GOA does not advertise a Files interface.
-pub fn append_for_account(body: &gtk::Box, id: &str) {
-    let holder = widgets::vbox(8);
-    body.append(&holder);
-    let resolved = Rc::new(std::cell::Cell::new(false));
-    load_services(&holder, id.to_owned(), resolved.clone());
-    let weak = holder.downgrade();
-    let id = id.to_owned();
-    glib::spawn_future_local(async move {
-        let Ok(bus) = gtk::gio::bus_get_future(gtk::gio::BusType::Session).await else { return };
-        let weak_callback = weak.clone();
-        let subscription = bus.subscribe_to_signal(
-            Some(nyx_cloud::BUS),
-            Some(nyx_cloud::BUS),
-            Some("Changed"),
-            Some(nyx_cloud::PATH),
-            None,
-            gtk::gio::DBusSignalFlags::NONE,
-            move |_| {
-                if !resolved.get()
-                    && let Some(holder) = weak_callback.upgrade()
-                {
-                    load_services(&holder, id.clone(), resolved.clone());
-                }
-            },
-        );
-        if let Some(holder) = weak.upgrade() {
-            let subscription = RefCell::new(Some(subscription));
-            holder.connect_destroy(move |_| {
-                subscription.borrow_mut().take();
-            });
-        }
-    });
-}
-fn load_services(holder: &gtk::Box, account_id: String, resolved: Rc<std::cell::Cell<bool>>) {
-    clear(holder);
-    holder.append(&widgets::label("Looking for storage services…", "dim"));
-    let weak = holder.downgrade();
-    cmd::background(
-        || Client::connect()?.list(),
-        move |result: anyhow::Result<Vec<Remote>>| {
-            let Some(holder) = weak.upgrade() else { return };
-            clear(&holder);
-            match result {
-                Ok(remotes) => {
-                    if let Some(remote) = remotes.iter().find(|r| r.account_id.as_deref() == Some(&account_id)) {
-                        resolved.set(true);
-                        service_controls(&holder, remote);
-                        append_connection_controls(&holder, remote);
-                        append_preferences(&holder, remote.clone(), glib::WeakRef::new());
-                        return;
-                    }
-                    holder.append(&widgets::label("Storage and Notes", "section-title"));
-                    holder.append(&widgets::label("Connect using this account’s native authorization.", "dim"));
-                    let connect = gtk::Button::with_label("Connect storage");
-                    let id = account_id.clone();
-                    connect.connect_clicked(move |_| {
-                        let id = id.clone();
-                        work(move |client| client.link_native_account(&id));
-                    });
-                    holder.append(&connect);
-                }
-                Err(_) => holder
-                    .append(&widgets::label("Storage services are unavailable. Install Cloud and rclone, then retry.", "dim")),
-            }
-        },
-    );
-}
-fn link_dialog(account_id: &str) {
-    let (window, body) = dialog("Connect account storage");
-    body.append(&widgets::label("Choose an existing connection for this account, or authorize a new one. Confirm that the selected connection belongs to this account.", "dim"));
-    let id = account_id.to_owned();
-    let authorize = gtk::Button::with_label("Authorize storage…");
-    let link = id.clone();
-    authorize.connect_clicked(move |_| onboarding(None, Some(link.clone())));
-    body.append(&authorize);
-    let weak = window.downgrade();
-    cmd::background(
-        || Client::connect()?.list(),
-        move |result: anyhow::Result<Vec<Remote>>| {
-            if let Ok(remotes) = result {
-                for remote in remotes.into_iter().filter(|r| r.account_id.is_none()) {
-                    let button = gtk::Button::with_label(&format!("Use {} ({})", remote.name, remote.provider));
-                    let id = id.clone();
-                    let weak = weak.clone();
-                    button.connect_clicked(move |_| {
-                        let id = id.clone();
-                        let remote = remote.clone();
-                        let weak = weak.clone();
-                        cmd::background(
-                            move || Client::connect()?.configure_services(&remote.id, Some(&id), true, &remote.notes),
-                            move |result| {
-                                report(result);
-                                if let Some(w) = weak.upgrade() {
-                                    w.close();
-                                }
-                            },
-                        );
-                    });
-                    body.append(&button);
-                }
-            }
-        },
-    );
 }
 fn service_controls(body: &gtk::Box, remote: &Remote) {
     body.append(&widgets::label("Services", "section-title"));

@@ -7,9 +7,13 @@ use anyhow::{Result, bail};
 use serde_json::{Value, json};
 
 pub fn describe() -> Value {
+    let pane = std::env::var("SETTINGS_KINDS").is_ok_and(|k| k.split(' ').any(|x| x == "preview"));
     let mut groups = Vec::new();
+    let mut colours = Vec::new();
     if asus::has_aura() {
-        groups.push(keyboard());
+        let (group, picked) = keyboard(pane);
+        groups.push(group);
+        colours = picked;
         if let Some(g) = lighting_states() {
             groups.push(g);
         }
@@ -32,7 +36,33 @@ pub fn describe() -> Value {
     if asus::has_scsi() {
         groups.push(drive_leds());
     }
-    json!({ "groups": groups })
+    if !pane {
+        return json!({ "groups": groups });
+    }
+    json!({ "groups": groups, "preview": preview(colours) })
+}
+
+/// The keyboard lit as it is now, its colours, and the lightbar.
+fn preview(colours: Vec<Value>) -> Value {
+    let c = asus::resolved(&current_choice());
+    let effect = effect_label(&c.mode);
+    let line = if c.follow_theme { format!("{effect} in the theme's colour") } else { format!("{effect} · {}", c.colour1) };
+    let mut blocks = vec![json!({ "kind": "picture", "picture": "keyboard", "accent": format!("#{}", asus::hex6(&c.colour1)) })];
+    if !colours.is_empty() {
+        blocks.push(json!({ "kind": "rows", "title": "Colour", "rows": colours }));
+    }
+    if asus::has_slash() {
+        let s = asus::slash();
+        let mut sub = vec![if s.enabled { asus::pretty(&s.mode) } else { "Off".to_string() }];
+        if s.enabled {
+            sub.push(format!("{}%", (s.brightness as f64 / 2.55).round()));
+            if s.battery_warning {
+                sub.push("flashes when the battery is low".into());
+            }
+        }
+        blocks.push(json!({ "kind": "list", "items": [{ "icon": "display-brightness-symbolic", "label": "Slash lightbar", "sub": sub.join(" · ") }] }));
+    }
+    json!({ "title": "Keyboard", "line": line, "blocks": blocks, "foot": "The keyboard's brightness keys change it too; Settings follows.", "foot_icon": "emblem-ok-symbolic" })
 }
 
 // ----- Keyboard -----
@@ -59,7 +89,7 @@ fn brightness_row() -> Option<Value> {
         })
         .collect();
     Some(json!({
-        "kind": "segmented", "key": "brightness", "title": "Brightness", "desc": "Also on the keyboard's brightness keys.",
+        "kind": "segmented", "key": "brightness", "title": "Brightness", "desc": "Keys too", "icon": "keyboard-brightness-symbolic",
         "options": options(&opts), "value": current, "keywords": "keyboard backlight brightness",
     }))
 }
@@ -95,59 +125,61 @@ fn effect_label(kebab: &str) -> String {
     kebab.split('-').map(|w| w[..1].to_uppercase() + &w[1..]).collect::<Vec<_>>().join(" ")
 }
 
-fn keyboard() -> Value {
+/// The keyboard's controls, and (with a preview pane) its colour pickers to draw there.
+fn keyboard(pane: bool) -> (Value, Vec<Value>) {
     let modes = asus::usable_modes(asus::support());
     let mut rows: Vec<Value> = brightness_row().into_iter().collect();
+    let mut colours = Vec::new();
     if modes.is_empty() {
-        return json!({ "title": "Keyboard", "rows": rows });
+        return (json!({ "title": "Keyboard", "rows": rows }), colours);
     }
     let c = current_choice();
     let shown = asus::resolved(&c);
     let p = asus::effect_params(&c.mode);
     let effects: Vec<(String, String)> = modes.iter().map(|m| (m.clone(), effect_label(m))).collect();
     rows.push(json!({
-        "kind": "segmented", "key": "effect", "title": "Effect", "options": options(&effects), "value": c.mode,
+        "kind": "segmented", "key": "effect", "title": "Effect", "icon": "starred-symbolic", "options": options(&effects), "value": c.mode,
         "refresh": true, "keywords": "aura rgb lighting animation rainbow breathe static pulse effect",
     }));
     if p.colours >= 1 {
         rows.push(json!({
-            "kind": "switch", "key": "follow-theme", "title": "Follow Omarchy theme",
-            "desc": "Use the theme's keyboard colour, and update it whenever you change themes. Your effect is kept.",
-            "value": c.follow_theme, "refresh": true,
+            "kind": "switch", "key": "follow-theme", "title": "Follow the theme", "icon": "applications-graphics-symbolic",
+            "desc": "Takes the theme's keyboard colour", "value": c.follow_theme, "refresh": true,
         }));
         let mut colour = json!({
-            "kind": "colour", "key": "colour1", "title": "Colour", "value": shown.colour1, "refresh": true,
+            "kind": "colour", "key": "colour1", "title": if pane { "" } else { "Colour" }, "value": shown.colour1, "refresh": true,
             "keywords": "colour color rgb hex",
         });
         if let Some(t) = asus::theme_keyboard_colour() {
-            colour["theme"] = json!({ "label": "Omarchy theme", "colour": t });
+            colour["theme"] = json!({ "label": "Theme", "colour": t });
         }
-        rows.push(colour);
+        if pane { colours.push(colour) } else { rows.push(colour) }
     }
     if p.colours >= 2 {
-        rows.push(json!({
+        let second = json!({
             "kind": "colour", "key": "colour2", "title": "Second colour",
             "desc": "Breathing fades between the two colours.", "value": c.colour2,
-        }));
+        });
+        if pane { colours.push(second) } else { rows.push(second) }
     }
     // Breathe needs a speed on the command line, but the keyboard ignores it.
     if p.speed && c.mode != "breathe" {
         rows.push(json!({
-            "kind": "segmented", "key": "speed", "title": "Speed",
+            "kind": "segmented", "key": "speed", "title": "Speed", "icon": "media-seek-forward-symbolic",
             "options": options(&[("low", "Slow"), ("med", "Medium"), ("high", "Fast")]), "value": c.speed,
         }));
     }
     if p.direction {
         rows.push(json!({
-            "kind": "segmented", "key": "direction", "title": "Direction",
+            "kind": "segmented", "key": "direction", "title": "Direction", "icon": "object-flip-horizontal-symbolic",
             "options": options(&[("left", "←"), ("right", "→"), ("up", "↑"), ("down", "↓")]), "value": c.direction,
         }));
     }
-    json!({
+    (json!({
         "title": "Keyboard",
         "note": "The backlight timeout is under Power &amp; Battery.",
         "rows": rows,
-    })
+    }), colours)
 }
 
 fn lighting_states() -> Option<Value> {
@@ -173,7 +205,7 @@ fn lighting_states() -> Option<Value> {
     }
     Some(json!({
         "title": "When the lights are on",
-        "note": "Pick the moments each zone lights up. For example, leave <b>Sleep</b> off so the keyboard is dark while the laptop sleeps.",
+        "note": "Leave <b>Sleep</b> off so the keyboard is dark while the laptop sleeps.",
         "rows": rows,
     }))
 }
@@ -208,8 +240,8 @@ fn slash() -> Value {
         "desc": "Flash a warning on the lightbar when the battery is low.", "value": s.battery_warning,
     }));
     json!({ "title": "Slash lightbar", "rows": [{
-        "kind": "switch", "key": "slash", "title": "Slash lightbar",
-        "desc": "The light strip on the back of the lid. Its LEDs are white only, so there's no colour to choose.",
+        "kind": "switch", "key": "slash", "title": "Slash lightbar", "icon": "display-brightness-symbolic",
+        "desc": "The white lights on the lid",
         "value": s.enabled, "keywords": "slash led lid strip lightbar", "rows": inner,
     }]})
 }

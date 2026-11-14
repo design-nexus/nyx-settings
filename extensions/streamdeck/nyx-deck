@@ -16,6 +16,12 @@ holds `brightness` (0–100) and `start_profile`.
 
 Needs python-elgato-streamdeck and python-pillow; shortcuts are typed with
 wtype, media keys with playerctl.
+
+With `galleon = true` in config.toml it also runs the Corsair Galleon 100 SD's
+built-in deck (galleon.py), from galleon-deck-shaped files in
+~/.config/nyx-deck/galleon/. It's off by default, and nyx-deck never opens that
+deck while galleon-deck is running. `nyx-deck --theme-from-wallpaper [image]`
+makes the Galleon's wallpaper theme.
 """
 
 import os
@@ -25,6 +31,10 @@ import sys
 import threading
 import time
 import tomllib
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, HERE)
+import galleon_config  # noqa: E402
 
 HOME = os.path.expanduser("~")
 CONF = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "nyx-deck")
@@ -176,8 +186,19 @@ class Deck:
         self.render()
 
 
+def start_galleon():
+    import galleon
+
+    t = threading.Thread(target=galleon.serve, args=(galleon_config.galleon_enabled,), daemon=True)
+    t.start()
+    return t
+
+
 def watch(decks):
-    """Redraw when the profiles change (Settings saved an edit)."""
+    """Redraw when the profiles change (Settings saved an edit), and run the
+    Galleon's deck while it's turned on."""
+    galleon_thread = None
+
     def stamp():
         newest = 0
         for root in (CONF, PROFILES):
@@ -191,6 +212,11 @@ def watch(decks):
     last = stamp()
     while True:
         time.sleep(1)
+        if galleon_config.galleon_enabled():
+            if not (galleon_thread and galleon_thread.is_alive()):
+                galleon_thread = start_galleon()
+        elif not decks and not (galleon_thread and galleon_thread.is_alive()):
+            return
         now = stamp()
         if now != last:
             last = now
@@ -203,13 +229,42 @@ def watch(decks):
                     pass
 
 
-def main():
+def theme_from_wallpaper(args):
+    import galleon_draw
+
+    paths = galleon_config.nyx_paths()
+    settings = galleon_config.read_toml(paths.config).get("wallpaper_theme", {})
+    path = galleon_draw.write_wallpaper_theme(paths, settings, args[0] if args else None)
+    if not path:
+        return "No wallpaper found"
+    with open(path) as f:
+        print(f.read(), end="")
+    return 0
+
+
+def elgato_decks():
+    """The Elgato decks plugged in; with the Galleon turned on, a missing library
+    only means there are none."""
     try:
         from StreamDeck.DeviceManager import DeviceManager
     except ImportError:
+        if galleon_config.galleon_enabled():
+            return []
         sys.exit("nyx-deck needs python-elgato-streamdeck")
-    decks = [Deck(d) for d in DeviceManager().enumerate()]
-    if not decks:
+    if not galleon_config.galleon_enabled():
+        return [Deck(d) for d in DeviceManager().enumerate()]
+    try:
+        return [Deck(d) for d in DeviceManager().enumerate()]
+    except Exception as e:
+        print(f"Elgato decks: {e}", file=sys.stderr)
+        return []
+
+
+def main():
+    if sys.argv[1:2] == ["--theme-from-wallpaper"]:
+        sys.exit(theme_from_wallpaper(sys.argv[2:]))
+    decks = elgato_decks()
+    if not decks and not galleon_config.galleon_enabled():
         sys.exit("No Elgato Stream Deck found")
     for d in decks:
         d.start()

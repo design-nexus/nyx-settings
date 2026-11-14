@@ -38,7 +38,7 @@ impl Entry {
     }
 
     /// A plugin or a pill, not a divider or the "other plugins" mark.
-    fn is_item(&self) -> bool {
+    pub(crate) fn is_item(&self) -> bool {
         !matches!(self, Entry::One(s) if s == DIVIDER || s == OTHERS)
     }
 }
@@ -79,7 +79,7 @@ impl Info {
         [self.sections.left.clone(), self.sections.center.clone(), self.sections.right.clone()]
     }
 
-    fn name(&self, entry: &str) -> String {
+    pub(crate) fn name(&self, entry: &str) -> String {
         self.names.get(entry).cloned().unwrap_or_else(|| entry.to_string())
     }
 
@@ -94,7 +94,7 @@ impl Info {
 
     /// Whether an entry shows anything on the bar: a plugin that's off (Keep awake until
     /// it's turned on) keeps its place in the layout but has nothing to arrange.
-    fn is_on(&self, e: &Entry) -> bool {
+    pub(crate) fn is_on(&self, e: &Entry) -> bool {
         match &self.on {
             None => true,
             Some(on) => !e.is_item() || e.items().iter().any(|i| on.contains(i)),

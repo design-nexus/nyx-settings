@@ -25,8 +25,8 @@ pub fn group(id: &str, group: &'static str) -> &'static str {
         "online-accounts" | "accounts" => "Accounts",
         "theme" | "look" => "Appearance",
         "displays" | "nightlight" => "Displays",
-        "bar" | "plugins" | "dock" | "switcher" | "control-center" | "notifications" | "workspaces" | "workspace-profiles"
-        | "rules" | "capture" => "Desktop",
+        "nyx-bar" | "bar" | "plugins" | "dock" | "switcher" | "control-center" | "notifications" | "workspaces"
+        | "workspace-profiles" | "rules" | "capture" => "Desktop",
         "keyboard" | "mouse" | "trackpad" | "keybindings" => "Input",
         "wifi" | "bluetooth" | "devices" | "network" | "sharing" => "Network",
         "audio" => "Sound",
@@ -46,6 +46,43 @@ pub fn group(id: &str, group: &'static str) -> &'static str {
     }
 }
 
+/// The pages each category opens with, in order (their names make its line in the
+/// sidebar); the rest follow in the order they're written.
+const FIRST: &[&str] = &[
+    "online-accounts",
+    "accounts",
+    "theme",
+    "look",
+    "displays",
+    "nightlight",
+    "nyx-bar",
+    "bar",
+    "plugins",
+    "dock",
+    "switcher",
+    "keyboard",
+    "mouse",
+    "trackpad",
+    "keybindings",
+    "wifi",
+    "bluetooth",
+    "devices",
+    "network",
+    "sign-in",
+    "idle",
+    "apps",
+    "software",
+    "extensions",
+    "mounts",
+    "disks",
+    "region",
+    "boot",
+    "services",
+    "printers",
+    "updates",
+    "about",
+];
+
 fn never() -> bool {
     false
 }
@@ -61,10 +98,17 @@ pub fn apply(list: &mut [Section]) {
             "idle" => "Lock Screen",
             _ => s.title,
         };
+        s.description = match s.id {
+            "home" => "This computer at a glance, and what needs you.",
+            "online-accounts" => "You, your online accounts, files, VPN and how you sign in.",
+            "accounts" => "The people on this computer, who can make system changes, and adding someone.",
+            "region" => "The clock, the language and formats, the keyboard and this computer's name.",
+            _ => s.description,
+        };
         let own: Option<fn(&crate::widgets::Page)> = match s.id {
             "online-accounts" => Some(super::accounts::build),
             "accounts" => Some(super::users::build),
-            "region" => Some(super::pages::region),
+            "region" => Some(super::region::region),
             "services" => Some(super::pages::services),
             "software" => Some(super::pages::software),
             "boot" => Some(super::pages::boot),
@@ -78,7 +122,10 @@ pub fn apply(list: &mut [Section]) {
             s.visible = never;
         }
     }
-    list.sort_by_key(|s| GROUPS.iter().position(|g| *g == s.group).map_or(0, |i| i + 1));
+    list.sort_by_key(|s| {
+        let group = GROUPS.iter().position(|g| *g == s.group).map_or(0, |i| i + 1);
+        (group, FIRST.iter().position(|id| *id == s.id).unwrap_or(FIRST.len()))
+    });
 }
 
 /// Users opens from Accounts.
@@ -117,5 +164,16 @@ mod tests {
         assert_eq!(list[0].id, "home");
         let order: Vec<usize> = list.iter().skip(1).map(|s| GROUPS.iter().position(|g| *g == s.group).unwrap()).collect();
         assert!(order.windows(2).all(|w| w[0] <= w[1]));
+    }
+
+    #[test]
+    fn categories_open_with_their_main_pages() {
+        let mut list = crate::sections::all_with(false);
+        apply(&mut list);
+        let first = |group: &str| list.iter().find(|s| s.group == group).map(|s| s.id);
+        assert_eq!(first("System"), Some("region"));
+        assert_eq!(first("Security"), Some("sign-in"));
+        assert_eq!(first("Apps & Defaults"), Some("apps"));
+        assert_eq!(first("Desktop"), Some("nyx-bar"));
     }
 }

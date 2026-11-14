@@ -8,6 +8,7 @@
 
 pub mod manage;
 pub mod media;
+pub mod pictures;
 pub mod protocol;
 pub mod render;
 

@@ -181,6 +181,51 @@ pub fn win(cr: &Context, p: &Pal, r: R, s: Win) {
     }
 }
 
+/// A small desktop in the theme's colours, for previews: a wallpaper, the bar along
+/// the top and three tiled windows, the left one focused. Returns the area under the bar.
+pub fn desktop(cr: &Context, p: &Pal, r: R) -> R {
+    let radius = (r.w * 0.012).clamp(4.0, 10.0);
+    cr.save().ok();
+    rounded(cr, r.x, r.y, r.w, r.h, radius);
+    cr.clip();
+    let g = gtk::cairo::LinearGradient::new(r.x, r.y, r.x + r.w, r.y + r.h);
+    let a = mix(p.bg, p.accent, 0.42);
+    let b = mix(p.bg, p.accent, 0.12);
+    g.add_color_stop_rgb(0.0, a.0, a.1, a.2);
+    g.add_color_stop_rgb(1.0, b.0, b.1, b.2);
+    let _ = cr.set_source(&g);
+    let _ = cr.paint();
+    // The bar: workspaces at the left, the clock in the middle, the tray at the right.
+    let bar_h = (r.h * 0.065).clamp(8.0, 22.0);
+    set(cr, p.bg, 0.86);
+    cr.rectangle(r.x, r.y, r.w, bar_h);
+    let _ = cr.fill();
+    let dot = bar_h * 0.36;
+    for i in 0..4 {
+        let w = if i == 0 { dot * 2.4 } else { dot };
+        set(cr, if i == 0 { p.accent } else { p.dim }, if i == 0 { 1.0 } else { 0.5 });
+        rounded(cr, r.x + bar_h * 0.6 + i as f64 * (dot * 1.6) + if i > 0 { dot * 1.4 } else { 0.0 }, r.y + (bar_h - dot) / 2.0, w, dot, dot / 2.0);
+        let _ = cr.fill();
+    }
+    set(cr, p.text, 0.75);
+    rounded(cr, r.cx() - bar_h * 1.3, r.y + bar_h * 0.36, bar_h * 2.6, bar_h * 0.28, bar_h * 0.14);
+    let _ = cr.fill();
+    for i in 0..3 {
+        set(cr, p.text, 0.6);
+        cr.arc(r.x + r.w - bar_h * (0.8 + i as f64 * 0.75), r.y + bar_h / 2.0, bar_h * 0.18, 0.0, 2.0 * PI);
+        let _ = cr.fill();
+    }
+    let area = R::new(r.x, r.y + bar_h, r.w, r.h - bar_h).inset((r.w * 0.012).clamp(3.0, 10.0));
+    let (left, right) = area.hsplit(0.52, (r.w * 0.01).clamp(3.0, 8.0));
+    let (top, bottom) = right.vsplit(0.48, (r.w * 0.01).clamp(3.0, 8.0));
+    let radius = (r.w * 0.008).clamp(2.5, 7.0);
+    win(cr, p, left, Win { focused: true, radius, lines: 3, ..Default::default() });
+    win(cr, p, top, Win { radius, lines: 3, ..Default::default() });
+    win(cr, p, bottom, Win { radius, lines: 2, ..Default::default() });
+    cr.restore().ok();
+    area
+}
+
 /// The mouse pointer, its tip at (x, y).
 pub fn pointer(cr: &Context, p: &Pal, x: f64, y: f64) {
     cr.move_to(x, y);

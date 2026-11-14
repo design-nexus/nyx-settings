@@ -13,6 +13,7 @@ pub mod feature {
     pub const BATTERY_VOLTAGE: u16 = 0x1001;
     pub const UNIFIED_BATTERY: u16 = 0x1004;
     pub const CHANGE_HOST: u16 = 0x1814;
+    pub const HOSTS_INFO: u16 = 0x1815;
     pub const BACKLIGHT2: u16 = 0x1982;
     pub const REPROG_CONTROLS_V4: u16 = 0x1B04;
     pub const SMART_SHIFT: u16 = 0x2110;

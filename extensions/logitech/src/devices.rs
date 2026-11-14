@@ -2,6 +2,7 @@
 //! and connected, and identify each device. No GTK here; the window's
 //! the extension and the `watch` service share it.
 
+use crate::gearbench;
 use crate::hidpp::device::{self, Info, Kind};
 use crate::hidpp::hidraw::{self, Hidraw, NodeInfo};
 use crate::hidpp::link::{DIRECT, Io, Link};
@@ -16,6 +17,22 @@ pub fn mock_spec() -> Option<String> {
     std::env::var("LOGI_MOCK").ok().filter(|s| !s.trim().is_empty())
 }
 
+/// `denied` in `LOGI_MOCK`: the simulated nodes refuse to open, as without the udev rule.
+fn mock_denied() -> bool {
+    mock_spec().is_some_and(|s| s.split(',').any(|x| x.trim() == "denied"))
+}
+
+/// Where pretend mode keeps what it saves (`SETTINGS_EXTENSION_STATE`), never the real files.
+pub fn mock_state() -> Option<std::path::PathBuf> {
+    mock_spec()?;
+    Some(
+        std::env::var_os("SETTINGS_EXTENSION_STATE")
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .unwrap_or_else(|| std::env::temp_dir().join("settings-logitech-mock")),
+    )
+}
+
 /// Simulated nodes are created once and handed out on first open.
 static MOCK: OnceLock<Mutex<HashMap<String, sim::SimNode>>> = OnceLock::new();
 
@@ -26,16 +43,42 @@ fn mock_nodes() -> &'static Mutex<HashMap<String, sim::SimNode>> {
     })
 }
 
-/// Every HID++ node present now.
-pub fn scan() -> Vec<NodeInfo> {
+fn all_nodes() -> Vec<NodeInfo> {
     match mock_spec() {
         Some(spec) => sim::nodes(&spec).into_iter().map(|(i, _)| i).collect(),
         None => hidraw::scan(),
     }
 }
 
+/// The devices on each pretend receiver.
+fn mock_behind(node: &NodeInfo) -> Vec<u16> {
+    let spec = mock_spec().unwrap_or_default();
+    sim::nodes(&spec).into_iter().find(|(i, _)| i.path == node.path).map(|(_, n)| n.paired_ids()).unwrap_or_default()
+}
+
+fn split() -> (Vec<NodeInfo>, Vec<gearbench::Held>) {
+    let nodes = all_nodes();
+    if !gearbench::set_up() {
+        return (nodes, vec![]);
+    }
+    if mock_spec().is_some() { gearbench::split(nodes, mock_behind) } else { gearbench::split(nodes, gearbench::sysfs_behind) }
+}
+
+/// Every HID++ node present now that this extension may open: not the ones Gearbench drives.
+pub fn scan() -> Vec<NodeInfo> {
+    split().0
+}
+
+/// The devices Gearbench drives, known without opening them.
+pub fn held() -> Vec<gearbench::Held> {
+    split().1
+}
+
 pub fn open(info: &NodeInfo) -> io::Result<Link> {
     let io: Box<dyn Io> = if mock_spec().is_some() {
+        if mock_denied() {
+            return Err(io::Error::from(io::ErrorKind::PermissionDenied));
+        }
         let key = info.path.display().to_string();
         let node = mock_nodes().lock().unwrap().remove(&key).ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))?;
         Box::new(node)
@@ -146,7 +189,7 @@ mod tests {
         assert_eq!(mouse.info.kind, Kind::Mouse);
         assert!(mouse.info.has(f::SMART_SHIFT_ENHANCED));
         assert_eq!(mouse.info.key(), "b034-8a215c03");
-        assert_eq!(mouse.battery.unwrap().percent, 80);
+        assert_eq!(mouse.battery.unwrap().percent, 70);
         let keys = &d.devices[1];
         assert!(!keys.online);
         assert_eq!(keys.info.name, "MX Keys");
@@ -206,11 +249,11 @@ mod tests {
         pointer::write_report_rate(&mut link, &g, 500).unwrap();
         assert_eq!(pointer::read_report_rate(&mut link, &g).unwrap().current, 500);
         let ob = gaming::read_onboard(&mut link, &g).unwrap();
-        assert_eq!((ob.profiles, ob.onboard), (5, false));
+        assert_eq!((ob.profiles, ob.onboard, ob.current), (5, true, 2));
         let zones = gaming::read_zones(&mut link, &g).unwrap();
         assert_eq!(zones.len(), 2);
-        assert_eq!(zones[1].effect, gaming::Effect::Breathe);
-        assert_eq!(zones[1].period, 3000);
+        assert_eq!(zones[0].effect, gaming::Effect::Breathe);
+        assert_eq!(zones[0].period, 3000);
         gaming::write_zone(&mut link, &g, &zones[0], gaming::Effect::Static, [1, 2, 3], 0).unwrap();
         assert_eq!(gaming::read_zones(&mut link, &g).unwrap()[0].colour, [1, 2, 3]);
     }

@@ -499,36 +499,63 @@ fn remove_ssh(id: String) {
 fn kind_icon(k: &Kind) -> &'static str {
     match k {
         Kind::Drive => "drive-harddisk-symbolic",
-        Kind::Smb | Kind::Nfs => "folder-remote-symbolic",
-        Kind::Ssh => "network-server-symbolic",
+        Kind::Smb => "folder-remote-symbolic",
+        Kind::Nfs => "network-workgroup-symbolic",
+        Kind::Ssh => "utilities-terminal-symbolic",
         Kind::Other => "folder-symbolic",
     }
 }
 
 fn kind_name(k: &Kind) -> &'static str {
     match k {
-        Kind::Drive => "Drive",
-        Kind::Smb => "SMB share",
-        Kind::Nfs => "NFS share",
-        Kind::Ssh => "SSH folder",
-        Kind::Other => "Mount",
+        Kind::Drive => "A drive at startup",
+        Kind::Smb => "A Windows or NAS share",
+        Kind::Nfs => "An NFS share",
+        Kind::Ssh => "A folder over SSH",
+        Kind::Other => "A mount",
     }
 }
 
-fn status(dir: &str, now: &[(String, String)]) -> (&'static str, bool) {
+#[derive(Clone, Copy, PartialEq)]
+enum State {
+    Mounted,
+    /// Waiting to be mounted the first time something opens it.
+    Waiting,
+    Not,
+}
+
+fn status(dir: &str, now: &[(String, String)]) -> State {
     let here: Vec<&String> = now.iter().filter(|(d, _)| d == dir).map(|(_, k)| k).collect();
     if here.iter().any(|k| *k != "autofs") {
-        ("Mounted", true)
+        State::Mounted
     } else if !here.is_empty() {
-        ("Ready: mounts when opened", false)
+        State::Waiting
     } else {
-        ("Not mounted", false)
+        State::Not
     }
+}
+
+fn state_chip(s: State) -> gtk::Box {
+    let (text, class) = match s {
+        State::Mounted => ("Mounted", "ok"),
+        State::Waiting => ("Mounts when opened", "accent"),
+        State::Not => ("Not mounted", ""),
+    };
+    let l = widgets::label(text, "cn-chip");
+    if !class.is_empty() {
+        l.add_css_class(class);
+    }
+    // In a box, so the card's padding for labels in rows doesn't reach it.
+    let b = widgets::hbox(0);
+    b.set_valign(gtk::Align::Center);
+    b.append(&l);
+    b
 }
 
 /// How a mount is removed: through the helper (a line Settings added to
-/// fstab) or the user's services (an SSH folder). None: it's the user's own
-/// fstab line.
+/// fstab) or the user's services (an SSH folder). The user's own fstab lines
+/// have none.
+#[derive(Clone)]
 enum Remove {
     Helper(String),
     Ssh(String),
@@ -553,145 +580,540 @@ fn remove(how: &Remove) {
     }
 }
 
-fn mount_row(m: &Mount, now: &[(String, String)], how: Option<Remove>) -> gtk::Box {
-    let (state, live) = status(&m.dir, now);
-    let title = std::path::Path::new(&m.dir).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(m.dir.clone());
-    let when = match m.kind {
-        Kind::Ssh => "at sign-in",
-        _ if m.on_demand() => "when first opened",
-        _ => "at startup",
-    };
-    let desc = format!(
-        "{} · {} · {} · {}",
-        glib::markup_escape_text(&m.source),
-        glib::markup_escape_text(&m.dir),
-        kind_name(&m.kind),
-        when
-    );
-    let control = widgets::hbox(6);
-    let tag = widgets::tag(state);
-    if live {
-        tag.add_css_class("ok-tag");
-    }
-    control.append(&tag);
-    if live {
-        let open = gtk::Button::from_icon_name("folder-open-symbolic");
-        open.add_css_class("flat");
-        open.set_tooltip_text(Some("Open"));
-        let d = m.dir.clone();
-        open.connect_clicked(move |_| cmd::spawn(&["xdg-open", &d]));
-        control.append(&open);
-    }
-    match how {
-        Some(how) => {
-            let b = gtk::Button::from_icon_name("user-trash-symbolic");
-            b.add_css_class("flat");
-            b.set_tooltip_text(Some("Stop mounting it (the files themselves stay)"));
-            b.connect_clicked(move |_| remove(&how));
-            control.append(&b);
-        }
-        None => control.append(&widgets::tag("Yours, in /etc/fstab")),
-    }
-    let r = widgets::row(&title, &desc, Some(control.upcast_ref()));
-    let icon = gtk::Image::from_icon_name(kind_icon(&m.kind));
-    icon.set_pixel_size(22);
-    icon.set_valign(gtk::Align::Center);
-    icon.add_css_class("mount-icon");
-    r.prepend(&icon);
-    r
+/// A mount on the list: an fstab line or an SSH folder.
+#[derive(Clone)]
+struct Item {
+    m: Mount,
+    how: Option<Remove>,
 }
 
-fn add_card(title: &str, desc: &str, icon: &str, f: impl Fn() + 'static) -> gtk::Button {
-    let b = gtk::Button::new();
-    b.add_css_class("picture-card");
-    b.add_css_class("add-mount");
-    let c = widgets::vbox(6);
-    let i = gtk::Image::from_icon_name(icon);
-    i.set_pixel_size(32);
-    c.append(&i);
-    let t = widgets::label(title, "picture-card-title");
-    t.set_halign(gtk::Align::Center);
-    c.append(&t);
-    let d = widgets::label(desc, "picture-card-label");
-    d.set_wrap(true);
-    d.set_justify(gtk::Justification::Center);
-    d.set_max_width_chars(22);
-    c.append(&d);
-    b.set_child(Some(&c));
-    b.connect_clicked(move |_| f());
-    b
+fn items() -> Vec<Item> {
+    // Settings removes only the lines it added; the rest are yours.
+    let mut out: Vec<Item> = crate::platform::fstab()
+        .into_iter()
+        .filter(|m| !m.system)
+        .map(|m| {
+            let how = m.ours().then(|| Remove::Helper(m.id.clone()));
+            Item { m, how }
+        })
+        .collect();
+    for (id, target, dir) in mounts::ssh_folders(&paths::home()) {
+        out.push(Item {
+            m: Mount {
+                id: id.clone(),
+                kind: Kind::Ssh,
+                source: target,
+                dir,
+                fstype: "fuse.sshfs".into(),
+                options: String::new(),
+                system: false,
+            },
+            how: Some(Remove::Ssh(id)),
+        });
+    }
+    out
+}
+
+fn name_of(m: &Mount) -> String {
+    std::path::Path::new(&m.dir).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(m.dir.clone())
+}
+
+/// A folder with the home folder written as ~.
+fn short_dir(dir: &str) -> String {
+    let home = paths::home().to_string_lossy().to_string();
+    match dir.strip_prefix(&home) {
+        Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("~{rest}"),
+        _ => dir.to_string(),
+    }
+}
+
+fn in_home(dir: &str) -> bool {
+    short_dir(dir).starts_with('~')
+}
+
+fn option<'a>(m: &'a Mount, key: &str) -> Option<&'a str> {
+    m.options.split(',').find_map(|o| o.strip_prefix(key)?.strip_prefix('='))
+}
+
+fn has_option(m: &Mount, key: &str) -> bool {
+    m.options.split(',').any(|o| o == key)
+}
+
+/// Where a mount's files come from: the machine or drive, what of it, and how
+/// it connects.
+struct Route {
+    icon: &'static str,
+    from: String,
+    what: String,
+    how: String,
+}
+
+fn route(m: &Mount, part: Option<&udisks::Part>) -> Route {
+    match m.kind {
+        Kind::Smb => {
+            let rest = m.source.trim_start_matches('/');
+            let (server, share) = rest.split_once('/').unwrap_or((rest, ""));
+            let mut how = option(m, "vers").map_or("SMB".to_string(), |v| format!("SMB {v}"));
+            if has_option(m, "guest") {
+                how.push_str(" · as a guest");
+            } else if let Some(u) = option(m, "username").or(option(m, "user")) {
+                how.push_str(&format!(" · signed in as {u}"));
+            } else if option(m, "credentials").is_some() {
+                how.push_str(" · with a saved sign-in");
+            }
+            Route {
+                icon: "network-server-symbolic",
+                from: server.to_string(),
+                what: if share.trim_matches('/').is_empty() { "The whole server".into() } else { format!("Share: {share}") },
+                how,
+            }
+        }
+        Kind::Nfs => {
+            let (server, path) = m.source.split_once(':').unwrap_or((&m.source, ""));
+            Route {
+                icon: "network-server-symbolic",
+                from: server.to_string(),
+                what: format!("Folder: {path}"),
+                how: option(m, "nfsvers").or(option(m, "vers")).map_or("NFS".to_string(), |v| format!("NFS {v}")),
+            }
+        }
+        Kind::Ssh => {
+            let (who, path) = m.source.split_once(':').unwrap_or((&m.source, ""));
+            let (user, host) = who.split_once('@').unwrap_or(("", who));
+            Route {
+                icon: "computer-symbolic",
+                from: host.to_string(),
+                what: if path.is_empty() { "Their home folder".into() } else { format!("Folder: {path}") },
+                how: if user.is_empty() { "SSH, with your key".into() } else { format!("SSH · signed in as {user} with your key") },
+            }
+        }
+        Kind::Drive => match part {
+            Some(p) => Route {
+                icon: "drive-harddisk-symbolic",
+                from: p.title(),
+                what: format!("{} partition", crate::backend::sysinfo::bytes_text(p.size)),
+                how: udisks::fs_name(&p.fs),
+            },
+            None => Route {
+                icon: "drive-harddisk-symbolic",
+                from: m.source.trim_start_matches("UUID=").chars().take(13).collect(),
+                what: "A partition".into(),
+                how: udisks::fs_name(&m.fstype),
+            },
+        },
+        Kind::Other => Route { icon: "folder-symbolic", from: m.source.clone(), what: m.fstype.clone(), how: String::new() },
+    }
+}
+
+/// The partition a drive line mounts, found through UDisks.
+fn find_part(source: &str) -> Option<udisks::Part> {
+    let uuid = source.strip_prefix("UUID=")?;
+    udisks::load()
+        .ok()?
+        .iter()
+        .flat_map(|d| d.parts.iter())
+        .find(|p| p.uuid == uuid || p.content().uuid == uuid)
+        .map(|p| p.content().clone())
+}
+
+/// (size, used, free) in bytes of the filesystem mounted at `dir`. Only ask once
+/// it's mounted: asking about a folder that mounts when opened would mount it.
+fn space(dir: &str) -> Option<(u64, u64, u64)> {
+    let text = cmd::output(&["timeout", "4", "df", "-B1", "--output=size,used,avail", "--", dir])?;
+    let n: Vec<u64> = text.lines().nth(1)?.split_whitespace().filter_map(|x| x.parse().ok()).collect();
+    (n.len() == 3 && n[0] > 0).then(|| (n[0], n[1], n[2]))
+}
+
+thread_local! {
+    /// The folder of the mount shown on the right, kept while the page is redrawn.
+    static PICKED: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+struct Ui {
+    items: Vec<Item>,
+    now: Vec<(String, String)>,
+    body: gtk::Box,
+    removal: gtk::Box,
+    foot: gtk::Label,
+    rows: std::cell::RefCell<Vec<(String, gtk::Box)>>,
 }
 
 pub fn build(page: &Page) {
     if let (_, Some(notice)) = crate::platform::system_notice("mounts", "adding a network share") {
         page.body.append(&notice);
     }
-    let g = page.group("Add a mount");
-    g.note(crate::platform::mounts_note());
-    let flow = gtk::FlowBox::new();
-    flow.set_selection_mode(gtk::SelectionMode::None);
-    flow.set_homogeneous(true);
-    flow.set_min_children_per_line(2);
-    flow.set_max_children_per_line(2);
-    flow.set_column_spacing(10);
-    flow.set_row_spacing(10);
-    flow.add_css_class("picture-cards");
-    flow.append(&add_card("Drive at startup", "A partition, mounted at a folder every time", "drive-harddisk-symbolic", || {
-        startup_dialog(None)
-    }));
-    flow.append(&add_card(
-        "Windows or NAS share",
-        "SMB: shared folders from a NAS or a Windows PC",
-        "folder-remote-symbolic",
-        smb_dialog,
-    ));
-    flow.append(&add_card("NFS share", "Shared folders from a Linux server or NAS", "network-workgroup-symbolic", nfs_dialog));
-    flow.append(&add_card(
-        "Folder over SSH",
-        "A folder on another computer you can sign in to",
-        "network-server-symbolic",
-        ssh_dialog,
-    ));
-    let holder = widgets::vbox(0);
-    holder.add_css_class("settings-option");
-    holder.add_css_class("card-row");
-    holder.add_css_class("tall");
-    holder.append(&flow);
-    g.add(&holder);
     widgets::keywords("mount fstab nas samba smb cifs windows share nfs sshfs ssh network drive automount startup");
+    let pv = page.split();
+    super::connectivity::steady(&pv);
+    let body = widgets::vbox(14);
+    pv.add(&body);
+    let foot = pv.foot("dialog-information-symbolic", "");
+    let removal = widgets::hbox(4);
+    if let Some(row) = foot.parent().and_downcast::<gtk::Box>() {
+        row.append(&removal);
+    }
+    let items = items();
+    let picked = PICKED
+        .with(|p| p.borrow().clone())
+        .filter(|d| items.iter().any(|i| &i.m.dir == d))
+        .or_else(|| items.first().map(|i| i.m.dir.clone()));
+    PICKED.with(|p| *p.borrow_mut() = picked);
+    let ui = Rc::new(Ui { items, now: mounts::mounted(), body, removal, foot, rows: Default::default() });
+    list(page, &ui);
+    add_kinds(page);
+    system_own(page);
+    show(&ui, None);
+}
 
-    let now = mounts::mounted();
-    let all: Vec<Mount> = crate::platform::fstab().into_iter().filter(|m| !m.system).collect();
-    let ssh = mounts::ssh_folders(&paths::home());
+fn list(page: &Page, ui: &Rc<Ui>) {
+    let g = page.group("Your mounts");
+    if ui.items.is_empty() {
+        g.add(&widgets::icon_row(
+            "folder-remote-symbolic",
+            "None yet",
+            "Mounts you add show here, with whether they're mounted now.",
+            None,
+        ));
+        return;
+    }
+    for item in &ui.items {
+        let m = &item.m;
+        let r = widgets::icon_row(
+            kind_icon(&m.kind),
+            &glib::markup_escape_text(&name_of(m)),
+            &glib::markup_escape_text(&format!("In {}", short_dir(&m.dir))),
+            Some(state_chip(status(&m.dir, &ui.now)).upcast_ref()),
+        );
+        r.add_css_class("cn-click");
+        r.set_cursor_from_name(Some("pointer"));
+        r.set_focusable(true);
+        let (ui2, dir) = (ui.clone(), m.dir.clone());
+        let click = gtk::GestureClick::new();
+        click.connect_released(move |_, _, _, _| {
+            PICKED.with(|p| *p.borrow_mut() = Some(dir.clone()));
+            show(&ui2, None);
+        });
+        r.add_controller(click);
+        ui.rows.borrow_mut().push((m.dir.clone(), r.clone()));
+        g.add(&r);
+    }
+}
 
-    let g = page.group("Mounts");
-    if all.is_empty() && ssh.is_empty() {
-        g.add(&widgets::row("None yet", "Mounts you add show here, with whether they're mounted now.", None));
+fn add_kinds(page: &Page) {
+    let g = page.plain_group("Add a mount");
+    g.note(crate::platform::mounts_note());
+    let grid = gtk::Grid::new();
+    grid.set_column_spacing(8);
+    grid.set_row_spacing(8);
+    grid.set_column_homogeneous(true);
+    let kinds: [(&str, &str, &str, fn()); 4] = [
+        ("drive-harddisk-symbolic", "Drive at startup", "A partition, mounted at a folder every time", || startup_dialog(None)),
+        ("folder-remote-symbolic", "Windows or NAS share", "SMB: shared folders from a NAS or a Windows PC", smb_dialog),
+        ("network-workgroup-symbolic", "NFS share", "Shared folders from a Linux server or NAS", nfs_dialog),
+        ("utilities-terminal-symbolic", "Folder over SSH", "A folder on another computer you can sign in to", ssh_dialog),
+    ];
+    for (i, (icon, title, tip, open)) in kinds.into_iter().enumerate() {
+        let b = gtk::Button::new();
+        b.add_css_class("cn-mt-kind");
+        b.set_tooltip_text(Some(tip));
+        let c = widgets::hbox(10);
+        c.append(&widgets::tile(icon));
+        let t = widgets::label(title, "cn-strong");
+        t.set_wrap(true);
+        t.set_xalign(0.0);
+        c.append(&t);
+        b.set_child(Some(&c));
+        b.connect_clicked(move |_| open());
+        grid.attach(&b, (i % 2) as i32, (i / 2) as i32, 1, 1);
     }
-    // Settings removes only the lines it added; the rest are yours.
-    for m in &all {
-        let how = m.ours().then(|| Remove::Helper(m.id.clone()));
-        g.add(&mount_row(m, &now, how));
-    }
-    for (id, target, dir) in ssh {
-        let m = Mount {
-            id: id.clone(),
-            kind: Kind::Ssh,
-            source: target,
-            dir,
-            fstype: "fuse.sshfs".into(),
-            options: String::new(),
-            system: false,
-        };
-        g.add(&mount_row(&m, &now, Some(Remove::Ssh(id))));
-    }
+    g.add(&grid);
+}
+
+fn system_own(page: &Page) {
     let system: Vec<Mount> = crate::platform::fstab().into_iter().filter(|m| m.system).collect();
-    if !system.is_empty() {
-        let g = page.collapsible("The system's own", false);
-        g.note("Where the system itself is mounted. Settings leaves these alone.");
-        for m in system {
-            let (r, _) = widgets::info_row(&m.dir, &format!("{} · {}", m.fstype, m.source));
-            g.add(&r);
+    if system.is_empty() {
+        return;
+    }
+    let g = page.group("");
+    widgets::keywords("system root boot home swap partitions fstab");
+    let n = system.len().to_string();
+    let (r, _) = widgets::nav_row(
+        Some("system-lock-screen-symbolic"),
+        "The system's own",
+        "Where Linux itself is mounted; Settings leaves these alone",
+        &n,
+        move || {
+            let system = system.clone();
+            widgets::subpage("The system's own", 560, move |page| {
+                let g = page.group("");
+                g.note("Where the system itself is mounted. Settings leaves these alone.");
+                for m in system {
+                    let (r, _) = widgets::info_row(&m.dir, &format!("{} · {}", m.fstype, m.source));
+                    g.add(&r);
+                }
+            });
+        },
+    );
+    g.add(&r);
+}
+
+// ----- The picked mount -----
+
+fn clear(b: &gtk::Box) {
+    while let Some(c) = b.first_child() {
+        b.remove(&c);
+    }
+}
+
+/// A row in the preview: a tile, its text and a value at the right.
+fn fact_row(icon: &str, title: &str, desc: &str, value: &str) -> gtk::Box {
+    let v = widgets::label(value, "row-value");
+    v.set_valign(gtk::Align::Center);
+    widgets::icon_row(icon, title, desc, Some(v.upcast_ref()))
+}
+
+fn show(ui: &Rc<Ui>, part: Option<udisks::Part>) {
+    let picked = PICKED.with(|p| p.borrow().clone());
+    for (dir, row) in ui.rows.borrow().iter() {
+        if picked.as_deref() == Some(dir.as_str()) {
+            row.add_css_class("cn-picked");
+        } else {
+            row.remove_css_class("cn-picked");
         }
+    }
+    clear(&ui.body);
+    clear(&ui.removal);
+    let Some(item) = picked.and_then(|d| ui.items.iter().find(|i| i.m.dir == d)) else {
+        ui.foot.set_text("Settings adds each one so a missing drive or network never holds up starting.");
+        let empty = nyx_ui::widgets::empty_state(
+            "folder-remote-symbolic",
+            "No mounts yet",
+            "Add a drive, a share from a NAS or Windows PC, or a folder over SSH on the left.",
+            None,
+        );
+        empty.add_css_class("cn-empty");
+        ui.body.append(&empty);
+        return;
+    };
+    let m = &item.m;
+    let state = status(&m.dir, &ui.now);
+    if m.kind == Kind::Drive && part.is_none() {
+        let (ui2, source, dir) = (ui.clone(), m.source.clone(), m.dir.clone());
+        cmd::background(
+            move || find_part(&source),
+            move |p| {
+                if p.is_some() && PICKED.with(|x| x.borrow().as_deref() == Some(dir.as_str())) {
+                    show(&ui2, p);
+                }
+            },
+        );
+    }
+
+    // The heading: its name, its kind, and opening it.
+    let head = widgets::hbox(8);
+    head.add_css_class("preview-head");
+    let text = widgets::vbox(2);
+    text.set_hexpand(true);
+    text.set_valign(gtk::Align::Center);
+    let t = widgets::label(&name_of(m), "preview-title");
+    t.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    text.append(&t);
+    let origin = match (&m.kind, &item.how) {
+        (Kind::Ssh, _) => "kept mounted while you're signed in",
+        (_, Some(_)) => "added in Settings",
+        (_, None) => "your own line in /etc/fstab",
+    };
+    let l = widgets::label(&format!("{} · {origin}", kind_name(&m.kind)), "preview-line");
+    l.set_wrap(true);
+    l.set_xalign(0.0);
+    text.append(&l);
+    head.append(&text);
+    if state != State::Not {
+        let open = nyx_ui::widgets::labeled_button("folder-open-symbolic", "Open folder");
+        open.set_valign(gtk::Align::Center);
+        let d = m.dir.clone();
+        open.connect_clicked(move |_| cmd::spawn(&["xdg-open", &d]));
+        head.append(&open);
+    }
+    if m.kind == Kind::Ssh {
+        let unit = mounts::ssh_unit_name(&m.id);
+        let (label, verb) = if state == State::Mounted { ("Unmount", "stop") } else { ("Mount", "start") };
+        let b = gtk::Button::with_label(label);
+        b.set_valign(gtk::Align::Center);
+        b.connect_clicked(move |b| {
+            b.set_sensitive(false);
+            cmd::run_async(&["systemctl", "--user", verb, &unit], |r| {
+                if let Err(e) = r {
+                    window::toast(&format!("{e:#}"));
+                }
+                refresh();
+            });
+        });
+        head.append(&b);
+    }
+    ui.body.append(&head);
+
+    // The path: where the files come from, how, and the folder they appear as here.
+    let rt = route(m, part.as_ref());
+    let card = widgets::vbox(0);
+    card.add_css_class("preview-card");
+    card.add_css_class("cn-mt-route");
+    let line = widgets::hbox(8);
+    let end = |icon: &str, title: &str, desc: &str| {
+        let b = widgets::vbox(4);
+        b.add_css_class("cn-mt-end");
+        b.set_size_request(130, -1);
+        let tile = widgets::tile(icon);
+        tile.add_css_class("cn-mt-big");
+        b.append(&tile);
+        let t = widgets::label(title, "cn-strong");
+        t.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+        t.set_max_width_chars(20);
+        t.set_tooltip_text(Some(title));
+        b.append(&t);
+        let d = widgets::label(desc, "cn-note");
+        d.set_wrap(true);
+        d.set_justify(gtk::Justification::Center);
+        d.set_max_width_chars(20);
+        b.append(&d);
+        b
+    };
+    line.append(&end(rt.icon, &rt.from, &rt.what));
+    let mid = widgets::vbox(2);
+    mid.set_hexpand(true);
+    mid.set_valign(gtk::Align::Center);
+    let how = widgets::label(&rt.how, "cn-note");
+    how.set_wrap(true);
+    how.set_justify(gtk::Justification::Center);
+    mid.append(&how);
+    let live = state == State::Mounted;
+    let arrow = widgets::drawing(14, move |cr, p, accent, w, h| {
+        let y = h / 2.0;
+        let c = if live { accent } else { p.dim };
+        crate::sketch::set(cr, c, if live { 1.0 } else { 0.6 });
+        cr.set_line_width(2.0);
+        if !live {
+            cr.set_dash(&[5.0, 4.0], 0.0);
+        }
+        cr.move_to(2.0, y);
+        cr.line_to(w - 8.0, y);
+        let _ = cr.stroke();
+        cr.set_dash(&[], 0.0);
+        cr.move_to(w - 2.0, y);
+        cr.line_to(w - 10.0, y - 5.0);
+        cr.line_to(w - 10.0, y + 5.0);
+        cr.close_path();
+        let _ = cr.fill();
+    });
+    mid.append(&arrow);
+    line.append(&mid);
+    let here = if in_home(&m.dir) { "A folder in your home" } else { "A folder for everyone here" };
+    line.append(&end("folder-symbolic", &short_dir(&m.dir), here));
+    card.append(&line);
+    ui.body.append(&card);
+
+    // How full it is.
+    let fill = widgets::vbox(8);
+    fill.add_css_class("preview-card");
+    fill.add_css_class("cn-mt-space");
+    let top = widgets::hbox(8);
+    let used = widgets::label("", "cn-strong");
+    used.set_hexpand(true);
+    used.set_xalign(0.0);
+    used.set_wrap(true);
+    let free = widgets::label("", "cn-note");
+    top.append(&used);
+    top.append(&free);
+    fill.append(&top);
+    let share = Rc::new(std::cell::Cell::new(None::<f64>));
+    let bar = {
+        let share = share.clone();
+        widgets::drawing(8, move |cr, p, accent, w, h| {
+            crate::sketch::set(cr, p.text, 0.08);
+            crate::sketch::rounded(cr, 0.0, 0.0, w, h, h / 2.0);
+            let _ = cr.fill();
+            if let Some(f) = share.get() {
+                crate::sketch::set(cr, accent, 1.0);
+                crate::sketch::rounded(cr, 0.0, 0.0, (w * f).max(h), h, h / 2.0);
+                let _ = cr.fill();
+            }
+        })
+    };
+    bar.set_visible(state == State::Mounted);
+    fill.append(&bar);
+    let place = match m.kind {
+        Kind::Drive => "on the drive",
+        Kind::Ssh => "on that computer",
+        Kind::Smb | Kind::Nfs => "on the server",
+        Kind::Other => "there",
+    };
+    if state != State::Mounted {
+        used.remove_css_class("cn-strong");
+    }
+    match state {
+        State::Mounted => {
+            used.set_text("Reading how full it is…");
+            let (dir, place) = (m.dir.clone(), place.to_string());
+            cmd::background(
+                move || space(&dir),
+                move |s| match s {
+                    Some((size, u, f)) => {
+                        let b = crate::backend::sysinfo::bytes_text;
+                        used.set_text(&format!("{} used of {}", b(u), b(size)));
+                        free.set_text(&format!("{} free {place}", b(f)));
+                        share.set(Some(u as f64 / size as f64));
+                        bar.queue_draw();
+                    }
+                    None => used.set_text("It didn't say how full it is."),
+                },
+            );
+        }
+        State::Waiting => used.set_text("How full it is shows once it's mounted: opening the folder mounts it."),
+        State::Not => used.set_text("It isn't mounted now."),
+    }
+    ui.body.append(&fill);
+
+    // How it's mounted.
+    let opts = widgets::vbox(0);
+    opts.add_css_class("settings-card");
+    let on_off = |on: bool| if on { "On" } else { "Off" };
+    let missing = match m.kind {
+        Kind::Drive => "A missing drive never holds up starting",
+        _ => "A missing server never holds up starting",
+    };
+    if m.kind == Kind::Ssh {
+        let who = m.source.split_once(':').map_or(m.source.as_str(), |(w, _)| w);
+        opts.append(&fact_row("system-users-symbolic", "Signed in as", "With your SSH key (Users → SSH keys)", who));
+    } else {
+        opts.append(&fact_row("alarm-symbolic", "Mount when first opened", missing, on_off(m.on_demand())));
+        opts.append(&fact_row("view-reveal-symbolic", "Read-only", "Files open but can't be changed", on_off(has_option(m, "ro"))));
+    }
+    if m.kind == Kind::Smb {
+        let (who, desc) = if has_option(m, "guest") {
+            ("A guest".to_string(), "The share asks for no password")
+        } else if let Some(u) = option(m, "username").or(option(m, "user")) {
+            (u.to_string(), "The password is kept where only the system can read it")
+        } else if option(m, "credentials").is_some() {
+            ("A saved sign-in".to_string(), "Kept where only the system can read it")
+        } else {
+            ("Nobody yet".to_string(), "It mounts without signing in")
+        };
+        opts.append(&fact_row("system-users-symbolic", "Signed in as", desc, &who));
+    }
+    ui.body.append(&opts);
+
+    match &item.how {
+        Some(how) => {
+            ui.foot.set_text(&format!("Stopping it leaves every file {place} where it is."));
+            let how = how.clone();
+            let b = widgets::confirm_button("Stop mounting it", "Stop mounting it?", move |b| {
+                b.set_sensitive(false);
+                remove(&how);
+            });
+            b.add_css_class("flat");
+            b.add_css_class("cn-danger");
+            ui.removal.append(&b);
+        }
+        None => ui.foot.set_text("It's your own line in /etc/fstab, so Settings leaves it as it is."),
     }
 }

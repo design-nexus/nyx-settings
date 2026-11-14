@@ -98,6 +98,38 @@ where
 
 // ---------- Colours and the map ----------
 
+/// A partition's name: its label or GPT name, else what it's for, from where it's
+/// mounted (the system, boot, home), else its device.
+fn part_name(p: &Part) -> String {
+    let c = p.content();
+    if !p.label.is_empty() || !p.name.is_empty() {
+        return p.title();
+    }
+    if !c.label.is_empty() {
+        return c.label.clone();
+    }
+    let at = |dirs: &[&str]| c.mounts.iter().any(|m| dirs.contains(&m.as_str()));
+    if at(&["/"]) {
+        "System".into()
+    } else if at(&["/boot", "/boot/efi", "/efi"]) {
+        "Boot".into()
+    } else if at(&["/home"]) {
+        "Home".into()
+    } else if p.swap_active || c.fs == "swap" {
+        "Swap".into()
+    } else {
+        p.title()
+    }
+}
+
+/// The section colour of the page `w` is on.
+fn page_rgb(w: &gtk::Widget) -> Rgb {
+    let key = std::iter::successors(w.parent(), |w| w.parent())
+        .find_map(|w| w.css_classes().iter().find_map(|c| c.strip_prefix("colour-").map(str::to_string)))
+        .unwrap_or_else(|| "hardware".into());
+    crate::fangraph::rgb(&crate::theme::section_accent("settings", &key))
+}
+
 fn fs_colour(p: &Part) -> Rgb {
     let fs = if p.encrypted { "crypto_LUKS" } else { p.fs.as_str() };
     match fs {
@@ -143,9 +175,9 @@ fn layout(sizes: &[u64], width: f64, gap: f64, min: f64) -> Vec<(f64, f64)> {
         .collect()
 }
 
-fn map(d: &Drive) -> gtk::DrawingArea {
+fn map(d: &Drive, on_pick: Rc<dyn Fn()>) -> gtk::DrawingArea {
     let area = gtk::DrawingArea::new();
-    area.set_content_height(66);
+    area.set_content_height(84);
     area.set_hexpand(true);
     area.add_css_class("disk-map");
     let segs = d.segments();
@@ -158,7 +190,7 @@ fn map(d: &Drive) -> gtk::DrawingArea {
         .collect();
     let d2 = d.clone();
     let (segs2, sizes2) = (segs.clone(), sizes.clone());
-    area.set_draw_func(move |_, cr, w, h| {
+    area.set_draw_func(move |a_ref, cr, w, h| {
         let p = sketch::pal();
         let (w, h) = (w as f64, h as f64);
         let picked = picked(&d2.block);
@@ -166,7 +198,7 @@ fn map(d: &Drive) -> gtk::DrawingArea {
             let (fill, title, size, chosen) = match seg {
                 Segment::Part(i) => {
                     let part = &d2.parts[*i];
-                    (Some(fs_colour(part)), part.title(), part.size, picked == Some(Pick::Part(part.path.clone())))
+                    (Some(fs_colour(part)), part_name(part), part.size, picked == Some(Pick::Part(part.path.clone())))
                 }
                 Segment::Free { offset, size } => (None, "Free".to_string(), *size, picked == Some(Pick::Free(*offset))),
             };
@@ -210,7 +242,7 @@ fn map(d: &Drive) -> gtk::DrawingArea {
             }
             if chosen {
                 rounded(cr, x + 1.0, 1.0, sw - 2.0, h - 2.0, 7.0);
-                set(cr, p.accent, 1.0);
+                set(cr, page_rgb(a_ref.upcast_ref()), 1.0);
                 cr.set_line_width(2.5);
                 let _ = cr.stroke();
             }
@@ -243,7 +275,7 @@ fn map(d: &Drive) -> gtk::DrawingArea {
                     Segment::Free { offset, .. } => Pick::Free(*offset),
                 };
                 pick(&d3.block, p);
-                rebuild();
+                on_pick();
                 return;
             }
         }
@@ -789,53 +821,150 @@ fn button(label: &str, icon: &str, f: impl Fn() + 'static) -> gtk::Button {
     b
 }
 
-fn drive_card(d: &Drive) -> gtk::Box {
-    let card = widgets::vbox(12);
-    card.add_css_class("drive-card");
-    let head = widgets::hbox(12);
-    let icon = gtk::Image::from_icon_name(drive_icon(d));
-    icon.set_pixel_size(28);
-    icon.add_css_class("drive-icon");
-    head.append(&icon);
+thread_local! {
+    /// The drive shown on the right (its block), kept across rebuilds.
+    static CHOSEN: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+/// What a drive is for, as its name: the system's, else its largest partition's name,
+/// else its model.
+fn drive_name(d: &Drive) -> String {
+    if d.system() {
+        return "System drive".into();
+    }
+    if !d.backing_file.is_empty() {
+        return d.title();
+    }
+    d.parts
+        .iter()
+        .filter(|p| !p.content().label.is_empty())
+        .max_by_key(|p| p.size)
+        .map(|p| p.content().label.clone())
+        .unwrap_or_else(|| d.title())
+}
+
+/// How it's attached, in words.
+fn attached(d: &Drive) -> &str {
+    match d.bus.as_str() {
+        "usb" => "USB",
+        "sdio" => "card reader",
+        "loop" => "disk image",
+        _ if d.removable => "removable",
+        _ => "built in",
+    }
+}
+
+/// How full its mounted filesystems are, as a share of the drive, if any is mounted.
+fn fullness(d: &Drive) -> Option<f64> {
+    let mut used = 0u64;
+    let mut any = false;
+    for p in &d.parts {
+        if let Some(m) = p.content().mounts.first()
+            && let Some((u, _)) = udisks::used(m)
+        {
+            used += u;
+            any = true;
+        }
+    }
+    (any && d.size > 0).then(|| (used as f64 / d.size as f64).clamp(0.0, 1.0))
+}
+
+fn health_line(d: &Drive) -> Option<(String, bool)> {
+    if !d.health.supported {
+        return None;
+    }
+    Some(if d.health.ok() {
+        match d.health.temperature {
+            Some(t) => (format!("Healthy · {:.0} {}", crate::units::from_celsius(t), crate::units::symbol()), true),
+            None => ("Healthy".to_string(), true),
+        }
+    } else {
+        ("Needs attention".to_string(), false)
+    })
+}
+
+/// A drive in the list: its icon, name, size and how full it is.
+fn drive_row(d: &Drive) -> gtk::Box {
+    let r = widgets::row(&drive_name(d), &format!("{} · {}", bytes_text(d.size), attached(d)), None);
+    r.prepend(&widgets::tile(drive_icon(d)));
+    r.add_css_class("with-tile");
+    r.add_css_class("dsk-drive");
+    if let Some(text) = r.first_child().and_then(|t| t.next_sibling()).and_downcast::<gtk::Box>() {
+        // Tags beside the name.
+        if let Some(title) = text.first_child() {
+            let line = widgets::hbox(8);
+            text.remove(&title);
+            line.append(&title);
+            if d.system() && drive_name(d) != "System drive" {
+                line.append(&widgets::tag("System drive"));
+            }
+            if d.other_os() {
+                let tag = widgets::tag("Windows");
+                tag.add_css_class("warn-tag");
+                line.append(&tag);
+            }
+            if d.removable {
+                line.append(&widgets::tag("Removable"));
+            }
+            text.prepend(&line);
+        }
+        let full = fullness(d);
+        if let Some(f) = full {
+            let m = crate::charts::meter(5);
+            m.never_warn();
+            m.set(vec![f]);
+            m.area.add_css_class("dsk-meter");
+            text.append(&m.area);
+        }
+        let foot = widgets::hbox(8);
+        let (h, ok) = health_line(d).unwrap_or_else(|| ("Health not reported".into(), true));
+        let hl = widgets::label(&h, if !d.health.supported { "dsk-dim" } else if ok { "dsk-ok" } else { "dsk-bad" });
+        hl.set_hexpand(true);
+        hl.set_xalign(0.0);
+        foot.append(&hl);
+        if let Some(f) = full {
+            foot.append(&widgets::label(&format!("{}% full", (f * 100.0).round()), "dsk-dim"));
+        }
+        text.append(&foot);
+    }
+    r
+}
+
+/// The chosen drive: its map, a key to the colours, and what's picked on it.
+fn drive_preview(shown: &gtk::Box, d: &Drive) {
+    while let Some(c) = shown.first_child() {
+        shown.remove(&c);
+    }
+    let head = widgets::hbox(8);
+    head.add_css_class("preview-head");
     let text = widgets::vbox(2);
     text.set_hexpand(true);
-    let title = widgets::hbox(8);
-    let t = widgets::label(&d.title(), "drive-title");
+    text.set_valign(gtk::Align::Center);
+    let t = widgets::label(&drive_name(d), "preview-title");
+    t.set_xalign(0.0);
     t.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    title.append(&t);
-    if d.system() {
-        title.append(&widgets::tag("System drive"));
-    }
-    if d.other_os() {
-        let tag = widgets::tag("Windows");
-        tag.add_css_class("warn-tag");
-        title.append(&tag);
-    }
-    if d.removable {
-        title.append(&widgets::tag("Removable"));
-    }
-    text.append(&title);
+    text.append(&t);
     let table = match d.table.as_str() {
         "gpt" => "GPT",
         "dos" => "MBR",
         _ => "no partition table",
     };
-    let sub = widgets::label(&format!("{} · {} · {} · {}", bytes_text(d.size), bus_name(d), table, d.device), "dim");
-    sub.set_xalign(0.0);
-    text.append(&sub);
+    let line = [d.title(), bytes_text(d.size), bus_name(d).to_string(), table.to_string(), d.device.clone()]
+        .into_iter()
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(" · ");
+    let l = widgets::label(&line, "preview-line");
+    l.set_xalign(0.0);
+    l.set_wrap(true);
+    l.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+    text.append(&l);
     head.append(&text);
-    if d.health.supported {
-        let (label, class) = if d.health.ok() {
-            match d.health.temperature {
-                Some(t) => (format!("Healthy · {:.0}{}", crate::units::from_celsius(t), crate::units::symbol()), "health-good"),
-                None => ("Healthy".to_string(), "health-good"),
-            }
-        } else {
-            ("Needs attention".to_string(), "health-bad")
-        };
+    if let Some((label, ok)) = health_line(d) {
         let b = gtk::Button::with_label(&label);
         b.add_css_class("flat");
-        b.add_css_class(class);
+        b.add_css_class(if ok { "health-good" } else { "health-bad" });
+        b.add_css_class("dsk-health");
         b.set_valign(gtk::Align::Center);
         b.set_tooltip_text(Some("Temperature, wear and errors"));
         let d2 = d.clone();
@@ -873,19 +1002,52 @@ fn drive_card(d: &Drive) -> gtk::Box {
     pop.set_child(Some(&items));
     menu.set_popover(Some(&pop));
     head.append(&menu);
-    card.append(&head);
+    shown.append(&head);
 
     if let Some((_, what)) = BUSY.with(|b| b.borrow().clone()).filter(|(blk, _)| *blk == d.block) {
         let row = widgets::vbox(4);
+        row.add_css_class("preview-card");
         row.append(&widgets::label(&format!("{what}…"), ""));
         let bar = gtk::ProgressBar::new();
         bar.set_pulse_step(0.15);
         row.append(&bar);
         PROGRESS.with(|p| *p.borrow_mut() = Some(bar));
-        card.append(&row);
+        shown.append(&row);
     }
 
-    card.append(&map(d));
+    let refresh: Rc<dyn Fn()> = {
+        let (shown, d) = (shown.clone(), d.clone());
+        Rc::new(move || {
+            let (shown, d) = (shown.clone(), d.clone());
+            // After the click has been handled: this replaces the map that got it.
+            glib::idle_add_local_once(move || drive_preview(&shown, &d));
+        })
+    };
+    shown.append(&map(d, refresh));
+
+    // A key to the colours on the map.
+    let key = widgets::hbox(12);
+    key.add_css_class("dsk-key");
+    let mut seen: Vec<String> = Vec::new();
+    for p in &d.parts {
+        let name = if p.encrypted { "Encrypted".to_string() } else if p.fs.is_empty() { "Unknown".to_string() } else { udisks::fs_name(&p.fs) };
+        if seen.contains(&name) {
+            continue;
+        }
+        seen.push(name.clone());
+        let c = fs_colour(p);
+        key.append(&key_item(&name, Some(c)));
+    }
+    if d.segments().iter().any(|s| matches!(s, Segment::Free { .. })) {
+        key.append(&key_item("Free", None));
+    }
+    let hint = widgets::label("Click a part to see what's on it", "dsk-dim");
+    hint.set_hexpand(true);
+    hint.set_xalign(1.0);
+    hint.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    key.append(&hint);
+    shown.append(&key);
+
     // What's picked: the first partition if nothing is yet.
     let chosen = picked(&d.block).filter(|p| match p {
         Pick::Part(path) => d.parts.iter().any(|x| x.path == *path),
@@ -900,19 +1062,45 @@ fn drive_card(d: &Drive) -> gtk::Box {
     match chosen {
         Some(Pick::Part(path)) => {
             if let Some(i) = d.parts.iter().position(|p| p.path == path) {
-                card.append(&part_panel(d, i));
+                shown.append(&part_panel(d, i));
             }
         }
         Some(Pick::Free(off)) => {
             if let Some(Segment::Free { offset, size }) =
                 d.segments().into_iter().find(|s| matches!(s, Segment::Free { offset, .. } if *offset == off))
             {
-                card.append(&free_panel(d, offset, size));
+                shown.append(&free_panel(d, offset, size));
             }
         }
         None => {}
     }
-    card
+}
+
+/// A colour swatch and its name, for the key; free space is hatched.
+fn key_item(name: &str, colour: Option<Rgb>) -> gtk::Box {
+    let b = widgets::hbox(5);
+    let sw = gtk::DrawingArea::new();
+    sw.set_content_width(10);
+    sw.set_content_height(10);
+    sw.set_valign(gtk::Align::Center);
+    sw.set_draw_func(move |_, cr, w, h| {
+        let p = sketch::pal();
+        rounded(cr, 0.5, 0.5, w as f64 - 1.0, h as f64 - 1.0, 2.5);
+        match colour {
+            Some(c) => {
+                set(cr, c, 1.0);
+                let _ = cr.fill();
+            }
+            None => {
+                set(cr, p.dim, 0.7);
+                cr.set_line_width(1.0);
+                let _ = cr.stroke();
+            }
+        }
+    });
+    b.append(&sw);
+    b.append(&widgets::label(name, "dsk-dim"));
+    b
 }
 
 fn info(grid: &gtk::Grid, row: i32, k: &str, v: &str) {
@@ -931,7 +1119,8 @@ fn part_panel(d: &Drive, i: usize) -> gtk::Box {
     let p = &d.parts[i];
     let content = p.content();
     let panel = widgets::vbox(12);
-    panel.add_css_class("part-panel");
+    panel.add_css_class("preview-card");
+    panel.add_css_class("dsk-detail");
     let head = widgets::hbox(8);
     let swatch = gtk::DrawingArea::new();
     swatch.set_content_width(12);
@@ -944,7 +1133,7 @@ fn part_panel(d: &Drive, i: usize) -> gtk::Box {
     });
     swatch.set_valign(gtk::Align::Center);
     head.append(&swatch);
-    head.append(&widgets::label(&p.title(), "part-title"));
+    head.append(&widgets::label(&part_name(p), "part-title"));
     let kind = widgets::label(&format!("{} · {}", p.kind(), bytes_text(p.size)), "dim");
     head.append(&kind);
     panel.append(&head);
@@ -1111,7 +1300,8 @@ fn part_panel(d: &Drive, i: usize) -> gtk::Box {
 
 fn free_panel(d: &Drive, offset: u64, size: u64) -> gtk::Box {
     let panel = widgets::vbox(10);
-    panel.add_css_class("part-panel");
+    panel.add_css_class("preview-card");
+    panel.add_css_class("dsk-detail");
     let head = widgets::hbox(8);
     head.append(&widgets::label("Free space", "part-title"));
     head.append(&widgets::label(&bytes_text(size), "dim"));
@@ -1148,17 +1338,70 @@ pub fn build(page: &Page) {
         }
     });
     PROGRESS.with(|p| *p.borrow_mut() = None);
-    let g = page.plain_group("Drives");
-    g.note(
-        "Pick a part of a drive's map to see what's on it and what you can do. Changes ask for your password once, \
-         then remember it for a few minutes (Users can turn this off).",
-    );
+    let pv = page.split();
+    let shown = widgets::vbox(12);
+    shown.set_vexpand(true);
+    pv.add(&shown);
+
+    let g = page.group("Drives");
     widgets::keywords(
         "disk drive partition format resize shrink grow delete label rename mount unmount encrypt luks usb ssd nvme",
     );
-    for d in &drives {
-        g.add(&drive_card(d));
+    if drives.is_empty() {
+        g.add(&widgets::row("No drives", "UDisks doesn't list any drives.", None));
     }
+    let chosen = CHOSEN.with(|c| c.borrow().clone());
+    let chosen = if drives.iter().any(|d| d.block == chosen) { chosen } else { drives.first().map(|d| d.block.clone()).unwrap_or_default() };
+    let drives = Rc::new(drives);
+    let rows: Rc<RefCell<Vec<(String, gtk::Box)>>> = Rc::default();
+    let choose = {
+        let (drives, rows, shown) = (drives.clone(), rows.clone(), shown.clone());
+        Rc::new(move |block: &str| {
+            CHOSEN.with(|c| *c.borrow_mut() = block.to_string());
+            for (b, r) in rows.borrow().iter() {
+                if b == block {
+                    r.add_css_class("dsk-chosen");
+                } else {
+                    r.remove_css_class("dsk-chosen");
+                }
+            }
+            if let Some(d) = drives.iter().find(|d| d.block == block) {
+                drive_preview(&shown, d);
+            }
+        })
+    };
+    for d in drives.iter() {
+        let r = drive_row(d);
+        r.set_cursor_from_name(Some("pointer"));
+        r.set_focusable(true);
+        let click = gtk::GestureClick::new();
+        let (c, b) = (choose.clone(), d.block.clone());
+        click.connect_released(move |_, _, _, _| c(&b));
+        r.add_controller(click);
+        let keys = gtk::EventControllerKey::new();
+        let (c, b) = (choose.clone(), d.block.clone());
+        keys.connect_key_pressed(move |_, key, _, _| {
+            if matches!(key, gtk::gdk::Key::Return | gtk::gdk::Key::KP_Enter | gtk::gdk::Key::space) {
+                c(&b);
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+        r.add_controller(keys);
+        g.add(&r);
+        rows.borrow_mut().push((d.block.clone(), r));
+    }
+    if !chosen.is_empty() {
+        choose(&chosen);
+    }
+    let hint = page.group("");
+    hint.add(&widgets::icon_row(
+        "dialog-password-symbolic",
+        "Changes ask for your password",
+        "Once, then it's remembered for a few minutes.",
+        None,
+    ));
+    widgets::keywords("password permission polkit remember users");
     super::cleanup::build(page);
 }
 

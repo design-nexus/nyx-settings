@@ -20,7 +20,10 @@ pub fn state_home() -> PathBuf {
 /// Saved device settings, shared with the Logi app and re-applied whenever a
 /// device (re)connects.
 pub fn devices_file() -> PathBuf {
-    config_home().join("logi/devices.toml")
+    match crate::devices::mock_state() {
+        Some(dir) => dir.join("devices.toml"),
+        None => config_home().join("logi/devices.toml"),
+    }
 }
 
 pub fn udev_rule() -> PathBuf {

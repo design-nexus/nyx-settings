@@ -1,0 +1,38 @@
+# galleon-deck: the Galleon 100 SD's Stream Deck. Edit with the "Galleon Deck"
+# app (galleon-deck-config) or by hand; saved changes apply within a second and
+# mistakes show on the deck's screen instead of crashing it.
+#
+# (galleon-deck's examples/config.toml, MIT, Copyright (c) 2026 The Galleon-Deck
+# contributors; the long option list is shortened here.)
+
+start_profile = "desktop"
+brightness = 70
+volume_step = 2 # percent per dial click
+clock_format = "%H:%M"
+
+[auto_switch]
+fallback = "desktop" # profile for windows no rule matches
+rules = [
+  { class = "^(steam_app_.*|gamescope)$", profile = "gaming" },
+]
+
+[transition]
+enabled = true
+speed = 1.0 # 2.0 = twice as fast, 0.5 = half speed
+hold = 0.5 # seconds the logo stays up once it has resolved
+
+[boot]
+enabled = true
+speed = 1.0 # 0.5 = half speed
+title = "GALLEON DECK"
+lines = [ # "LABEL|STATUS", up to 6
+  "DECK LINK 1B1C:2B18|OK",
+  "PROFILES|LOADED",
+  "KEYS|ENCRYPTED",
+  "DIALS|READY",
+]
+
+[wallpaper_theme]
+auto = false # true: regenerate whenever the wallpaper changes
+font = "Quantico"
+clock_font = "Quantico:bold"

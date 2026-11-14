@@ -1,6 +1,7 @@
 //! Simulated receivers and devices that answer HID++ like the real thing.
 //! Used by the tests and by `LOGI_MOCK=mx-master-3s,mx-keys,g502x,mx-anywhere-3s`
-//! to run the whole app without hardware.
+//! to run the whole app without hardware (add `denied` to pretend access isn't allowed,
+//! `gearbench` to pretend Gearbench is set up).
 
 use super::device::feature as f;
 use super::hidraw::{BUS_BLUETOOTH, BUS_USB, NodeInfo};
@@ -37,6 +38,10 @@ pub struct SimDevice {
     zones: Vec<(u16, u8, [u8; 10])>,
     controls: Vec<(u16, u8, u8, u8, u16)>,
     battery: (u8, u8),
+    /// Main firmware: prefix, major, minor, build.
+    firmware: ([u8; 3], u8, u8, u16),
+    /// Easy-Switch host names; empty means not paired.
+    host_names: Vec<&'static str>,
 }
 
 impl SimDevice {
@@ -67,6 +72,8 @@ impl SimDevice {
             zones: vec![],
             controls: vec![],
             battery: (80, 0),
+            firmware: (*b"RBM", 0x21, 0x02, 0x0014),
+            host_names: vec![],
         }
     }
 
@@ -81,24 +88,40 @@ impl SimDevice {
                     f::HIRES_WHEEL,
                     f::THUMB_WHEEL,
                     f::ADJUSTABLE_DPI,
+                    f::EXTENDED_REPORT_RATE,
+                    f::HOSTS_INFO,
                 ]);
+                d.rate_mask = 0x0F;
+                d.wheel = (2, 12);
+                d.battery = (70, 0);
+                d.firmware = (*b"RBM", 0x12, 0x02, 0x0014);
+                d.host_names = vec!["Hades", "", ""];
                 d.controls = vec![
                     (0x50, 0x01, 1, 0x00, 0x50),
                     (0x51, 0x01, 1, 0x00, 0x51),
                     (0x52, 0x31, 2, 0x03, 0x52),
                     (0x53, 0x31, 2, 0x03, 0x53),
                     (0x56, 0x31, 2, 0x03, 0x56),
-                    (0xC3, 0x31, 2, 0x03, 0xC3),
+                    (0xC3, 0x31, 2, 0x03, 0x52),
                     (0xC4, 0x31, 2, 0x03, 0xC4),
                 ];
                 d
             }
             "mx-keys" => {
-                let mut d = Self::base("MX Keys", 0, 1, 0xB35B, [0x1F, 0x0B, 0x77, 0x42]);
-                d.features.extend([f::CHANGE_HOST, f::BACKLIGHT2, f::REPROG_CONTROLS_V4, f::K375S_FN_INVERSION, f::DISABLE_KEYS]);
+                let mut d = Self::base("MX Keys", 0, 1, 0xB35B, [0x8F, 0x2A, 0x1C, 0x04]);
+                d.features.extend([
+                    f::CHANGE_HOST,
+                    f::BACKLIGHT2,
+                    f::REPROG_CONTROLS_V4,
+                    f::K375S_FN_INVERSION,
+                    f::DISABLE_KEYS,
+                    f::HOSTS_INFO,
+                ]);
                 d.disable_caps = 0x19;
                 d.disabled = 0x01;
                 d.battery = (35, 0);
+                d.firmware = (*b"RBK", 0x04, 0x01, 0x0012);
+                d.host_names = vec!["Hades", "", ""];
                 d.controls = [0xC7, 0xC8, 0x0111, 0x0112, 0xE0, 0xD4, 0x0103, 0xE4, 0x0114, 0x0116, 0x0117, 0x0118]
                     .into_iter()
                     .map(|cid| (cid, 0x11, 1, 0x01, cid))
@@ -106,7 +129,7 @@ impl SimDevice {
                 d
             }
             "g502x" => {
-                let mut d = Self::base("G502 X LIGHTSPEED", 3, 2, 0x4099, [0x55, 0x10, 0xA2, 0x9E]);
+                let mut d = Self::base("G502 X LIGHTSPEED", 3, 2, 0x409F, [0x55, 0x10, 0xA2, 0x9E]);
                 d.features.extend([
                     f::ADJUSTABLE_DPI,
                     f::EXTENDED_REPORT_RATE,
@@ -118,9 +141,11 @@ impl SimDevice {
                 d.dpi_list = vec![100, 0xE000 | 50, 25600];
                 d.rate_mask = 0x0F;
                 d.profiles = 5;
-                d.onboard_mode = 2;
+                d.onboard_mode = 1;
+                d.profile = 2;
                 d.battery = (12, 0);
-                d.zones = vec![(1, 1, [0x00, 0x9E, 0xFF, 0, 0, 0, 0, 0, 0, 0]), (2, 3, [0x8E, 0x5C, 0xF7, 0x0B, 0xB8, 0, 100, 0, 0, 0])];
+                d.firmware = (*b"MPM", 0x54, 0x03, 0x0007);
+                d.zones = vec![(1, 3, [0xA8, 0x55, 0xF7, 0x0B, 0xB8, 0, 100, 0, 0, 0]), (2, 1, [0xA8, 0x55, 0xF7, 0, 0, 0, 0, 0, 0, 0])];
                 d.controls = vec![
                     (0x50, 0x01, 1, 0x00, 0x50),
                     (0x51, 0x01, 1, 0x00, 0x51),
@@ -165,7 +190,11 @@ impl SimDevice {
             }
             (f::FIRMWARE, 0) => Ok(vec![2, self.serial[0], self.serial[1], self.serial[2], self.serial[3]]),
             (f::FIRMWARE, 1) => Ok(match p(0) {
-                0 => vec![0, b'R', b'B', b'M', 0x21, 0x02, 0x00, 0x14],
+                0 => {
+                    let (prefix, major, minor, build) = self.firmware;
+                    let b = be(build);
+                    vec![0, prefix[0], prefix[1], prefix[2], major, minor, b[0], b[1]]
+                }
                 _ => vec![1, b'B', b'L', b'2', 0x02, 0x00, 0x00, 0x05],
             }),
             (f::NAME, 0) => Ok(vec![self.name.len() as u8]),
@@ -235,6 +264,17 @@ impl SimDevice {
             (f::CHANGE_HOST, 1) => {
                 self.hosts.1 = p(0);
                 Ok(vec![])
+            }
+            (f::HOSTS_INFO, 0) => Ok(vec![0x01, 0, self.hosts.0, self.hosts.1]),
+            (f::HOSTS_INFO, 1) => {
+                let name = self.host_names.get(p(0) as usize).ok_or(0x02u8)?;
+                Ok(vec![p(0), !name.is_empty() as u8, 0, 1, name.len() as u8, 24])
+            }
+            (f::HOSTS_INFO, 3) => {
+                let name = self.host_names.get(p(0) as usize).ok_or(0x02u8)?;
+                let mut r = vec![p(0), p(1)];
+                r.extend(name.as_bytes().iter().skip(p(1) as usize).take(14));
+                Ok(r)
             }
             (f::BACKLIGHT2, 0) => Ok(self.backlight.to_vec()),
             (f::BACKLIGHT2, 1) => {
@@ -335,6 +375,11 @@ impl SimNode {
 
     pub fn direct(device: SimDevice) -> Self {
         Self { receiver: None, direct: Some(device), queue: VecDeque::new() }
+    }
+
+    /// The wireless ids paired to a receiver, as the kernel lists them in sysfs.
+    pub fn paired_ids(&self) -> Vec<u16> {
+        self.receiver.iter().flat_map(|rx| rx.slots.iter().flatten().map(|d| d.wpid)).collect()
     }
 
     fn reply_short(&mut self, bytes: &[u8]) {
@@ -493,7 +538,7 @@ pub fn nodes(spec: &str) -> Vec<(NodeInfo, SimNode)> {
     let mut bolt = Vec::new();
     let mut lightspeed = Vec::new();
     let mut out = Vec::new();
-    for item in spec.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+    for item in spec.split(',').map(str::trim).filter(|s| !s.is_empty() && !["denied", "gearbench"].contains(s)) {
         let (name, off) = match item.strip_suffix(":off") {
             Some(n) => (n, true),
             None => (item, false),

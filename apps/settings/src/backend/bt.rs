@@ -52,6 +52,47 @@ pub fn devices() -> Vec<Device> {
     out
 }
 
+/// What BlueZ knows about one device (`bluetoothctl info`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Info {
+    pub alias: String,
+    /// The freedesktop icon name BlueZ gives its kind: "audio-headset", "input-mouse"…
+    pub icon: String,
+    pub trusted: bool,
+    pub battery: Option<u8>,
+}
+
+pub fn parse_info(text: &str) -> Info {
+    let mut info = Info::default();
+    for line in text.lines().map(str::trim) {
+        let Some((k, v)) = line.split_once(':') else { continue };
+        let v = v.trim();
+        match k {
+            "Alias" => info.alias = v.to_string(),
+            "Icon" => info.icon = v.to_string(),
+            "Trusted" => info.trusted = v == "yes",
+            // "Battery Percentage: 0x50 (80)"
+            "Battery Percentage" => {
+                info.battery = v.split(['(', ')']).nth(1).and_then(|n| n.trim().parse().ok());
+            }
+            _ => {}
+        }
+    }
+    info
+}
+
+pub fn info(address: &str) -> Info {
+    parse_info(&cmd::output(&["bluetoothctl", "info", address]).unwrap_or_default())
+}
+
+/// The name other devices see this computer as.
+pub fn adapter_name() -> Option<String> {
+    cmd::output(&["bluetoothctl", "show"])?
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("Alias:").map(|n| n.trim().to_string()))
+        .filter(|n| !n.is_empty())
+}
+
 /// Omarchy's scripts also unblock the radio (rfkill); elsewhere BlueZ's own commands.
 fn omarchy(script: &str) -> bool {
     crate::capability::program(script)
@@ -110,6 +151,17 @@ mod tests {
                 ("AA:BB:CC:DD:EE:FF".to_string(), "MX Keys Mini".to_string())
             ]
         );
+    }
+
+    #[test]
+    fn reads_device_info() {
+        let text = "Device 00:11:22:33:44:55 (public)\n\tName: WH-1000XM4\n\tAlias: My buds\n\tIcon: audio-headset\n\tPaired: yes\n\tTrusted: yes\n\tBattery Percentage: 0x50 (80)\n";
+        let i = parse_info(text);
+        assert_eq!(i.alias, "My buds");
+        assert_eq!(i.icon, "audio-headset");
+        assert!(i.trusted);
+        assert_eq!(i.battery, Some(80));
+        assert_eq!(parse_info("\tTrusted: no\n").battery, None);
     }
 
     #[test]

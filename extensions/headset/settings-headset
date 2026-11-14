@@ -1,26 +1,73 @@
 #!/usr/bin/env python3
-"""Gaming headset controls for Settings, through HeadsetControl.
+"""Gaming headset controls for Settings, through HeadsetControl, and the ASTRO A50 X through
+Gearbench's gearbench-ctl.
 
 settings-headset pages | describe PAGE | set PAGE KEY VALUE
 
 Headsets only report battery and chat-mix back; everything else is write-only,
 so the page shows what was last set from here (kept in SETTINGS_EXTENSION_STATE).
+The A50 X reports its settings back through Gearbench.
+
+HEADSET_MOCK swaps the hardware for pretend headsets (see headset_mock.py).
 """
 
+import glob
+import html
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
+HERE = os.path.dirname(os.path.realpath(__file__))
 STATE_DIR = os.environ.get("SETTINGS_EXTENSION_STATE") or os.path.expanduser("~/.local/state/settings/extensions/headset")
 
 INACTIVE = [["0", "Never"], ["5", "5 minutes"], ["10", "10 minutes"], ["15", "15 minutes"],
             ["30", "30 minutes"], ["60", "1 hour"], ["90", "90 minutes"]]
 
+MIC = "audio-input-microphone-symbolic"
+EQ = "multimedia-volume-control-symbolic"
+VOL = "audio-volume-high-symbolic"
+LIGHT = "display-brightness-symbolic"
+POWER = "system-shutdown-symbolic"
+BT = "bluetooth-symbolic"
+BELL = "preferences-system-notifications-symbolic"
+
+ICONS = {"sidetone": MIC, "eq": EQ, "limiter": VOL, "mic-volume": MIC, "rotate-mute": MIC, "voice": VOL,
+         "lights": LIGHT, "mute-led": LIGHT, "inactive": POWER, "bt-on": BT, "battery-warning": BELL}
+
+
+def mock():
+    """The pretend headsets, or None unless HEADSET_MOCK is set."""
+    if not (os.environ.get("HEADSET_MOCK") or "").strip():
+        return None
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import headset_mock
+    return headset_mock
+
+
+def state_dir():
+    return os.path.join(STATE_DIR, "mock") if mock() else STATE_DIR
+
+
+def preview_supported():
+    """Whether this Settings draws a preview pane beside the groups."""
+    return any(k == "preview" for k in os.environ.get("SETTINGS_KINDS", "").split(" "))
+
+
+def esc(text):
+    return html.escape(str(text), quote=False)
+
 
 def run(*args):
-    return subprocess.run(["headsetcontrol", *args], capture_output=True, text=True, check=False)
+    if mock():
+        return mock().headsetcontrol(list(args))
+    try:
+        return subprocess.run(["headsetcontrol", *args], capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(["headsetcontrol", *args], 127, "", "headsetcontrol isn't installed")
 
 
 def devices():
@@ -50,10 +97,12 @@ def caps(d):
 
 
 def state_file(pid):
-    return os.path.join(STATE_DIR, f"{pid}.json")
+    return os.path.join(state_dir(), f"{pid}.json")
 
 
 def load_state(pid):
+    if mock():
+        return mock().last_set(state_dir(), pid)
     try:
         with open(state_file(pid)) as f:
             return json.load(f)
@@ -62,7 +111,7 @@ def load_state(pid):
 
 
 def save_state(pid, state):
-    os.makedirs(STATE_DIR, exist_ok=True)
+    os.makedirs(state_dir(), exist_ok=True)
     tmp = state_file(pid) + ".tmp"
     with open(tmp, "w") as f:
         json.dump(state, f)
@@ -84,6 +133,36 @@ def battery_text(d):
     return "Not available (headset off?)"
 
 
+def duration(minutes):
+    """'15 hours', 'an hour', '40 minutes'; '' when HeadsetControl gave no time."""
+    if not isinstance(minutes, (int, float)) or isinstance(minutes, bool) or minutes < 0:
+        return ""
+    if minutes < 60:
+        return f"{round(minutes)} minutes"
+    hours = round(minutes / 60)
+    return "an hour" if hours == 1 else f"{hours} hours"
+
+
+def battery_reading(d):
+    b = d.get("battery") or {}
+    status = b.get("status", "")
+    level = b.get("level", -1)
+    level = -1 if level is None else level
+    if status == "BATTERY_CHARGING":
+        left = duration(b.get("time_to_full_min"))
+        return {"label": "Battery", "value": f"{level}%" if level >= 0 else "Charging",
+                "sub": f"Full in about {left}" if left else "Charging", "tone": "good"}
+    if status == "BATTERY_AVAILABLE" and level >= 0:
+        left = duration(b.get("time_to_empty_min"))
+        tone = "bad" if level <= LOW else "warn" if level <= 30 else "good"
+        return {"label": "Battery", "value": f"{level}%", "sub": f"About {left}" if left else "", "tone": tone}
+    return {"label": "Battery", "value": "Not available", "sub": "Headset off?"}
+
+
+def lean(mix):
+    return "Even" if 60 <= mix <= 68 else ("More game" if mix < 64 else "More chat")
+
+
 def preset_names(d):
     presets = d.get("equalizer_presets")
     if isinstance(presets, dict) and presets:
@@ -93,16 +172,23 @@ def preset_names(d):
 
 
 def pages():
-    return [{
+    out = [{
         "id": page_id(d),
         "title": name_of(d),
         "icon": "audio-headset-symbolic",
         "description": "Battery, sidetone, lights and power-off timer.",
         "keywords": "headset headphones battery sidetone mic monitor lights led equalizer eq chatmix " + name_of(d).lower(),
     } for d in devices()]
+    if a50x_plugged():
+        out.append({"id": A50X, "title": A50X_TITLE, "icon": "audio-headset-symbolic", "description": A50X_DESC,
+                    "keywords": "headset headphones astro a50 x logitech gearbench battery balance sidetone noise gate "
+                                "microphone boom equalizer eq stream mix base station sleep tones"})
+    return out
 
 
 def describe(pid):
+    if pid == A50X:
+        return describe_a50x()
     _, d = find(pid)
     c = caps(d)
     st = load_state(pid)
@@ -111,9 +197,7 @@ def describe(pid):
         status.append({"kind": "switch", "key": "battery-warning", "title": "Warn when the battery is low",
                        "desc": f"A notification at {LOW}%, checked every five minutes.", "value": warning_on()})
     if "CAP_CHATMIX_STATUS" in c and d.get("chatmix") is not None:
-        mix = int(d["chatmix"])
-        lean = "Even" if 60 <= mix <= 68 else ("More game" if mix < 64 else "More chat")
-        status.append({"kind": "info", "title": "Chat mix", "value": lean, "tooltip": "Set with the dial on the headset."})
+        status.append({"kind": "info", "title": "Chat mix", "value": lean(int(d["chatmix"])), "tooltip": "Set with the dial on the headset."})
 
     sound = []
     if "CAP_SIDETONE" in c:
@@ -153,6 +237,8 @@ def describe(pid):
         device.append({"kind": "switch", "key": "bt-on", "title": "Bluetooth on at power-on",
                        "value": st.get("bt-on", False)})
 
+    if preview_supported():
+        return headset_page(d, c, st, sound, device)
     groups = [g for g in (
         {"title": "Status", "rows": status},
         {"title": "Sound", "rows": sound},
@@ -163,6 +249,43 @@ def describe(pid):
     return out
 
 
+SHORT_DESC = {"sidetone": "Your own voice, while you talk", "limiter": "Keeps the volume at a safe level",
+              "voice": "Spoken announcements such as \u201cbattery low\u201d", "inactive": "When it's been silent this long"}
+
+
+def headset_page(d, c, st, sound, device):
+    """Style A: the controls on the left; the headset, its readings and the battery warning in the pane."""
+    def pane_row(r):
+        r = {**r, "icon": ICONS[r["key"]]}
+        if r["key"] in SHORT_DESC:
+            r["desc"] = SHORT_DESC[r["key"]]
+        return r
+
+    groups = [g for g in (
+        {"title": "Sound", "rows": [pane_row(r) for r in sound]},
+        {"title": "Headset", "rows": [pane_row(r) for r in device]},
+    ) if g["rows"]]
+    items = []
+    if "CAP_BATTERY_STATUS" in c:
+        items.append(battery_reading(d))
+    if "CAP_CHATMIX_STATUS" in c and d.get("chatmix") is not None:
+        items.append({"label": "Chat mix", "value": lean(int(d["chatmix"])), "sub": "The dial on the headset"})
+    if "CAP_INACTIVE_TIME" in c and str(st.get("inactive", "")).isdigit():
+        minutes = int(st["inactive"])
+        items.append({"label": "Turns off", "value": f"After {minutes} min" if minutes else "Never",
+                      "sub": "Of silence" if minutes else "Stays on"})
+    blocks = [{"kind": "picture", "picture": "headset"}]
+    if items:
+        blocks.append({"kind": "stats", "items": items})
+    if "CAP_BATTERY_STATUS" in c:
+        blocks.append({"kind": "rows", "rows": [{
+            "kind": "switch", "key": "battery-warning", "title": "Warn when the battery is low", "icon": BELL,
+            "desc": f"A notification at {LOW}%, checked every five minutes", "value": warning_on()}]})
+    preview = {"title": name_of(d), "line": "Battery and chat mix are read from the headset; the rest is what was last set here.",
+               "blocks": blocks}
+    return {"poll": 30, "groups": groups, "preview": preview}
+
+
 # ------------------------------------------------------------------ low battery
 
 TIMER = "nyx-headset-battery"
@@ -171,11 +294,16 @@ LOW = 15
 
 
 def warning_on():
+    if mock():
+        return mock().warning_on(state_dir())
     return os.path.exists(os.path.join(UNIT_DIR, TIMER + ".timer"))
 
 
 def set_warning(on):
     """A user timer that runs `battery-check` every five minutes."""
+    if mock():
+        mock().set_warning(state_dir(), on)
+        return
     service = os.path.join(UNIT_DIR, TIMER + ".service")
     timer = os.path.join(UNIT_DIR, TIMER + ".timer")
     if on:
@@ -202,18 +330,20 @@ def battery_check():
     for d in devices():
         b = d.get("battery") or {}
         level = b.get("level", -1)
-        flag = os.path.join(STATE_DIR, f"warned-{page_id(d)}")
+        flag = os.path.join(state_dir(), f"warned-{page_id(d)}")
         if b.get("status") == "BATTERY_AVAILABLE" and 0 <= level <= LOW:
             if not os.path.exists(flag):
                 subprocess.run(["notify-send", "-u", "critical", "-i", "audio-headset-symbolic",
                                 f"{name_of(d)}: {level}% battery", "Charge it soon."])
-                os.makedirs(STATE_DIR, exist_ok=True)
+                os.makedirs(state_dir(), exist_ok=True)
                 open(flag, "w").close()
         elif level > LOW + 10 and os.path.exists(flag):
             os.remove(flag)
 
 
 def set_value(pid, key, value):
+    if pid == A50X:
+        return set_a50x(key, value)
     if key == "battery-warning":
         set_warning(value == "true")
         return None
@@ -240,6 +370,396 @@ def set_value(pid, key, value):
     st = load_state(pid)
     st[key] = on if value in ("true", "false") else (num() if key in ("sidetone", "mic-volume", "mute-led") else value)
     save_state(pid, st)
+    return None
+
+
+# ------------------------------------------------------------------ ASTRO A50 X, through Gearbench
+
+A50X = "a50x"
+A50X_USB = ("046d", "0b0b")
+A50X_TITLE = "A50 X"
+A50X_DESC = "Balance, microphone, both equalizers, the stream mix and the base station, through Gearbench."
+GEARBENCH_RELEASES = "https://github.com/gearbench/gearbench/releases"
+ONE_DRIVER = "Gearbench drives every Logitech G device it supports, so no other program should drive those devices too."
+TEAL = "#2dd4bf"
+SOURCES = [("stream", "Stream port level"), ("game", "Game"), ("voice", "Voice"), ("mic", "Mic"), ("bluetooth", "Bluetooth")]
+MUTABLE = SOURCES[1:]
+NOISE_GATE = [["off", "Off"], ["night", "Night"], ["home", "Home"], ["tournament", "Tournament"]]
+PRESETS = {"headphones": [["default", "Default"], ["gaming", "Gaming"], ["media", "Media"]],
+           "microphone": [["default", "Default"], ["competition", "Competition"], ["broadcast", "Broadcast"]]}
+AUTO_SLEEP = [["never", "Never"], ["15", "15"], ["30", "30"], ["60", "60 min"]]
+TONES = [["none", "None"], ["minimal", "Minimal"], ["all", "All"]]
+
+
+class GearbenchError(Exception):
+    pass
+
+
+def a50x_plugged():
+    if mock():
+        return mock().plugged_a50x()
+    for dev in glob.glob("/sys/bus/usb/devices/*"):
+        try:
+            with open(os.path.join(dev, "idVendor")) as v, open(os.path.join(dev, "idProduct")) as p:
+                if (v.read().strip().lower(), p.read().strip().lower()) == A50X_USB:
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def gearbench_installed():
+    return mock().gearbench_installed() if mock() else shutil.which("gearbench-ctl") is not None
+
+
+def gearbench(*args):
+    """`gearbench-ctl --json ARGS`: the daemon's reply, parsed."""
+    if mock():
+        code, out, err = mock().gearbench(list(args), state_dir())
+    else:
+        try:
+            r = subprocess.run(["gearbench-ctl", "--json", *args], capture_output=True, text=True, timeout=15, check=False)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            raise GearbenchError(str(e)) from e
+        code, out, err = r.returncode, r.stdout, r.stderr
+    if code != 0:
+        raise GearbenchError((err or out).strip() or f"gearbench-ctl {args[0]} failed")
+    try:
+        return json.loads(out)
+    except ValueError:
+        return out
+
+
+def a50x_entry(status):
+    """The A50 X's entry in `status --json`'s headsets_attached (name, battery, answering, …)."""
+    for h in (status.get("headsets_attached") or []) if isinstance(status, dict) else []:
+        if isinstance(h, dict) and "A50 X" in str(h.get("name", "")):
+            return h
+    return None
+
+
+def problems(status):
+    """`status --json`'s problems as text. gearbench-ctl(1) names no field of an entry but
+    `keyboard`, so an entry is taken as text itself, or its first other text field."""
+    out = []
+    for p in (status.get("problems") or []) if isinstance(status, dict) else []:
+        if isinstance(p, dict):
+            p = next((v for k, v in p.items() if k != "keyboard" and isinstance(v, str) and v), "")
+        if isinstance(p, str) and p and p != "none":
+            out.append(p)
+    return out
+
+
+def number(v):
+    if isinstance(v, bool) or v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return round(v)
+    m = re.match(r"\s*(-?\d+)", str(v))
+    return int(m.group(1)) if m else None
+
+
+def parse_audio(reply):
+    """Reads `gearbench-ctl --json audio`. gearbench-ctl(1) says what `audio` reports (the
+    battery, balance and boom, the microphone's settings, each equalizer's preset or `custom`,
+    the stream mix and the other settings) and that --json prints the daemon's raw reply, but
+    not that reply's field names: every guess about them is in this function. A value given as
+    `not read`, or missing, is None."""
+    if not isinstance(reply, dict):
+        return {}
+    flat = {}
+    for part in (reply, reply.get("settings")):
+        if isinstance(part, dict):
+            flat.update({str(k).replace("-", "_"): v for k, v in part.items()})
+
+    def get(*keys):
+        v = next((flat[k] for k in keys if k in flat), None)
+        return None if isinstance(v, str) and v.strip().lower() == "not read" else v
+
+    def word(v):
+        return None if v is None or isinstance(v, (dict, list)) else str(v).strip().lower()
+
+    def onoff(v):
+        return v if isinstance(v, bool) or v is None else word(v) in ("on", "true", "down", "live", "yes")
+
+    eqs = get("equalizers", "equalizer")
+    eqs = eqs if isinstance(eqs, dict) else {}
+    mix = get("stream_mix", "mix")
+    mix = mix if isinstance(mix, dict) else {}
+    muted_list = mix.get("muted") if isinstance(mix.get("muted"), list) else []
+
+    def preset(e):
+        return word(e.get("preset") if isinstance(e, dict) else e)
+
+    def level(s):
+        v = mix.get(s)
+        return number(v.get("level") if isinstance(v, dict) else v)
+
+    def muted(s):
+        v = mix.get(s)
+        return bool(v.get("muted")) if isinstance(v, dict) else s in muted_list
+
+    sleep = word(get("auto_sleep"))
+    digits = re.match(r"\d+", sleep or "")
+    return {
+        "battery": number(get("battery")),
+        "balance": number(get("balance")),
+        "boom": onoff(get("boom")),
+        "sidetone": number(get("sidetone")),
+        "noise_gate": word(get("noise_gate")),
+        "volume": number(get("volume")),
+        "auto_sleep": None if sleep is None else "never" if sleep in ("never", "off") or (digits and int(digits.group()) == 0)
+        else digits.group() if digits else sleep,
+        "deep_sleep": onoff(get("deep_sleep")),
+        "brightness": number(get("brightness")),
+        "tones": word(get("tones")),
+        "eq": {i: preset(eqs.get(i)) for i in PRESETS},
+        "mix": {s: level(s) for s, _ in SOURCES},
+        "muted": {s for s, _ in MUTABLE if muted(s)},
+    }
+
+
+def sound_devices():
+    """The A50 X's outputs and inputs in PipeWire (through pactl), each with the apps using it."""
+    if mock():
+        return mock().sound_devices()
+
+    def pactl(*args):
+        try:
+            r = subprocess.run(["pactl", *args], capture_output=True, text=True, timeout=3, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+        return r.stdout.strip()
+
+    def listed(what):
+        try:
+            data = json.loads(pactl("-f", "json", "list", what) or "[]")
+        except ValueError:
+            return []
+        return data if isinstance(data, list) else []
+
+    out = []
+    for kind, streams in (("sink", "sink-inputs"), ("source", "source-outputs")):
+        default = pactl(f"get-default-{kind}")
+        users = listed(streams)
+        for n in listed(kind + "s"):
+            desc = n.get("description") or ""
+            props = n.get("properties") or {}
+            if "A50 X" not in desc or "Stream" in desc or desc.startswith("Monitor of") or props.get("device.class") == "monitor":
+                continue
+            apps = sorted({(u.get("properties") or {}).get("application.name") for u in users if u.get(kind) == n.get("index")} - {None})
+            out.append({"kind": kind, "name": desc, "default": n.get("name") == default, "apps": apps})
+    return out
+
+
+def sound_item(d):
+    sink = d["kind"] == "sink"
+    n = len(d["apps"])
+    default = ("Default output" if sink else "Default input") if d["default"] else ""
+    return {"icon": VOL if sink else MIC, "label": d["name"],
+            "sub": " · ".join(x for x in (default, ", ".join(d["apps"])) if x),
+            "value": "Default" if d["default"] else (f"{n} app" + ("" if n == 1 else "s")) if n else "",
+            "tone": "good" if d["default"] else ""}
+
+
+def control(row, value):
+    """A row for a reading Gearbench may not have; greyed out and 'Not read' without one."""
+    if value is None:
+        return {**row, "value": row.get("min", ""), "disabled": True, "desc": "Not read"}
+    return {**row, "value": value}
+
+
+def a50x_groups(a):
+    sound = []
+    if a["balance"] is not None:
+        sound.append({"kind": "slider", "key": "balance", "title": "Balance", "desc": "All voice at 0, all game at 12",
+                      "icon": EQ, "value": a["balance"], "min": 0, "max": 12, "step": 1, "marks": [6], "on_release": True,
+                      "keywords": "game chat voice mix dial"})
+    sound.append(control({"kind": "slider", "key": "volume", "title": "Headset volume", "icon": VOL,
+                          "min": 0, "max": 21, "step": 1, "on_release": True}, a["volume"]))
+
+    mic = []
+    if a["boom"] is not None:
+        mic.append({"kind": "info", "title": "Boom", "desc": "Flip it up to mute", "icon": MIC,
+                    "value": "Down · live" if a["boom"] else "Up · muted"})
+    mic.append(control({"kind": "slider", "key": "sidetone", "title": "Sidetone", "desc": "Your own voice in the earcups",
+                        "icon": MIC, "min": 0, "max": 6, "step": 1, "on_release": True,
+                        "keywords": "mic monitoring hear myself"}, a["sidetone"]))
+    mic.append(control({"kind": "segmented", "key": "noise-gate", "title": "Noise gate", "icon": MIC,
+                        "options": NOISE_GATE}, a["noise_gate"]))
+
+    eq = []
+    for inst, title in (("headphones", "Headphones"), ("microphone", "Microphone")):
+        row = control({"kind": "segmented", "key": f"eq-{inst}", "title": title, "icon": EQ,
+                       "options": PRESETS[inst], "keywords": "equalizer eq preset"}, a["eq"][inst])
+        if a["eq"][inst] == "custom":
+            row.update(value="", desc="Custom bands")
+        eq.append(row)
+
+    stream = []
+    for s, title in SOURCES:
+        lvl = a["mix"].get(s)
+        row = control({"kind": "slider", "key": f"mix-{s}", "title": title, "min": 0, "max": 100, "unit": "%",
+                       "on_release": True, "icon": MIC if s == "mic" else BT if s == "bluetooth" else VOL},
+                      None if lvl is None else round(lvl * 100 / 32))
+        if s in a["muted"]:
+            row["desc"] = "Muted"
+        stream.append(row)
+    stream.append({"kind": "chips", "key": "muted", "title": "Muted", "icon": "audio-volume-muted-symbolic",
+                   "labels": [t for _, t in MUTABLE], "value": [s in a["muted"] for s, _ in MUTABLE], "refresh": True})
+
+    base = [
+        control({"kind": "segmented", "key": "auto-sleep", "title": "Auto sleep", "desc": "When it's idle this long",
+                 "icon": POWER, "options": AUTO_SLEEP}, a["auto_sleep"]),
+        control({"kind": "switch", "key": "deep-sleep", "title": "Deep sleep",
+                 "desc": "The base station sleeps after 15 idle minutes", "icon": "weather-clear-night-symbolic"}, a["deep_sleep"]),
+        control({"kind": "slider", "key": "brightness", "title": "Base station light", "icon": LIGHT,
+                 "min": 0, "max": 100, "unit": "%", "on_release": True}, a["brightness"]),
+        control({"kind": "segmented", "key": "tones", "title": "Tones", "desc": "Sounds at the ends of the wheel and dial",
+                 "icon": BELL, "options": TONES}, a["tones"]),
+    ]
+    return [
+        {"title": "Sound", "note": "The dial on the headset moves the balance too.", "rows": sound},
+        {"title": "Microphone", "rows": mic},
+        {"title": "Equalizers", "note": "The presets are the headset's own, kept in it.", "rows": eq},
+        {"title": "Stream mix", "note": "What the base station's stream port sends, for streaming apps to record.", "rows": stream},
+        {"title": "Headset and base station", "rows": base},
+    ]
+
+
+def open_gearbench_row():
+    return {"kind": "button", "key": "open-gearbench", "title": "Open Gearbench", "desc": "Its window has every setting",
+            "label": "Open", "icon": "go-jump-symbolic"}
+
+
+def a50x_readings(a, battery):
+    items = []
+    if battery is not None:
+        items.append({"label": "Battery", "value": f"{battery}%", "sub": "Charge soon" if battery <= LOW else "",
+                      "tone": "bad" if battery <= LOW else "warn" if battery <= 30 else "good"})
+    if a["balance"] is not None:
+        game = round(a["balance"] * 100 / 12)
+        items.append({"label": "Balance", "value": f"{game} / {100 - game}",
+                      "sub": "Even" if game == 50 else "More game" if game > 50 else "More voice"})
+    if a["boom"] is not None:
+        items.append({"label": "Boom", "value": "Down" if a["boom"] else "Up",
+                      "sub": "Microphone live" if a["boom"] else "Microphone muted"})
+    return items
+
+
+def describe_a50x():
+    pane = preview_supported()
+    if not gearbench_installed():
+        return a50x_setup(pane)
+    try:
+        status = gearbench("status")
+        a = parse_audio(gearbench("audio"))
+    except GearbenchError as e:
+        return a50x_unreachable(str(e), pane)
+    entry = a50x_entry(status) or {}
+    battery = number(entry.get("battery"))
+    if battery is None:
+        battery = a["battery"]
+    banners = [{"text": "Gearbench: " + esc(p), "warning": True} for p in problems(status)]
+    groups = a50x_groups(a)
+    items = a50x_readings(a, battery)
+    inputs = "PC, PlayStation and Xbox are switched on the base station itself."
+    if not pane:
+        readings = [{"kind": "info", "title": i["label"], "value": f"{i['value']} · {i['sub']}" if i["sub"] else i["value"]}
+                    for i in items]
+        status_group = [{"title": "Status", "note": inputs, "rows": readings}] if readings else []
+        gearbench_group = {"title": "Gearbench", "note": ONE_DRIVER, "rows": [open_gearbench_row()]}
+        return {"banners": banners, "poll": 10, "groups": status_group + groups + [gearbench_group]}
+    line = "Through its base station" if entry.get("answering", True) else "Through its base station · the headset doesn't answer"
+    blocks = [{"kind": "picture", "picture": "headset", "accent": TEAL}]
+    if items:
+        blocks.append({"kind": "stats", "items": items})
+    sounds = [sound_item(d) for d in sound_devices()]
+    if sounds:
+        blocks.append({"kind": "list", "title": "On this computer", "items": sounds})
+    blocks += [{"kind": "banner", "text": inputs}, {"kind": "rows", "rows": [open_gearbench_row()]}]
+    preview = {"title": A50X_TITLE, "line": line, "blocks": blocks,
+               "foot": "Run by Gearbench, which drives every Logitech G device it supports: no other program "
+                       "should drive those devices too.", "foot_icon": "dialog-information-symbolic"}
+    return {"banners": banners, "poll": 10, "groups": groups, "preview": preview}
+
+
+def a50x_setup(pane):
+    """Gearbench isn't installed: what it's for, and where to get it."""
+    banner = {"text": "The A50 X plays sound already. Its controls come from <b>Gearbench</b>, "
+                      "an open-source app for Logitech G devices.", "warning": False}
+    row = {"kind": "button", "key": "install-gearbench", "title": "Install Gearbench",
+           "desc": "Version 1.3.1, from its releases on GitHub", "label": "Open releases page",
+           "icon": "system-software-install-symbolic", "keywords": "gearbench install download"}
+    out = {"banners": [banner], "groups": [{"title": "Set up", "note": ONE_DRIVER, "rows": [row]}]}
+    if pane:
+        items = [
+            {"icon": "object-select-symbolic", "label": "Sound works already", "sub": "Chat and the microphone"},
+            {"icon": "folder-download-symbolic", "label": "The controls need Gearbench",
+             "sub": "Balance, microphone, equalizers, stream mix, battery", "value": "Needed", "tone": "warn"},
+            {"icon": "security-high-symbolic", "label": "Nothing leaves this computer",
+             "sub": "No account; it sends nothing over the network"},
+        ]
+        out["preview"] = {"title": "A50 X found", "line": "Plugged in by USB",
+                          "blocks": [{"kind": "picture", "picture": "headset", "accent": TEAL}, {"kind": "list", "items": items}]}
+    return out
+
+
+def a50x_unreachable(err, pane):
+    banner = {"text": f"Gearbench didn't answer: {esc(err)}. Its service starts with "
+                      "<tt>systemctl --user start gearbench</tt>, or when its window opens.", "warning": True}
+    group = {"title": "Gearbench", "note": ONE_DRIVER, "rows": [open_gearbench_row()]}
+    out = {"banners": [banner], "poll": 10, "groups": [group]}
+    if pane:
+        out["preview"] = {"title": A50X_TITLE, "line": "Plugged in by USB",
+                          "blocks": [{"kind": "picture", "picture": "headset", "accent": TEAL}]}
+    return out
+
+
+def launch(argv):
+    """Starts a program and leaves it running; in pretend mode, only says what it would run."""
+    if mock():
+        return {"toast": "Pretend mode: would run " + " ".join(argv)}
+    try:
+        subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError as e:
+        raise SystemExit(f"couldn't run {argv[0]}: {e}") from e
+    return None
+
+
+def set_a50x(key, value):
+    if key == "install-gearbench":
+        return launch(["xdg-open", GEARBENCH_RELEASES])
+    if key == "open-gearbench":
+        return launch(["gearbench-ctl", "gui"])
+    try:
+        if key == "muted":
+            want = [v == "true" for v in value.split(",")]
+            now = parse_audio(gearbench("audio")).get("muted", set())
+            for (s, _), on in zip(MUTABLE, want):
+                if on != (s in now):
+                    gearbench("audio-mix", s, "--mute" if on else "--unmute")
+            return {"refresh": True}
+        num = lambda: str(round(float(value)))  # noqa: E731
+        args = {
+            "balance": lambda: ["audio-set", "balance", num()],
+            "volume": lambda: ["audio-set", "volume", num()],
+            "sidetone": lambda: ["audio-set", "sidetone", num()],
+            "brightness": lambda: ["audio-set", "brightness", num()],
+            "noise-gate": lambda: ["audio-set", "noise-gate", value],
+            "auto-sleep": lambda: ["audio-set", "auto-sleep", value],
+            "tones": lambda: ["audio-set", "tones", value],
+            "deep-sleep": lambda: ["audio-set", "deep-sleep", "on" if value == "true" else "off"],
+            "eq-headphones": lambda: ["audio-eq", "headphones", "--pick", value],
+            "eq-microphone": lambda: ["audio-eq", "microphone", "--pick", value],
+            **{f"mix-{s}": (lambda s=s: ["audio-mix", s, str(round(float(value) * 32 / 100))]) for s, _ in SOURCES},
+        }.get(key)
+        if args is None:
+            raise SystemExit(f"unknown setting {key}")
+        gearbench(*args())
+    except GearbenchError as e:
+        raise SystemExit(str(e)) from e
     return None
 
 

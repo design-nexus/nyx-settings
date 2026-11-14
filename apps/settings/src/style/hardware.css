@@ -1,0 +1,447 @@
+/* hardware pages: their own parts, on top of style.css. */
+
+/* ---------- Displays ---------- */
+
+.dsp-picker {
+  margin-bottom: 2px;
+}
+
+/* The buttons take the section's colour as `color` (displays::tint). */
+window.settings-window button.dsp-pick {
+  padding: 9px 12px;
+  border-radius: var(--nyx-radius-card);
+  background-color: @theme_card;
+  background-image: none;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.06);
+}
+
+window.settings-window button.dsp-pick:hover {
+  background-image: linear-gradient(alpha(@theme_text, 0.03), alpha(@theme_text, 0.03));
+}
+
+window.settings-window button.dsp-pick:checked {
+  background-image: linear-gradient(alpha(currentColor, 0.1), alpha(currentColor, 0.1));
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+button.dsp-pick image {
+  color: @theme_dim_text;
+  -gtk-icon-size: 18px;
+}
+
+button.dsp-pick:checked image {
+  color: currentColor;
+}
+
+.dsp-pick-name {
+  color: @theme_text;
+  font-weight: 600;
+}
+
+.dsp-pick-detail {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.dsp-experimental {
+  margin-left: 2px;
+}
+
+.dsp-sample-caption {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.dsp-sample-title {
+  font-weight: 600;
+}
+
+.dsp-sample-line {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+/* ---------- Sound ---------- */
+
+.snd-device > checkbutton {
+  margin-right: 2px;
+}
+
+.snd-volume > button {
+  margin-right: 2px;
+}
+
+.preview-card.snd-eq {
+  padding: 12px 12px 10px 4px;
+}
+
+.snd-sep {
+  margin: 4px 2px 26px;
+  background: alpha(@theme_text, 0.08);
+}
+
+.snd-preamp {
+  min-width: 58px;
+}
+
+.snd-preamp-label {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.snd-preamp-value {
+  font-weight: 600;
+  font-size: 0.923em;
+  font-feature-settings: "tnum";
+}
+
+.snd-preamp scale {
+  min-height: 140px;
+}
+
+.snd-bypassed .snd-preamp {
+  opacity: 0.55;
+}
+
+.snd-curve:focus-visible {
+  outline: 2px solid alpha(@theme_accent, 0.6);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+/* Presets as chips; the one in use takes the section's colour (displays::tint). */
+window.settings-window button.snd-chip {
+  padding: 4px 12px;
+  min-height: 0;
+  border-radius: 999px;
+  background-color: @theme_card;
+  background-image: none;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.08);
+}
+
+window.settings-window button.snd-chip label {
+  color: @theme_text;
+}
+
+window.settings-window button.snd-chip:checked {
+  background-image: linear-gradient(alpha(currentColor, 0.14), alpha(currentColor, 0.14));
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+
+.snd-volume {
+  border-spacing: 6px;
+}
+
+/* ---------- Power & Battery ---------- */
+
+window.settings-window button.pwr-profile {
+  padding: 12px 12px 10px;
+  border-radius: var(--nyx-radius-card);
+  background-color: @theme_card;
+  background-image: none;
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.06);
+}
+
+window.settings-window button.pwr-profile:hover {
+  background-image: linear-gradient(alpha(@theme_text, 0.03), alpha(@theme_text, 0.03));
+}
+
+window.settings-window button.pwr-profile:checked {
+  background-image: linear-gradient(alpha(currentColor, 0.1), alpha(currentColor, 0.1));
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.pwr-profile-icon {
+  color: @theme_dim_text;
+  -gtk-icon-size: 18px;
+  margin-bottom: 8px;
+}
+
+button.pwr-profile:checked .pwr-profile-icon {
+  color: currentColor;
+}
+
+.pwr-profile-name {
+  color: @theme_text;
+  font-weight: 600;
+}
+
+.pwr-profile-about {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.pwr-profiles {
+  margin-bottom: 4px;
+}
+
+.pwr-state {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.846em;
+  font-weight: 600;
+  background: alpha(currentColor, 0.14);
+}
+
+.preview-card.pwr-hero {
+  padding: 22px 24px;
+}
+
+.pwr-percent {
+  font-size: 2.2em;
+  font-weight: 700;
+}
+
+.pwr-left {
+  font-weight: 600;
+}
+
+.pwr-using {
+  color: @theme_dim_text;
+  font-size: 0.923em;
+}
+
+.pwr-fact-key {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.pwr-fact-value {
+  font-weight: 600;
+}
+
+/* ---------- Printers ---------- */
+
+.settings-option.prn-chosen {
+  background: @row_hover;
+}
+
+.prn-ok .settings-option-description {
+  color: @theme_success;
+}
+
+.prn-warn .settings-option-description {
+  color: @theme_warning;
+}
+
+.preview-card.prn-hero {
+  padding: 20px 22px;
+}
+
+.prn-hint {
+  color: @theme_dim_text;
+}
+
+.prn-state-ok {
+  color: @theme_success;
+  font-weight: 600;
+  font-size: 0.923em;
+}
+
+.prn-state-warn {
+  color: @theme_warning;
+  font-weight: 600;
+  font-size: 0.923em;
+}
+
+.prn-sentence {
+  font-size: 1.231em;
+  font-weight: 600;
+}
+
+.prn-buttons {
+  margin-top: 8px;
+}
+
+.prn-default {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.846em;
+  font-weight: 600;
+  background: alpha(currentColor, 0.14);
+}
+
+.prn-fact-key {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.prn-fact-value {
+  font-weight: 600;
+}
+
+.prn-queue-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+window.settings-window button.prn-remove {
+  color: @theme_danger;
+}
+
+/* ---------- Disks ---------- */
+
+.settings-option.dsk-chosen {
+  background: @row_hover;
+}
+
+.dsk-meter {
+  margin: 6px 0 2px;
+}
+
+.dsk-ok {
+  color: @theme_success;
+  font-size: 0.846em;
+}
+
+.dsk-bad {
+  color: @theme_danger;
+  font-size: 0.846em;
+  font-weight: 600;
+}
+
+.dsk-dim {
+  color: @theme_dim_text;
+  font-size: 0.846em;
+}
+
+.dsk-key {
+  margin-top: -4px;
+}
+
+window.settings-window button.dsk-health {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: alpha(currentColor, 0.12);
+  font-size: 0.846em;
+}
+
+.preview-card.dsk-detail {
+  padding: 14px 16px;
+}
+
+.dsp-tools {
+  margin-top: -6px;
+}
+
+/* ---------- Extension previews: the device or app beside the page's groups ---------- */
+
+.ext-device,
+.ext-picture,
+.ext-stats,
+.ext-facts {
+  padding: 14px 16px;
+}
+
+.ext-device-name {
+  font-weight: 700;
+  font-size: 1.08em;
+}
+
+.ext-device-line,
+.ext-reading-sub,
+.ext-caption {
+  color: @theme_dim_text;
+  font-size: 0.885em;
+}
+
+.ext-reading-label {
+  color: @theme_dim_text;
+  font-size: 0.8em;
+}
+
+.ext-reading-value {
+  font-weight: 600;
+  font-feature-settings: "tnum";
+}
+
+.ext-good {
+  color: @theme_success;
+}
+
+.ext-warn {
+  color: @theme_warning;
+}
+
+.ext-bad {
+  color: @theme_danger;
+}
+
+.ext-accent {
+  color: @theme_accent;
+}
+
+.ext-list-row {
+  padding: 10px 12px;
+}
+
+.ext-list-title {
+  font-weight: 600;
+}
+
+.ext-list-value {
+  font-size: 0.846em;
+  font-weight: 600;
+  color: @theme_dim_text;
+}
+
+.ext-pane-rows > .settings-group:first-child {
+  margin-top: 0;
+}
+
+.ext-deck {
+  padding: 16px;
+  border-radius: var(--nyx-radius-card);
+  background: mix(@theme_bg, black, 0.25);
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.06);
+}
+
+.ext-deck-screen {
+  min-width: 96px;
+  min-height: 150px;
+  padding: 8px;
+  border-radius: 8px;
+  background: linear-gradient(160deg, mix(@theme_accent, black, 0.45), mix(@theme_accent, black, 0.75));
+  color: white;
+}
+
+.ext-deck-big {
+  font-size: 1.4em;
+  font-weight: 600;
+}
+
+.ext-deck-line {
+  font-size: 0.77em;
+  opacity: 0.8;
+}
+
+window.settings-window button.ext-deck-key {
+  min-width: 50px;
+  min-height: 50px;
+  padding: 2px;
+  border-radius: 8px;
+  background: mix(@theme_card, @theme_text, 0.05);
+  box-shadow: inset 0 0 0 1px alpha(@theme_text, 0.06);
+}
+
+window.settings-window button.ext-deck-key.selected {
+  box-shadow: inset 0 0 0 2px @theme_accent;
+}
+
+window.settings-window button.ext-deck-key image {
+  -gtk-icon-size: 16px;
+}
+
+.ext-deck-label {
+  font-size: 0.7em;
+  color: @theme_dim_text;
+}
+
+.ext-deck-dial {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 40% 35%, mix(@theme_card, white, 0.12), mix(@theme_bg, black, 0.3));
+  box-shadow: inset 0 0 0 1px alpha(white, 0.1);
+}

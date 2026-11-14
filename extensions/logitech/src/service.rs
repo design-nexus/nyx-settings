@@ -25,16 +25,32 @@ pub fn unit_text(exe: &str) -> String {
     )
 }
 
+/// Pretend mode's stand-in for the unit being enabled.
+fn mock_flag() -> Option<std::path::PathBuf> {
+    crate::devices::mock_state().map(|d| d.join("keep-applied"))
+}
+
 pub fn enabled() -> bool {
+    if let Some(flag) = mock_flag() {
+        return flag.exists();
+    }
     systemctl(&["is-enabled", UNIT]).is_ok_and(|s| s == "enabled")
 }
 
 /// Logi's own service does the same job.
 pub fn logi_watch_enabled() -> bool {
-    systemctl(&["is-enabled", "logi-watch.service"]).is_ok_and(|s| s == "enabled")
+    mock_flag().is_none() && systemctl(&["is-enabled", "logi-watch.service"]).is_ok_and(|s| s == "enabled")
 }
 
 pub fn set(on: bool) -> Result<()> {
+    if let Some(flag) = mock_flag() {
+        if on {
+            crate::files::atomic_write(&flag, "")?;
+        } else if flag.exists() {
+            std::fs::remove_file(&flag)?;
+        }
+        return Ok(());
+    }
     if on {
         let exe = std::env::current_exe()?.display().to_string();
         crate::files::atomic_write(&unit_file(), &unit_text(&exe))?;

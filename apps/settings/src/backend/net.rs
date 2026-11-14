@@ -81,6 +81,13 @@ pub fn networks(rescan: bool) -> Vec<Network> {
     parse_networks(&text)
 }
 
+/// The networks NetworkManager last saw, without waiting for a new scan.
+pub fn networks_seen() -> Vec<Network> {
+    let text = cmd::output(&["nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "device", "wifi", "list", "--rescan", "no"])
+        .unwrap_or_default();
+    parse_networks(&text)
+}
+
 /// Saved Wi-Fi connections as (connection name, SSID).
 pub fn saved() -> Vec<(String, String)> {
     let list = cmd::output(&["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"]).unwrap_or_default();
@@ -141,6 +148,74 @@ pub fn details(device: &str) -> Vec<(String, String)> {
     )
 }
 
+/// The Wi-Fi link in use: its channel, frequency, rate and security.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Link {
+    pub ssid: String,
+    pub signal: u8,
+    pub channel: String,
+    /// MHz.
+    pub freq: u32,
+    /// "866 Mbit/s".
+    pub rate: String,
+    /// "WPA2 WPA3".
+    pub security: String,
+}
+
+/// Parse `nmcli -t -f IN-USE,SSID,CHAN,FREQ,RATE,SIGNAL,SECURITY device wifi list` for the line in use.
+pub fn parse_link(text: &str) -> Option<Link> {
+    text.lines().map(split_terse).find(|f| f.len() >= 7 && f[0].trim() == "*").map(|f| Link {
+        ssid: f[1].clone(),
+        channel: f[2].trim().to_string(),
+        freq: f[3].split_whitespace().next().and_then(|n| n.parse().ok()).unwrap_or(0),
+        rate: f[4].trim().to_string(),
+        signal: f[5].trim().parse().unwrap_or(0),
+        security: f[6].trim().to_string(),
+    })
+}
+
+pub fn link() -> Option<Link> {
+    parse_link(&cmd::output(&[
+        "nmcli",
+        "-t",
+        "-f",
+        "IN-USE,SSID,CHAN,FREQ,RATE,SIGNAL,SECURITY",
+        "device",
+        "wifi",
+        "list",
+        "--rescan",
+        "no",
+    ])?)
+}
+
+/// Settings of a saved connection, as (key, value): `connection.autoconnect`,
+/// `802-11-wireless.cloned-mac-address`…
+pub fn connection_settings(name: &str, keys: &str) -> Vec<(String, String)> {
+    cmd::output(&["nmcli", "-t", "-f", keys, "connection", "show", "id", name])
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| l.split_once(':').map(|(k, v)| (k.to_string(), v.trim().to_string())))
+        .collect()
+}
+
+/// A saved Wi-Fi network's password, when NetworkManager lets this user read it.
+pub fn password(name: &str) -> Option<String> {
+    cmd::output(&["nmcli", "-s", "-g", "802-11-wireless-security.psk", "connection", "show", "id", name])
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Bytes received and sent by a network device since it came up.
+pub fn traffic(device: &str) -> (u64, u64) {
+    let read = |k: &str| {
+        std::fs::read_to_string(format!("/sys/class/net/{device}/statistics/{k}"))
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(0)
+    };
+    (read("rx_bytes"), read("tx_bytes"))
+}
+
 /// Join a network: a saved one by its connection, otherwise as a new one.
 pub fn connect(ssid: &str, saved_as: Option<&str>, password: Option<&str>) -> Result<String> {
     match (saved_as, password) {
@@ -176,6 +251,16 @@ mod tests {
         assert!(n[0].in_use && n[0].secure && n[0].signal == 70);
         assert!(!n[1].secure, "no security is an open network");
         assert!(n[2].enterprise);
+    }
+
+    #[test]
+    fn link_in_use() {
+        let text = " :Cafe:6:2437 MHz:130 Mbit/s:80:WPA2\n*:Home\\:5G:44:5220 MHz:866 Mbit/s:92:WPA2 WPA3\n";
+        let l = parse_link(text).unwrap();
+        assert_eq!(l.ssid, "Home:5G");
+        assert_eq!((l.channel.as_str(), l.freq, l.signal), ("44", 5220, 92));
+        assert_eq!(l.rate, "866 Mbit/s");
+        assert!(parse_link(" :Cafe:6:2437 MHz:130 Mbit/s:80:WPA2\n").is_none());
     }
 
     #[test]

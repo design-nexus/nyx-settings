@@ -13,6 +13,7 @@ os.environ["XDG_CONFIG_HOME"] = TMP
 os.environ["SETTINGS_KINDS"] = "info switch camera meter"
 
 import obsbot  # noqa: E402
+import webcam_mock  # noqa: E402
 
 loader = importlib.machinery.SourceFileLoader("webcam", os.path.join(HERE, "settings-webcam"))
 spec = importlib.util.spec_from_loader("webcam", loader)
@@ -96,6 +97,94 @@ class Preview(unittest.TestCase):
             self.assertEqual(webcam.preview_group("/dev/video0")["rows"][0]["key"], "@preview-window")
         finally:
             webcam.KINDS = old
+
+
+PANE_KINDS = set("info switch slider choice segmented buttons entry button colour chips curve disclosure camera meter preview icon".split())
+
+
+class Pretend(unittest.TestCase):
+    """The pages against WEBCAM_MOCK=obsbot-tiny-3-lite."""
+
+    def setUp(self):
+        self.state = tempfile.mkdtemp()
+        self.env = {k: os.environ.get(k) for k in ("WEBCAM_MOCK", "SETTINGS_EXTENSION_STATE")}
+        os.environ.update(WEBCAM_MOCK="obsbot-tiny-3-lite", SETTINGS_EXTENSION_STATE=self.state)
+        loader = importlib.machinery.SourceFileLoader("webcam_pretend", os.path.join(HERE, "settings-webcam"))
+        self.w = importlib.util.module_from_spec(importlib.util.spec_from_loader("webcam_pretend", loader))
+        loader.exec_module(self.w)
+        self.page = self.w.pages()[0]["id"]
+
+    def tearDown(self):
+        for k, v in self.env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        shutil.rmtree(self.state, ignore_errors=True)
+
+    def describe(self, kinds):
+        self.w.KINDS = kinds
+        return self.w.describe(self.page)
+
+    def test_off_unless_asked(self):
+        self.assertIs(webcam.MOCK, None)
+        self.assertIs(webcam.ob, obsbot)
+        os.environ["WEBCAM_MOCK"] = "nope"
+        with self.assertRaises(SystemExit):
+            webcam_mock.profile()
+
+    def test_pane_page(self):
+        p = self.describe(PANE_KINDS)
+        self.assertNotIn("subtitle", p)
+        self.assertEqual([g["title"] for g in p["groups"]], ["Picture", "Camera", "OBSBOT", "Microphone", ""])
+        for g in p["groups"]:
+            for r in g["rows"]:
+                self.assertTrue(r.get("icon"), f"{r.get('key') or r['title']} has no icon")
+        blocks = p["preview"]["blocks"]
+        self.assertEqual([b["kind"] for b in blocks], ["rows", "rows", "caption"])
+        camera, frame, centre, goto, save = blocks[0]["rows"]
+        self.assertEqual((camera["kind"], camera["device"]), ("camera", webcam_mock.DEVICE))
+        self.assertEqual((frame["kind"], frame["value"]), ("segmented", "half"))
+        self.assertEqual([o[1] for o in goto["options"]], ["Go to 1", "Go to 2", "Go to 3"])
+        self.assertEqual((centre["key"], save["key"]), ("@centre", "@save"))
+        self.assertEqual((blocks[1]["rows"][0]["kind"], blocks[1]["rows"][0]["source"]), ("meter", webcam_mock.MIC))
+        rows = {r.get("key"): r for g in p["groups"] for r in g["rows"]}
+        self.assertTrue(rows["white_balance_temperature"]["disabled"])
+        self.assertEqual(rows["power_line_frequency"]["kind"], "segmented")
+        self.assertEqual(rows["@power"]["desc"], "Awake · sleeps by itself: off")
+
+    def test_old_page_without_preview(self):
+        p = self.describe({"info", "switch", "camera", "meter"})
+        self.assertNotIn("preview", p)
+        self.assertEqual(p["subtitle"], f"<tt>{webcam_mock.DEVICE}</tt>")
+        self.assertEqual(p["groups"][0]["rows"][0]["kind"], "camera")
+        self.assertFalse(any("icon" in r for g in p["groups"] for r in g["rows"]))
+        self.assertEqual(p["banners"][0]["text"], "AI tracking modes use OBSBOT's own commands and aren't in Settings yet.")
+
+    def test_changes_stay_pretend(self):
+        self.w.set_value(self.page, "white_balance_automatic", "false")
+        self.w.set_value(self.page, "brightness", "70.4")
+        self.w.set_value(self.page, "@goto", "3")
+        self.w.set_value(self.page, "@power", "sleep")
+        self.w.set_value(self.page, "@mic-default", "true")
+        rows = {r.get("key"): r for g in self.describe(PANE_KINDS)["groups"] for r in g["rows"]}
+        self.assertEqual(rows["brightness"]["value"], 70)
+        self.assertNotIn("disabled", rows["white_balance_temperature"])
+        self.assertEqual(rows["pan_absolute"]["value"], 36000)
+        self.assertTrue(rows["@power"]["desc"].startswith("Asleep"))
+        self.assertTrue(rows["@mic-default"]["value"])
+        self.assertTrue(self.w.OPTIONS.startswith(self.state))
+        self.assertFalse(os.path.exists(os.path.join(TMP, "wireplumber")))
+        with self.assertRaises(SystemExit):
+            self.w.set_value(self.page, "power_line_frequency", "7")
+
+    def test_controls_parse_like_v4l2_ctl(self):
+        groups = webcam.parse_controls(webcam_mock._list_ctrls(webcam_mock._fresh()["controls"]))
+        self.assertEqual([g for g, _ in groups], ["Picture", "Camera"])
+        ctrls = {c["name"]: c for _, cs in groups for c in cs}
+        self.assertEqual(len(ctrls), len(webcam_mock.CONTROLS))
+        self.assertIn("inactive", ctrls["white_balance_temperature"]["flags"])
+        self.assertEqual(ctrls["power_line_frequency"]["menu"], [("0", "Disabled"), ("1", "50 Hz"), ("2", "60 Hz")])
 
 
 if __name__ == "__main__":

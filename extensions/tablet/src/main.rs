@@ -3,6 +3,8 @@
 //! use. Hyprland does the work; these settings live in
 //! `~/.config/hypr/nyx-tablet.lua`, loaded from `hyprland.lua`, and apply at once.
 
+mod mock;
+
 use anyhow::{Context, Result, bail};
 use nyx_ext::page::{self, Page, desc, refreshes};
 use nyx_ext::{Extension, sys};
@@ -17,7 +19,7 @@ fn lua_file() -> PathBuf {
 }
 
 fn state_file() -> PathBuf {
-    sys::state_dir().join("tablet.json")
+    sys::state_dir().join(if mock::on() { "tablet-mock.json" } else { "tablet.json" })
 }
 
 /// What's set here, kept as JSON beside the Lua it writes.
@@ -152,11 +154,134 @@ fn tablets() -> Vec<String> {
     v["tablets"].as_array().map(|a| a.iter().filter_map(|t| t["name"].as_str().map(String::from)).collect()).unwrap_or_default()
 }
 
+/// What a page shows about the tablets, from Hyprland and libwacom (or the pretend one).
+pub struct Hardware {
+    pub tablets: Vec<String>,
+    pub monitors: Vec<(String, f64, f64)>,
+    /// The drawing area in mm.
+    pub size: Option<(f64, f64)>,
+    /// libwacom's name for it and its button count.
+    pub info: Option<(String, usize)>,
+    /// Whether OpenTabletDriver's window is installed.
+    pub otd: bool,
+}
+
+impl Hardware {
+    fn read() -> Hardware {
+        if mock::on() {
+            return mock::hardware();
+        }
+        Hardware { tablets: tablets(), monitors: monitors(), size: tablet_size(), info: tablet_info(), otd: sys::present("otd-gui") }
+    }
+}
+
+fn preview_supported() -> bool {
+    std::env::var("SETTINGS_KINDS").is_ok_and(|k| k.split(' ').any(|x| x == "preview"))
+}
+
+fn icon(mut row: Value, name: &str) -> Value {
+    row["icon"] = json!(name);
+    row
+}
+
+fn screens(hw: &Hardware) -> Vec<(String, String)> {
+    let mut screens: Vec<(String, String)> = vec![(String::new(), "All screens".into())];
+    screens.extend(hw.monitors.iter().map(|(n, w, h)| (n.clone(), format!("{n} ({w:.0}×{h:.0})"))));
+    screens
+}
+
+fn render(s: &Settings, hw: &Hardware, pane: bool) -> Value {
+    if pane { page_with_preview(s, hw) } else { page(s, hw) }
+}
+
+/// The page with the tablet and its facts in the preview pane.
+fn page_with_preview(s: &Settings, hw: &Hardware) -> Value {
+    let mut pen = vec![icon(desc(page::choice_owned("output", "Draw on", &s.output, &screens(hw)), "The whole tablet maps to this screen"), "video-display-symbolic")];
+    if hw.size.is_some() {
+        pen.push(icon(refreshes(desc(page::slider("area", "Area used", s.area as f64, (20.0, 100.0, 5.0), " %"), "Smaller means shorter moves")), "view-fullscreen-symbolic"));
+        pen.push(icon(refreshes(desc(page::switch("shape", "Match the screen's shape", s.match_shape), "Keeps circles round")), "zoom-fit-best-symbolic"));
+    }
+    pen.push(icon(desc(page::switch("left", "Left-handed", s.left_handed), "Turns the tablet around, buttons on the right"), "object-flip-horizontal-symbolic"));
+    pen.push(icon(desc(page::switch("relative", "Move like a mouse", s.relative), "The pen moves the pointer from where it is"), "input-mouse-symbolic"));
+    let mut extra = Vec::new();
+    if hw.otd {
+        extra.push(icon(
+            desc(page::button("otd", "Pressure curve and more", "Open OpenTabletDriver"), "OpenTabletDriver sets the pressure curve and button actions"),
+            "preferences-system-symbolic",
+        ));
+    }
+    let mut v = Page::new("").group("Pen", "Applied straight away.", pen).group("More", "", extra).build();
+    v["preview"] = preview(s, hw);
+    v
+}
+
+fn preview(s: &Settings, hw: &Hardware) -> Value {
+    let title = hw.info.as_ref().map(|i| i.0.clone()).or_else(|| hw.tablets.first().cloned()).unwrap_or_else(|| "Drawing tablet".into());
+    let onto = if s.output.is_empty() { "every screen".to_string() } else { s.output.clone() };
+    let mut picture = json!({ "kind": "picture", "picture": "tablet" });
+    let mut line = String::new();
+    if hw.size.is_some() {
+        line = format!("The area the pen uses, mapped onto {onto}");
+        let shape = if s.match_shape { "In the screen's shape" } else { "" };
+        picture["items"] = json!([{ "label": "Area used", "value": format!("{}%", s.area), "sub": shape }]);
+    }
+    let mut facts = Vec::new();
+    for t in &hw.tablets {
+        facts.push(json!({ "label": "Connected", "value": t }));
+    }
+    if let Some((name, buttons)) = &hw.info {
+        facts.push(json!({ "label": "Model", "value": name }));
+        if let Some((w, h)) = hw.size {
+            facts.push(json!({ "label": "Drawing area", "value": format!("{w:.0} × {h:.0} mm") }));
+        }
+        if *buttons > 0 {
+            facts.push(json!({ "label": "Tablet buttons", "value": buttons.to_string(), "sub": "Drawing apps choose what they do" }));
+        }
+    } else if let Some((w, h)) = hw.size {
+        facts.push(json!({ "label": "Drawing area", "value": format!("{w:.0} × {h:.0} mm") }));
+    }
+    let mut blocks = vec![picture];
+    if !facts.is_empty() {
+        blocks.push(json!({ "kind": "facts", "items": facts }));
+    }
+    json!({ "title": title, "line": line, "blocks": blocks })
+}
+
+/// The page as it was before the preview pane.
+fn page(s: &Settings, hw: &Hardware) -> Value {
+    let mut pen = vec![desc(page::choice_owned("output", "Draw on", &s.output, &screens(hw)), "The whole tablet maps to this screen.")];
+    if hw.size.is_some() {
+        pen.push(refreshes(desc(page::slider("area", "Area used", s.area as f64, (20.0, 100.0, 5.0), " %"), "A smaller area, centred, means shorter pen moves.")));
+        pen.push(desc(page::switch("shape", "Match the screen's shape", s.match_shape), "Keeps circles round: trims the tablet's area to the screen's proportions."));
+    }
+    pen.push(desc(page::switch("left", "Left-handed", s.left_handed), "Turns the tablet around, with the buttons on the right."));
+    pen.push(desc(page::switch("relative", "Move like a mouse", s.relative), "The pen moves the pointer from where it is, instead of jumping to where it touches."));
+    let mut about = Vec::new();
+    for t in &hw.tablets {
+        about.push(page::info(t, "Connected", t));
+    }
+    if let Some((name, buttons)) = &hw.info {
+        about.push(page::info("model", "Model", name));
+        if *buttons > 0 {
+            about.push(desc(page::info("buttons", "Tablet buttons", &buttons.to_string()), "Drawing apps (Krita, GIMP) choose what they do."));
+        }
+    }
+    if let Some((w, h)) = hw.size {
+        about.push(page::info("size", "Drawing area", &format!("{w:.0} × {h:.0} mm")));
+    }
+    let mut extra = Vec::new();
+    if hw.otd {
+        extra.push(desc(page::button("otd", "Pressure curve and more", "Open OpenTabletDriver"), "OpenTabletDriver is installed: its window sets the pressure curve and button actions."));
+    }
+    Page::new("Settings for the pen, applied straight away.").group("Pen", "", pen).group("Tablet", "", about).group("More", "", extra).build()
+}
+
 struct Tablet;
 
 impl Extension for Tablet {
     fn pages(&self) -> Value {
-        if tablets().is_empty() {
+        let tablets = if mock::on() { mock::hardware().tablets } else { tablets() };
+        if tablets.is_empty() {
             return json!([]);
         }
         json!([page::entry(PAGE, "Drawing tablet", "input-tablet-symbolic", "Which screen the pen draws on, the area used, left-handed and mouse-like use.",
@@ -164,41 +289,15 @@ impl Extension for Tablet {
     }
 
     fn describe(&self, _id: &str) -> Result<Value> {
-        let s = Settings::load();
-        let mut screens: Vec<(String, String)> = vec![(String::new(), "All screens".into())];
-        screens.extend(monitors().into_iter().map(|(n, w, h)| (n.clone(), format!("{n} ({w:.0}×{h:.0})"))));
-        let mut pen = vec![desc(page::choice_owned("output", "Draw on", &s.output, &screens), "The whole tablet maps to this screen.")];
-        if tablet_size().is_some() {
-            pen.push(refreshes(desc(page::slider("area", "Area used", s.area as f64, (20.0, 100.0, 5.0), " %"), "A smaller area, centred, means shorter pen moves.")));
-            pen.push(desc(page::switch("shape", "Match the screen's shape", s.match_shape), "Keeps circles round: trims the tablet's area to the screen's proportions."));
-        }
-        pen.push(desc(page::switch("left", "Left-handed", s.left_handed), "Turns the tablet around, with the buttons on the right."));
-        pen.push(desc(page::switch("relative", "Move like a mouse", s.relative), "The pen moves the pointer from where it is, instead of jumping to where it touches."));
-        let mut about = Vec::new();
-        for t in tablets() {
-            about.push(page::info(&t, "Connected", &t));
-        }
-        if let Some((name, buttons)) = tablet_info() {
-            about.push(page::info("model", "Model", &name));
-            if buttons > 0 {
-                about.push(desc(page::info("buttons", "Tablet buttons", &buttons.to_string()), "Drawing apps (Krita, GIMP) choose what they do."));
-            }
-        }
-        if let Some((w, h)) = tablet_size() {
-            about.push(page::info("size", "Drawing area", &format!("{w:.0} × {h:.0} mm")));
-        }
-        let mut extra = Vec::new();
-        if sys::present("otd-gui") {
-            extra.push(desc(page::button("otd", "Pressure curve and more", "Open OpenTabletDriver"), "OpenTabletDriver is installed: its window sets the pressure curve and button actions."));
-        }
-        Ok(Page::new("Settings for the pen, applied straight away.").group("Pen", "", pen).group("Tablet", "", about).group("More", "", extra).build())
+        Ok(render(&Settings::load(), &Hardware::read(), preview_supported()))
     }
 
     fn set(&self, _page: &str, key: &str, value: &str) -> Result<Option<Value>> {
         let mut s = Settings::load();
         match key {
             "output" => {
-                if !value.is_empty() && !monitors().iter().any(|m| m.0 == value) {
+                let screens = if mock::on() { mock::hardware().monitors } else { monitors() };
+                if !value.is_empty() && !screens.iter().any(|m| m.0 == value) {
                     bail!("that screen isn't connected");
                 }
                 s.output = value.to_string();
@@ -207,11 +306,16 @@ impl Extension for Tablet {
             "shape" => s.match_shape = value == "true",
             "left" => s.left_handed = value == "true",
             "relative" => s.relative = value == "true",
+            "otd" if mock::on() => return Ok(None),
             "otd" => {
                 std::process::Command::new("otd-gui").spawn()?;
                 return Ok(None);
             }
             _ => bail!("unknown setting {key}"),
+        }
+        if mock::on() {
+            s.save()?;
+            return Ok(None);
         }
         apply(&s)?;
         Ok(None)
@@ -245,5 +349,43 @@ mod tests {
         assert!(((w / h) - 16.0 / 9.0).abs() < 0.02, "{w}×{h}");
         assert_eq!(w, 216.0);
         assert_eq!(x, 0.0);
+    }
+
+    fn rows(page: &Value) -> Vec<&Value> {
+        page["groups"].as_array().unwrap().iter().flat_map(|g| g["rows"].as_array().unwrap()).collect()
+    }
+
+    #[test]
+    fn preview_pane() {
+        let s = Settings { area: 80, match_shape: true, output: "eDP-1".into(), ..Default::default() };
+        let hw = mock::hardware();
+        let old = render(&s, &hw, false);
+        assert!(old.get("preview").is_none());
+        assert_eq!(old["groups"][1]["title"], "Tablet");
+
+        let new = render(&s, &hw, true);
+        let pv = &new["preview"];
+        assert_eq!(pv["title"], "Wacom Intuos S (CTL-4100)");
+        assert_eq!(pv["line"], "The area the pen uses, mapped onto eDP-1");
+        assert_eq!(pv["blocks"][0]["picture"], "tablet");
+        assert_eq!(pv["blocks"][0]["items"][0]["value"], "80%");
+        let facts: Vec<&str> = pv["blocks"][1]["items"].as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
+        assert_eq!(facts, ["Connected", "Model", "Drawing area", "Tablet buttons"]);
+        assert_eq!(pv["blocks"][1]["items"][2]["value"], "152 × 95 mm");
+        let groups: Vec<&str> = new["groups"].as_array().unwrap().iter().map(|g| g["title"].as_str().unwrap()).collect();
+        assert_eq!(groups, ["Pen", "More"]);
+        let left = rows(&new);
+        assert_eq!(left.len(), 6);
+        assert!(left.iter().all(|r| r["icon"].as_str().is_some_and(|i| !i.is_empty())), "{left:?}");
+    }
+
+    #[test]
+    fn preview_without_libwacom() {
+        let hw = Hardware { tablets: vec!["xp-pen".into()], monitors: vec![], size: None, info: None, otd: false };
+        let new = render(&Settings::default(), &hw, true);
+        assert_eq!(new["preview"]["title"], "xp-pen");
+        assert_eq!(new["preview"]["line"], "");
+        assert!(new["preview"]["blocks"][0].get("items").is_none());
+        assert_eq!(rows(&new).len(), 3);
     }
 }

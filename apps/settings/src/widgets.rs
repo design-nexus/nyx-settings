@@ -67,6 +67,8 @@ pub fn forget_rows(within: &impl IsA<gtk::Widget>) {
 pub struct Page {
     pub root: gtk::ScrolledWindow,
     pub body: gtk::Box,
+    /// Where groups go: the body, or the controls column once the page is split.
+    target: RefCell<gtk::Box>,
 }
 
 /// A page. Its name shows in the top bar and its description in the status
@@ -78,6 +80,10 @@ pub fn page(section: &str) -> Page {
     let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
     body.add_css_class("settings-page");
     body.add_css_class(&format!("page-{section}"));
+    let colour = CURRENT_COLOUR.with(|c| c.borrow().clone());
+    if !colour.is_empty() {
+        body.add_css_class(&format!("colour-{colour}"));
+    }
 
     body.set_hexpand(true);
 
@@ -90,13 +96,76 @@ pub fn page(section: &str) -> Page {
         .child(&clamp)
         .vexpand(true)
         .build();
-    Page { root, body }
+    Page::new(root, body)
 }
 
 /// The widest a page's content gets, padding included.
 const MAX_CONTENT_WIDTH: i32 = 920;
+/// The widest a split page gets: controls and preview side by side.
+const MAX_SPLIT_WIDTH: i32 = 1400;
+/// The controls column of a split page.
+const SPLIT_CONTROLS_WIDTH: i32 = 430;
+
+thread_local! {
+    /// The theme's name for the colour of the section being built (`section-<key>`),
+    /// for the tiles in its rows.
+    static CURRENT_COLOUR: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+/// The section colour the rows built from now on take (`connections`, `hardware`…).
+pub fn set_section_colour(key: &str) {
+    CURRENT_COLOUR.with(|c| *c.borrow_mut() = key.to_string());
+}
 
 impl Page {
+    pub fn new(root: gtk::ScrolledWindow, body: gtk::Box) -> Page {
+        Page { root, body: body.clone(), target: RefCell::new(body) }
+    }
+
+    /// The box new groups go into.
+    fn holder(&self) -> gtk::Box {
+        self.target.borrow().clone()
+    }
+
+    /// Controls beside a picture of what they change: the groups made from now on go
+    /// in a column on the left, and the returned preview fills the right. In a narrow
+    /// window the preview sits above the controls.
+    pub fn split(&self) -> Preview {
+        let split = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        split.add_css_class("split-page");
+        split.set_vexpand(true);
+        let controls = vbox(0);
+        controls.add_css_class("split-controls");
+        controls.set_hexpand(false);
+        // Wrapping row text asks to be one line wide; the column stays its own width.
+        let column = nyx_ui::clamp::Clamp::new(&controls, SPLIT_CONTROLS_WIDTH);
+        column.set_start(true);
+        column.add_css_class("split-column");
+        column.set_width_request(SPLIT_CONTROLS_WIDTH);
+        let pane = vbox(14);
+        pane.add_css_class("preview-pane");
+        // A drawing or a row of chips mustn't hold the window too wide to go narrow.
+        let holder = nyx_ui::clamp::Clamp::new(&pane, i32::MAX);
+        holder.set_shrink(true);
+        holder.add_css_class("split-preview");
+        // Side by side, each column scrolls on its own and is only as tall as the window,
+        // so the preview's foot stays on screen however long the controls are.
+        let left = column_scroller(&column);
+        left.add_css_class("split-column-scroll");
+        let right = column_scroller(&holder);
+        right.add_css_class("split-preview-scroll");
+        right.set_hexpand(true);
+        split.append(&left);
+        split.append(&right);
+        self.body.append(&split);
+        self.body.add_css_class("split-body");
+        if let Some(clamp) = self.body.parent().and_downcast::<nyx_ui::clamp::Clamp>() {
+            clamp.set_max(MAX_SPLIT_WIDTH);
+        }
+        *self.target.borrow_mut() = controls;
+        narrow_split(self.body.upcast_ref(), self.body.has_css_class("narrow"));
+        Preview { pane, foot: RefCell::default(), filled: Cell::default() }
+    }
     /// A titled group whose rows share one card, split by hairlines.
     pub fn group(&self, title: &str) -> Group {
         self.make_group(title, true)
@@ -117,11 +186,13 @@ impl Page {
             l.add_css_class("group-title");
             l.set_xalign(0.0);
             head.append(&l);
+        } else {
+            wrapper.add_css_class("untitled");
         }
         wrapper.append(&head);
         let list = group_list(card);
         wrapper.append(&list);
-        self.body.append(&wrapper);
+        self.holder().append(&wrapper);
         CURRENT_GROUP.with(|g| *g.borrow_mut() = Some(wrapper.clone().upcast()));
         Group { wrapper, head, list }
     }
@@ -216,14 +287,14 @@ impl Page {
                 }
             });
         }
-        self.body.append(&wrapper);
+        self.holder().append(&wrapper);
         CURRENT_GROUP.with(|g| *g.borrow_mut() = Some(wrapper.clone().upcast()));
         Group { wrapper, head, list }
     }
 
     pub fn banner(&self, text: &str, warning: bool) -> gtk::Box {
         let b = banner(text, warning);
-        self.body.append(&b);
+        self.holder().append(&b);
         b
     }
 }
@@ -245,6 +316,7 @@ impl Group {
 
     /// Put a widget (a banner, say) between the title and the rows.
     pub fn top(&self, w: &impl IsA<gtk::Widget>) {
+        self.wrapper.remove_css_class("untitled");
         self.head.append(w);
     }
 
@@ -257,6 +329,378 @@ impl Group {
         // Notes sit just under the group title.
         self.head.append(&l);
     }
+}
+
+// ---------- Split pages: controls beside a preview ----------
+
+/// The right side of a split page ([`Page::split`]): a picture of what the
+/// controls change, with a heading, cards and a line at its foot.
+pub struct Preview {
+    pub pane: gtk::Box,
+    foot: RefCell<Option<gtk::Box>>,
+    filled: Cell<bool>,
+}
+
+impl Preview {
+    /// The preview's heading: a title, a line under it, and controls at the right.
+    pub fn head(&self, title: &str, line: &str, end: &[&gtk::Widget]) -> gtk::Box {
+        let head = hbox(10);
+        head.add_css_class("preview-head");
+        let text = vbox(2);
+        text.set_hexpand(true);
+        text.set_valign(gtk::Align::Center);
+        text.append(&label(title, "preview-title"));
+        if !line.is_empty() {
+            let l = label(line, "preview-line");
+            l.set_wrap(true);
+            text.append(&l);
+        }
+        head.append(&text);
+        for w in end {
+            w.set_valign(gtk::Align::Center);
+            head.append(*w);
+        }
+        self.add(&head);
+        head
+    }
+
+    /// Add to the preview, above its foot line.
+    pub fn add(&self, w: &impl IsA<gtk::Widget>) {
+        match self.foot.borrow().as_ref() {
+            Some(foot) => w.insert_before(&self.pane, Some(foot)),
+            None => self.pane.append(w),
+        }
+    }
+
+    /// Add `w` to take the height the preview has spare, rather than leaving it above the foot.
+    pub fn fill(&self, w: &impl IsA<gtk::Widget>) {
+        w.set_vexpand(true);
+        self.add(w);
+        self.filled.set(true);
+        if let Some(spacer) = self.foot.borrow().as_ref() {
+            spacer.set_vexpand(false);
+        }
+    }
+
+    /// A card in the preview, for a group of facts or a smaller picture.
+    pub fn card(&self) -> gtk::Box {
+        let c = vbox(0);
+        c.add_css_class("preview-card");
+        self.add(&c);
+        c
+    }
+
+    /// A drawing in the theme's colours, `height` tall and as wide as the preview,
+    /// redrawn when the theme changes. `draw` gets the context, the palette, the
+    /// section's colour and the size.
+    pub fn drawing(&self, height: i32, draw: impl Fn(&gtk::cairo::Context, &sketch::Pal, sketch::Rgb, f64, f64) + 'static) -> gtk::DrawingArea {
+        let area = drawing(height, draw);
+        self.add(&area);
+        area
+    }
+
+    /// A line at the foot of the preview: an icon and a short note. Call it last.
+    pub fn foot(&self, icon: &str, text: &str) -> gtk::Label {
+        let spacer = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        spacer.set_vexpand(!self.filled.get());
+        self.pane.append(&spacer);
+        let foot = hbox(8);
+        foot.add_css_class("preview-foot");
+        let i = gtk::Image::from_icon_name(icon);
+        i.set_valign(gtk::Align::Start);
+        foot.append(&i);
+        let l = label(text, "preview-foot-text");
+        l.set_wrap(true);
+        l.set_hexpand(true);
+        foot.append(&l);
+        self.pane.append(&foot);
+        *self.foot.borrow_mut() = Some(spacer);
+        l
+    }
+}
+
+/// A drawing in the theme's colours (see [`Preview::drawing`]), for previews and cards.
+pub fn drawing(height: i32, draw: impl Fn(&gtk::cairo::Context, &sketch::Pal, sketch::Rgb, f64, f64) + 'static) -> gtk::DrawingArea {
+    let area = gtk::DrawingArea::new();
+    area.set_content_height(height);
+    area.set_hexpand(true);
+    area.add_css_class("preview-drawing");
+    let made_for = CURRENT_COLOUR.with(|c| c.borrow().clone());
+    area.set_draw_func(move |a, cr, w, h| {
+        let key = page_colour(a.upcast_ref()).unwrap_or_else(|| made_for.clone());
+        draw(cr, &sketch::pal(), colour_rgb(&key), w as f64, h as f64)
+    });
+    let a = area.clone();
+    crate::theme::subscribe(&area, move || a.queue_draw());
+    area
+}
+
+/// The colour of the section being built, as Cairo wants it.
+pub fn section_rgb() -> sketch::Rgb {
+    colour_rgb(&CURRENT_COLOUR.with(|c| c.borrow().clone()))
+}
+
+/// The section colour of the page `w` is on (its body's `colour-<key>` class).
+fn page_colour(w: &gtk::Widget) -> Option<String> {
+    std::iter::successors(w.parent(), |w| w.parent())
+        .find_map(|w| w.css_classes().iter().find_map(|c| c.strip_prefix("colour-").map(str::to_string)))
+}
+
+fn colour_rgb(key: &str) -> sketch::Rgb {
+    crate::fangraph::rgb(&crate::theme::section_accent("settings", key))
+}
+
+/// One side of a split page: scrolls on its own while the page is side by side.
+fn column_scroller(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
+    gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .vscrollbar_policy(gtk::PolicyType::External)
+        .child(child)
+        .vexpand(true)
+        .build()
+}
+
+/// The widget a scrolled window shows (inside the viewport GTK adds).
+fn scrolled_child(s: &gtk::ScrolledWindow) -> Option<gtk::Widget> {
+    let c = s.child()?;
+    if c.is::<gtk::Viewport>() { c.first_child() } else { Some(c) }
+}
+
+/// Put a split page's preview above its controls in a narrow window, beside them
+/// otherwise. Side by side, the controls and the preview each scroll on their own at
+/// the window's height; stacked, the page scrolls as one. `body` is a page body.
+pub fn narrow_split(body: &gtk::Widget, narrow: bool) {
+    let page = body.ancestor(gtk::ScrolledWindow::static_type()).and_downcast::<gtk::ScrolledWindow>();
+    let mut c = body.first_child();
+    while let Some(child) = c {
+        if child.has_css_class("split-page")
+            && let Some(split) = child.downcast_ref::<gtk::Box>()
+            && let (Some(first), Some(last)) = (split.first_child(), split.last_child())
+        {
+            let (left, right) = if first.has_css_class("split-column-scroll") { (first, last) } else { (last, first) };
+            let (Some(left), Some(right)) = (left.downcast_ref::<gtk::ScrolledWindow>(), right.downcast_ref::<gtk::ScrolledWindow>())
+            else {
+                return;
+            };
+            let Some(column) = scrolled_child(left).and_downcast::<nyx_ui::clamp::Clamp>() else { return };
+            let own = if narrow { gtk::PolicyType::Never } else { gtk::PolicyType::External };
+            left.set_vscrollbar_policy(own);
+            right.set_vscrollbar_policy(own);
+            if let Some(page) = &page {
+                page.set_vscrollbar_policy(if narrow { gtk::PolicyType::External } else { gtk::PolicyType::Never });
+            }
+            if narrow {
+                split.set_orientation(gtk::Orientation::Vertical);
+                split.reorder_child_after(right, None::<&gtk::Widget>);
+                column.set_width_request(-1);
+                column.set_max(i32::MAX);
+                for s in [left, right] {
+                    s.set_vexpand(false);
+                    s.set_propagate_natural_height(true);
+                }
+            } else {
+                split.set_orientation(gtk::Orientation::Horizontal);
+                split.reorder_child_after(right, Some(left));
+                column.set_width_request(SPLIT_CONTROLS_WIDTH);
+                column.set_max(SPLIT_CONTROLS_WIDTH);
+                for s in [left, right] {
+                    s.set_vexpand(true);
+                    s.set_propagate_natural_height(false);
+                }
+            }
+        }
+        c = child.next_sibling();
+    }
+}
+
+/// The scrolled window that scrolls `w` into view: the nearest one around it that
+/// scrolls (a split page's column, or the page itself).
+pub fn scroller_for(w: &gtk::Widget) -> Option<gtk::ScrolledWindow> {
+    std::iter::successors(w.parent(), |w| w.parent())
+        .filter_map(|w| w.downcast::<gtk::ScrolledWindow>().ok())
+        .find(|s| s.vscrollbar_policy() != gtk::PolicyType::Never)
+}
+
+/// The scroller holding a page's controls: the page root, or a split page's controls
+/// column while it scrolls on its own.
+pub fn main_scroller(root: &gtk::ScrolledWindow) -> gtk::ScrolledWindow {
+    if root.vscrollbar_policy() == gtk::PolicyType::Never {
+        fn find(w: &gtk::Widget) -> Option<gtk::ScrolledWindow> {
+            if w.has_css_class("split-column-scroll") {
+                return w.clone().downcast::<gtk::ScrolledWindow>().ok();
+            }
+            let mut c = w.first_child();
+            while let Some(child) = c {
+                if let Some(s) = find(&child) {
+                    return Some(s);
+                }
+                c = child.next_sibling();
+            }
+            None
+        }
+        if let Some(s) = find(root.upcast_ref()) {
+            return s;
+        }
+    }
+    root.clone()
+}
+
+// ---------- Tiles and rows that lead somewhere ----------
+
+/// An icon on a tile in the section's colour, drawn as Umbra draws its icons (a
+/// satin tile, a glow and a rim of the colour, the glyph in it).
+pub fn tile(icon: &str) -> gtk::Box {
+    let t = hbox(0);
+    t.add_css_class("row-tile");
+    // The colour of the page it's on (a row may be made after another page was built).
+    t.connect_realize(|t| {
+        let key = page_colour(t.upcast_ref());
+        if let Some(key) = key.or_else(|| Some(CURRENT_COLOUR.with(|c| c.borrow().clone())).filter(|k| !k.is_empty())) {
+            t.add_css_class(&format!("section-{key}"));
+        }
+    });
+    t.set_valign(gtk::Align::Center);
+    t.set_halign(gtk::Align::Center);
+    t.set_hexpand(false);
+    let i = gtk::Image::from_icon_name(icon);
+    i.set_halign(gtk::Align::Center);
+    i.set_valign(gtk::Align::Center);
+    t.append(&i);
+    t
+}
+
+/// [`row`] with an icon on a tile before its text.
+pub fn icon_row(icon: &str, title: &str, desc: &str, control: Option<&gtk::Widget>) -> gtk::Box {
+    let r = row(title, desc, control);
+    r.prepend(&tile(icon));
+    r.add_css_class("with-tile");
+    r
+}
+
+/// A row that opens something one level down (a sub-page, a sheet): its current
+/// value and a chevron at the right; the whole row is the button.
+pub fn nav_row(icon: Option<&str>, title: &str, desc: &str, value: &str, on_open: impl Fn() + 'static) -> (gtk::Box, gtk::Label) {
+    let end = hbox(6);
+    let v = label(value, "row-value");
+    v.set_ellipsize(pango::EllipsizeMode::End);
+    v.set_max_width_chars(28);
+    v.set_visible(!value.is_empty());
+    end.append(&v);
+    let chevron = gtk::Image::from_icon_name("go-next-symbolic");
+    chevron.add_css_class("chevron");
+    end.append(&chevron);
+    let r = match icon {
+        Some(i) => icon_row(i, title, desc, Some(end.upcast_ref())),
+        None => row(title, desc, Some(end.upcast_ref())),
+    };
+    r.add_css_class("nav-row");
+    r.set_cursor_from_name(Some("pointer"));
+    r.set_focusable(true);
+    let click = gtk::GestureClick::new();
+    let open = Rc::new(on_open);
+    let o = open.clone();
+    click.connect_released(move |_, _, _, _| o());
+    r.add_controller(click);
+    let keys = gtk::EventControllerKey::new();
+    keys.connect_key_pressed(move |_, key, _, _| {
+        if matches!(key, gtk::gdk::Key::Return | gtk::gdk::Key::KP_Enter | gtk::gdk::Key::space) {
+            open();
+            return glib::Propagation::Stop;
+        }
+        glib::Propagation::Proceed
+    });
+    r.add_controller(keys);
+    (r, v)
+}
+
+/// A page one level down, over the window: `title` at its top with a way back, and
+/// `build` filling it like a page (groups, splits). For the settings a page keeps a
+/// click away (troubleshooting, remembered devices, details).
+pub fn subpage(title: &str, width: i32, build: impl FnOnce(&Page)) -> gtk::Window {
+    let (dialog, card) = dialog(title, width);
+    card.add_css_class("subpage");
+    let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    body.add_css_class("settings-page");
+    body.add_css_class("subpage-body");
+    // As tall as its content, but never taller than the window it opens over.
+    let tallest = main_window().map(|w| w.height()).filter(|h| *h > 0).map_or(620, |h| (h - 200).clamp(260, 860));
+    let scroll = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .vscrollbar_policy(gtk::PolicyType::External)
+        .propagate_natural_height(true)
+        .max_content_height(tallest)
+        .child(&body)
+        .build();
+    card.append(&scroll);
+    let page = Page::new(scroll.clone(), body.clone());
+    build(&page);
+    // A split sub-page's columns scroll on their own, so give them the room.
+    if body.has_css_class("split-body") {
+        scroll.set_size_request(-1, tallest);
+    }
+    let done = gtk::Button::with_label("Done");
+    done.set_halign(gtk::Align::End);
+    let d = dialog.clone();
+    done.connect_clicked(move |_| d.close());
+    card.append(&done);
+    dialog.present();
+    dialog
+}
+
+/// The bar at the foot of a page whose changes are applied together (NyxOS's system
+/// pages): how many are waiting, Discard and Apply.
+pub struct ChangesBar {
+    pub root: gtk::Box,
+    pub label: gtk::Label,
+    pub detail: gtk::Label,
+    pub discard: gtk::Button,
+    pub apply: gtk::Button,
+}
+
+impl ChangesBar {
+    /// Show `n` changes waiting (hidden at none) and what they are.
+    pub fn set(&self, n: usize, detail: &str) {
+        self.root.set_visible(n > 0);
+        self.label.set_text(&match n {
+            1 => "1 change waiting".to_string(),
+            n => format!("{n} changes waiting"),
+        });
+        self.detail.set_text(detail);
+        self.detail.set_visible(!detail.is_empty());
+    }
+}
+
+pub fn changes_bar() -> ChangesBar {
+    let root = hbox(12);
+    root.add_css_class("changes-bar");
+    let icon = gtk::Image::from_icon_name("document-save-symbolic");
+    icon.set_valign(gtk::Align::Center);
+    root.append(&icon);
+    let text = vbox(2);
+    text.set_hexpand(true);
+    text.set_valign(gtk::Align::Center);
+    let label = label("", "changes-bar-title");
+    let detail = label_wrapped("", "changes-bar-detail");
+    text.append(&label);
+    text.append(&detail);
+    root.append(&text);
+    let discard = gtk::Button::with_label("Discard");
+    discard.add_css_class("flat");
+    let apply = gtk::Button::with_label("Apply");
+    apply.add_css_class("suggested-action");
+    for b in [&discard, &apply] {
+        b.set_valign(gtk::Align::Center);
+        root.append(b);
+    }
+    root.set_visible(false);
+    ChangesBar { root, label, detail, discard, apply }
+}
+
+fn label_wrapped(text: &str, class: &str) -> gtk::Label {
+    let l = label(text, class);
+    l.set_wrap(true);
+    l.set_xalign(0.0);
+    l
 }
 
 /// The titles of the rows directly in a card (not the ones inside disclosures).
@@ -410,6 +854,7 @@ pub fn row(title: &str, desc: &str, control: Option<&gtk::Widget>) -> gtk::Box {
     row.add_css_class("settings-option");
     row.add_css_class("card-row");
     let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    text.add_css_class("row-text");
     text.set_valign(gtk::Align::Center);
     text.set_hexpand(true);
     let t = gtk::Label::new(Some(title));
@@ -540,7 +985,7 @@ fn string_factory(short: bool) -> gtk::SignalListItemFactory {
         if short {
             l.set_ellipsize(pango::EllipsizeMode::End);
             l.set_width_chars(8);
-            l.set_max_width_chars(30);
+            l.set_max_width_chars(22);
             item.set_child(Some(&l));
             return;
         }
@@ -846,29 +1291,6 @@ pub fn hypr_choice_typed(key: &'static str, title: &str, desc: &str, options: Ve
     r
 }
 
-pub fn hypr_entry(key: &'static str, title: &str, desc: &str, placeholder: &str) -> gtk::Box {
-    remember_option(key, title);
-    let current =
-        store::option(key).and_then(|v| v.as_str().map(String::from)).or_else(|| hypr::get_str(key)).unwrap_or_default();
-    let reset_slot: Rc<RefCell<Option<gtk::Button>>> = Rc::new(RefCell::new(None));
-    let (r, e) = {
-        let reset_slot = reset_slot.clone();
-        entry_row(title, desc, &current, placeholder, move |t| {
-            store::set_option(key, json!(t));
-            if let Some(b) = reset_slot.borrow().as_ref() {
-                show_reset(b, true);
-            }
-        })
-    };
-    let reset = reset_button(key, move || {
-        let e = e.clone();
-        after_reload(move || e.set_text(&hypr::get_str(key).unwrap_or_default()));
-    });
-    r.insert_child_after(&reset, r.first_child().as_ref());
-    *reset_slot.borrow_mut() = Some(reset);
-    r
-}
-
 // ---------- Shared helpers for hardware pages ----------
 
 /// Runs the last call after things have been quiet for a while.
@@ -962,6 +1384,15 @@ pub struct ColourPicker {
 pub fn colour_picker(current: &str, theme: Option<(&str, &str)>, on_change: impl Fn(String) + 'static) -> ColourPicker {
     let outer = hbox(6);
     outer.add_css_class("swatches");
+    // The swatches wrap onto a second line where the space is narrow (a preview pane).
+    let flow = gtk::FlowBox::new();
+    flow.set_selection_mode(gtk::SelectionMode::None);
+    flow.set_max_children_per_line(16);
+    flow.set_column_spacing(6);
+    flow.set_row_spacing(6);
+    flow.set_hexpand(true);
+    flow.set_valign(gtk::Align::Center);
+    outer.append(&flow);
     let swatches: Rc<RefCell<Vec<(String, gtk::Button)>>> = Rc::default();
     let entry = gtk::Entry::new();
     entry.add_css_class("mono");
@@ -1013,7 +1444,7 @@ pub fn colour_picker(current: &str, theme: Option<(&str, &str)>, on_change: impl
         let pick = pick.clone();
         let h2 = h.clone();
         b.connect_clicked(move |_| pick(h2.clone()));
-        outer.append(&b);
+        flow.insert(&b, -1);
         swatches.borrow_mut().push((h, b));
     };
     if let Some((label, hex)) = theme {
@@ -1048,7 +1479,12 @@ pub fn colour_picker(current: &str, theme: Option<(&str, &str)>, on_change: impl
             });
         });
     }
-    outer.append(&custom);
+    flow.insert(&custom, -1);
+    let mut child = flow.first_child();
+    while let Some(c) = child {
+        c.set_focusable(false);
+        child = c.next_sibling();
+    }
 
     {
         let pick = pick.clone();
@@ -1211,12 +1647,18 @@ pub fn tag(text: &str) -> gtk::Label {
 
 /// Put a tag right after a row's title.
 pub fn tag_row(row: &gtk::Box, text: &str) {
-    if let Some(title) = row.first_child().and_then(|t| t.first_child())
+    let mut texts = row.first_child();
+    while let Some(t) = texts.as_ref().filter(|t| t.has_css_class("row-tile")) {
+        texts = t.next_sibling();
+    }
+    if let Some(title) = texts.and_then(|t| t.first_child())
         && let (Some(parent), Some(t)) = (title.parent().and_downcast::<gtk::Box>(), title.downcast_ref::<gtk::Label>())
     {
         let line = hbox(8);
         parent.insert_child_after(&line, Some(t));
         parent.remove(t);
+        // Beside a tag and a wide control, a title mustn't squeeze to a letter a line.
+        t.set_width_chars(t.text().chars().count().min(10) as i32);
         line.append(t);
         line.append(&tag(text));
     }
