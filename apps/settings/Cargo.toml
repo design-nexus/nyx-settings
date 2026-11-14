@@ -15,8 +15,8 @@ nyxos = []
 [dependencies]
 nyx-cloud = { git = "https://github.com/design-nexus/nyx-cloud.git", rev = "ba6385f60597a9ca6ebd5fb63836a1ea3dfa0f49" }
 nyx-system-proto = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "88962d876b30df66e3c5db3c70f28876b7e39db2" }
-nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "aac46ebf3a8eab79a758ccbe435688544d429f62" }
-nyx-actions = { git = "https://github.com/design-nexus/nyx-core.git", rev = "aac46ebf3a8eab79a758ccbe435688544d429f62", default-features = false }
+nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "94e0c8aa133074c74adb31365e51f56168114f68" }
+nyx-actions = { git = "https://github.com/design-nexus/nyx-core.git", rev = "94e0c8aa133074c74adb31365e51f56168114f68", default-features = false }
 nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "ea8839d237a23ec83887429475f0780c06a36826" }
 nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "ea8839d237a23ec83887429475f0780c06a36826" }
 nyx-share-client = { git = "https://github.com/design-nexus/nyx-share.git", rev = "53a5cacbc46a4269ba40a0fb17c1ee07f12e5177" }
@@ -33,8 +33,8 @@ wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 nyx-accounts-native = { package = "nyx-accounts-service", git = "https://github.com/design-nexus/nyx-accounts.git", rev = "afdc1482cb910746f942556090870d3ec083dd34" }
 
 # The nyx-core nyx-design uses (virtual monitors included), so the app carries one nyx-desktop.
-nyx-desktop = { git = "https://github.com/design-nexus/nyx-core.git", rev = "aac46ebf3a8eab79a758ccbe435688544d429f62" }
-nyx-pim = { git = "https://github.com/design-nexus/nyx-core.git", rev = "aac46ebf3a8eab79a758ccbe435688544d429f62" }
+nyx-desktop = { git = "https://github.com/design-nexus/nyx-core.git", rev = "94e0c8aa133074c74adb31365e51f56168114f68" }
+nyx-pim = { git = "https://github.com/design-nexus/nyx-core.git", rev = "94e0c8aa133074c74adb31365e51f56168114f68" }
 # At their own revisions: none depends on another nyx-core crate, so the
 # app still carries one nyx-core and one nyx-desktop.
 nyx-capability = { git = "https://github.com/design-nexus/nyx-core.git", rev = "aac46ebf3a8eab79a758ccbe435688544d429f62", features = ["glib"] }
