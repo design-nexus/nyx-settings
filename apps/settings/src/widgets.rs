@@ -158,12 +158,16 @@ impl Page {
         split.append(&left);
         split.append(&right);
         self.body.append(&split);
+        // The page this split is on: the body itself, or (an extension's page, drawn into
+        // a box inside the body) the settings page around it. It takes the split's width.
+        let host = page_of(self.body.upcast_ref());
         self.body.add_css_class("split-body");
-        if let Some(clamp) = self.body.parent().and_downcast::<nyx_ui::clamp::Clamp>() {
+        host.add_css_class("split-body");
+        if let Some(clamp) = host.parent().and_downcast::<nyx_ui::clamp::Clamp>() {
             clamp.set_max(MAX_SPLIT_WIDTH);
         }
         *self.target.borrow_mut() = controls;
-        narrow_split(self.body.upcast_ref(), self.body.has_css_class("narrow"));
+        narrow_split(self.body.upcast_ref(), host.has_css_class("narrow"));
         Preview { pane, foot: RefCell::default(), filled: Cell::default() }
     }
     /// A titled group whose rows share one card, split by hairlines.
@@ -469,10 +473,24 @@ fn scrolled_child(s: &gtk::ScrolledWindow) -> Option<gtk::Widget> {
 /// Put a split page's preview above its controls in a narrow window, beside them
 /// otherwise. Side by side, the controls and the preview each scroll on their own at
 /// the window's height; stacked, the page scrolls as one. `body` is a page body.
+/// The settings page `w` is on (`w` itself when it's the page).
+pub fn page_of(w: &gtk::Widget) -> gtk::Widget {
+    std::iter::successors(Some(w.clone()), |w| w.parent()).find(|w| w.has_css_class("settings-page")).unwrap_or_else(|| w.clone())
+}
+
+/// Stack a page's split (controls above the preview) when the window is narrow. The split
+/// is in the page body, or a level or two down (an extension's page).
 pub fn narrow_split(body: &gtk::Widget, narrow: bool) {
+    narrow_split_in(body, narrow, 2);
+}
+
+fn narrow_split_in(body: &gtk::Widget, narrow: bool, depth: u32) {
     let page = body.ancestor(gtk::ScrolledWindow::static_type()).and_downcast::<gtk::ScrolledWindow>();
     let mut c = body.first_child();
     while let Some(child) = c {
+        if depth > 0 && !child.has_css_class("split-page") && child.is::<gtk::Box>() {
+            narrow_split_in(&child, narrow, depth - 1);
+        }
         if child.has_css_class("split-page")
             && let Some(split) = child.downcast_ref::<gtk::Box>()
             && let (Some(first), Some(last)) = (split.first_child(), split.last_child())

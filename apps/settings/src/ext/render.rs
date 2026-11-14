@@ -238,7 +238,10 @@ fn render(st: &Shared, desc: &PageDesc) {
     let page = Page::new(st.root.clone(), st.content.clone());
     match &desc.preview {
         Some(pv) => preview(st, &page.split(), pv),
-        None => st.content.remove_css_class("split-body"),
+        None => {
+            st.content.remove_css_class("split-body");
+            widgets::page_of(st.content.upcast_ref()).remove_css_class("split-body");
+        }
     }
     for b in &desc.banners {
         page.banner(&b.text, b.warning);

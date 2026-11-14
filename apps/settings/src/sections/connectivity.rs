@@ -830,6 +830,13 @@ fn show_current(ui: &Rc<WifiUi>, data: &WifiData) {
     th.append(&tt);
     let down = chip("Down", true);
     let up = chip("Up", false);
+    // As wide as the longest speed ("Down 999.9 KB/s"), so a changing speed doesn't
+    // resize the row and with it the graph.
+    for c in [&down, &up] {
+        c.set_width_chars(15);
+        c.set_xalign(0.5);
+        c.add_css_class("cn-rate");
+    }
     th.append(&down);
     th.append(&up);
     traffic.append(&th);

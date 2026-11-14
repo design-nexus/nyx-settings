@@ -166,6 +166,10 @@ window.settings-window .cn-hm-actions button.cn-hm-danger {
   color: @theme_dim_text;
 }
 
+.cn-chip.cn-rate {
+  font-feature-settings: "tnum";
+}
+
 .cn-chip.accent {
   background: alpha(@theme_accent, 0.15);
   color: @theme_accent;
