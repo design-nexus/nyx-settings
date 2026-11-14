@@ -5,6 +5,8 @@
 
 use gtk::prelude::*;
 use serde_json::Value;
+use std::cell::Cell;
+use std::rc::Rc;
 
 use super::accounts::terminal;
 use crate::widgets::{self, Group, Page};
@@ -297,12 +299,24 @@ fn keys_rows(h: &gtk::Box, keys: &Value) {
         1 => "Register a backup key too, so losing one doesn't lock you out of anything that needs a key.".to_string(),
         n => format!("{n} keys registered."),
     };
+    let ask_pin = Rc::new(Cell::new(false));
+    let (r, _) = widgets::switch_row(
+        "Ask for its PIN",
+        "Each use needs the key's PIN as well as a touch. Off: a touch is enough.",
+        false,
+        {
+            let ask_pin = ask_pin.clone();
+            move |on| ask_pin.set(on)
+        },
+    );
+    widgets::keywords("security key yubikey fido2 pin touch");
+    h.append(&r);
     let (r, _) =
-        widgets::entry_row("Add a security key", &desc, "", "name, such as Primary YubiKey", |name| match safe_name(&name) {
-            Some(n) => in_terminal(&format!("nyx-authctl keys add '{n}' --pin")),
+        widgets::entry_row("Add a security key", &desc, "", "name, such as Primary YubiKey", move |name| match safe_name(&name) {
+            Some(n) => in_terminal(&format!("nyx-authctl keys add '{n}'{}", if ask_pin.get() { " --pin" } else { "" })),
             None => window::toast("Use letters, numbers, spaces, dashes or dots in the name"),
         });
-    widgets::keywords("security key yubikey fido2 u2f add register backup");
+    widgets::keywords("security key yubikey fido2 u2f add register backup pin");
     h.append(&r);
 }
 
