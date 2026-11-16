@@ -64,7 +64,7 @@ pub fn journal_usage(out: &str) -> u64 {
 
 /// System logs over `keep` bytes.
 pub fn journal_extra(keep: u64) -> u64 {
-    journal_usage(&output("/usr/bin/journalctl", &["--disk-usage"])).saturating_sub(keep)
+    journal_usage(&output("journalctl", &["--disk-usage"])).saturating_sub(keep)
 }
 
 /// Bytes under a folder (not following other filesystems).
@@ -72,13 +72,13 @@ pub fn folder_size(path: &Path) -> u64 {
     if !path.exists() {
         return 0;
     }
-    output("/usr/bin/du", &["-sbx", &path.to_string_lossy()]).split_whitespace().next().and_then(|n| n.parse().ok()).unwrap_or(0)
+    output("du", &["-sbx", &path.to_string_lossy()]).split_whitespace().next().and_then(|n| n.parse().ok()).unwrap_or(0)
 }
 
 /// The biggest folders directly in `home`, largest first.
 pub fn largest(home: &Path, count: usize) -> Vec<(String, u64)> {
-    let out = Command::new("/usr/bin/nice")
-        .args(["-n", "15", "/usr/bin/du", "-xb", "-d", "1", &home.to_string_lossy()])
+    let out = Command::new("nice")
+        .args(["-n", "15", "du", "-xb", "-d", "1", &home.to_string_lossy()])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
         .unwrap_or_default();
