@@ -468,14 +468,16 @@ fn account_preview(shown: &gtk::Box, foot: &gtk::Label, account: &Account) {
 }
 
 /// Who an account can be with, as the Add screen offers them: (provider, name, line).
+/// App passwords are the supported way in; Google's and Microsoft's own sign-in needs an
+/// OAuth client the person registers, so those come last, marked as such.
 const PROVIDERS: &[(&str, &str, &str)] = &[
-    ("google", "Google", "Gmail, Calendar, Contacts and Drive"),
-    ("microsoft_personal", "Microsoft", "Outlook, calendar, contacts and OneDrive"),
     ("fastmail", "Fastmail", "Mail, calendar and contacts with an app password"),
     ("nextcloud", "Nextcloud", "Files, calendar and contacts on your server"),
     ("zoho", "Zoho", "Mail, Calendar and Contacts"),
-    ("imap_smtp", "Other mail", "Any provider, with IMAP and SMTP"),
-    ("webdav", "Calendar or contacts server", "Calendars, contacts and files on a server"),
+    ("imap_smtp", "Other mail", "Gmail, iCloud or any IMAP provider, with an app password"),
+    ("webdav", "Calendar or contacts server", "iCloud, CalDAV and CardDAV servers"),
+    ("google", "Google sign-in", "Advanced: needs an OAuth client of your own"),
+    ("microsoft_personal", "Microsoft sign-in", "Advanced: needs an OAuth client of your own"),
 ];
 
 /// The providers to add an account from, and cloud storage for files alone.
@@ -535,7 +537,9 @@ fn add_preview(shown: &gtk::Box, foot: &gtk::Label, close: Option<impl Fn() + 's
     add.connect_clicked(|_| super::cloud::onboarding(None, None));
     files.append(&add);
     shown.append(&files);
-    foot.set_text("Google and Microsoft sign in through your browser; the others use an app password. Sign-in details are kept in your keyring.");
+    foot.set_text(
+        "Most accounts use an app password made in the provider's security settings. Google and Microsoft sign-in needs an OAuth client you register with them. Sign-in details are kept in your keyring.",
+    );
 }
 
 fn service_name(service: &Service) -> &'static str {
@@ -650,7 +654,7 @@ fn setup_account(provider: &'static str) {
     if oauth {
         let config = section(&body, "One-time provider setup");
         config
-            .append(&widgets::label("This preview needs an app registration from your provider before you can sign in.", "dim"));
+            .append(&widgets::label("Signing in this way needs an OAuth client (an app registration) you create with the provider first. Fastmail, iCloud and Gmail mail, Nextcloud and other servers use an app password instead.", "dim"));
         let guide = gtk::Button::with_label("Open step-by-step setup guide");
         guide.set_halign(gtk::Align::Start);
         guide.connect_clicked(|_| {
@@ -664,8 +668,13 @@ fn setup_account(provider: &'static str) {
                     .and_then(|p| p.parent()?.parent().map(|p| p.join("share/doc/nyx-accounts/PROVIDERS.md")))
                     .unwrap_or(personal)
             };
-            let file = gtk::gio::File::for_path(path);
-            let _ = gtk::gio::AppInfo::launch_default_for_uri(&file.uri(), None::<&gtk::gio::AppLaunchContext>);
+            // NyxOS installs no copy of the guide; the published one is the same text.
+            let uri = if path.exists() {
+                gtk::gio::File::for_path(path).uri().to_string()
+            } else {
+                "https://github.com/design-nexus/nyx-accounts/blob/main/docs/PROVIDERS.md".to_string()
+            };
+            let _ = gtk::gio::AppInfo::launch_default_for_uri(&uri, None::<&gtk::gio::AppLaunchContext>);
         });
         config.append(&guide);
         client_id = Some(entry(&config, "Client ID", "Paste the client ID from your provider"));
