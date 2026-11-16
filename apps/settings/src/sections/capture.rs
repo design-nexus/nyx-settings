@@ -903,6 +903,38 @@ fn voice_dictation(content: &gtk::Box) -> Option<String> {
         )
         .0,
     );
+    // The speech model comes once, on request (about 650 MB).
+    let (model, model_button) =
+        widgets::button_row("Speech model", "Dictation needs it: about 650 MB, downloaded once.", "Download", |b| {
+            b.set_sensitive(false);
+            b.set_label("Downloading…");
+            let b = b.clone();
+            cmd::run_async(&["nyx-voice", "models", "fetch", "asr"], move |r| match r {
+                Ok(_) => {
+                    window::toast("The speech model is ready: hold F9 and speak");
+                    if let Some(row) = b.parent() {
+                        row.set_visible(false);
+                    }
+                }
+                Err(e) => {
+                    b.set_sensitive(true);
+                    b.set_label("Download");
+                    window::toast(&format!("The speech model didn't download: {e:#}"));
+                }
+            });
+        });
+    model_button.add_css_class("suggested-action");
+    model.set_visible(false);
+    card.append(&model);
+    cmd::run_async(&["nyx-voice", "status", "--json"], move |r| {
+        let missing = r
+            .ok()
+            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+            .and_then(|v| v["recognizer_unavailable"].as_str().map(|s| s.contains("models fetch asr")))
+            .unwrap_or(false);
+        model.set_visible(missing);
+    });
+    widgets::keywords("speech model download dictation");
     let output = voice_dictation_value("output").and_then(|v| v.as_str().map(String::from)).unwrap_or_else(|| "type".into());
     let (r, _) = widgets::choice_row(
         "Put the words",
