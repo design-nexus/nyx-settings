@@ -496,6 +496,8 @@ pub fn home_updates(page: &Page, hero: &Hero) {
         None => (version(), "Updates has what's new, the update settings and earlier generations.".to_string()),
     };
     let (r, value) = widgets::nav_row(Some(layers_icon()), &title, &desc, &version(), || window::navigate("updates"));
+    // Short, and never cut ("Up to…"): the description beside it wraps instead.
+    value.set_ellipsize(gtk::pango::EllipsizeMode::None);
     widgets::keywords("update upgrade generation rollback version nixos");
     g.add(&r);
 

@@ -557,11 +557,22 @@ fn category_row(group: &'static str, pages: &[&Section], compact: bool, count: O
         text.set_hexpand(true);
         let summary =
             if group.is_empty() { "This computer and updates".to_string() } else { titles[..titles.len().min(3)].join(", ") };
+        // A section whose one page has its name has nothing to add under it.
+        let summary = if titles.len() == 1 && titles[0] == name { String::new() } else { summary };
         for (t, class) in [(name, "category-name"), (summary.as_str(), "category-pages")] {
+            if t.is_empty() {
+                continue;
+            }
             let l = widgets::label(t, class);
             l.set_ellipsize(gtk::pango::EllipsizeMode::End);
-            // As wide as the sidebar, which doesn't grow to fit it.
+            // As wide as the sidebar, which doesn't grow to fit it; the summary takes a
+            // second line before it's cut.
             l.set_max_width_chars(1);
+            if class == "category-pages" {
+                l.set_wrap(true);
+                l.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+                l.set_lines(2);
+            }
             text.append(&l);
         }
         content.append(&text);

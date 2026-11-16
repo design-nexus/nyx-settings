@@ -49,6 +49,10 @@ fn fact(grid: &gtk::Grid, i: i32, title: &str, value: &str) -> gtk::Label {
     // Selectable by mouse, but not a focus stop: a focused label shows a text cursor.
     v.set_focusable(false);
     v.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    // A long processor name takes a second line before it's cut.
+    v.set_wrap(true);
+    v.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+    v.set_lines(2);
     v.set_tooltip_text(Some(value));
     cell.append(&v);
     grid.attach(&cell, i % 3, i / 3, 1, 1);
@@ -788,7 +792,7 @@ fn quick_settings(page: &Page) {
         g.add(&widgets::icon_row(
             "power-profile-balanced-symbolic",
             "Power",
-            "For now",
+            "Speed or battery life",
             Some(seg.upcast_ref()),
         ));
         widgets::keywords("power profile performance balanced power saver battery power source");
