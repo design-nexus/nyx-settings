@@ -33,7 +33,10 @@ fn global_bool(key: &str) -> bool {
 }
 
 fn global_accel() -> String {
-    store::option("input.accel_profile").and_then(|v| v.as_str().map(String::from)).or_else(|| hypr::get_str("input.accel_profile")).unwrap_or_default()
+    store::option("input.accel_profile")
+        .and_then(|v| v.as_str().map(String::from))
+        .or_else(|| hypr::get_str("input.accel_profile"))
+        .unwrap_or_default()
 }
 
 fn feel(shown: &Shown) -> Feel {
@@ -41,7 +44,10 @@ fn feel(shown: &Shown) -> Feel {
         flat: global_accel() == "flat",
         left_handed: global_bool("input.left_handed"),
         natural: global_bool("input.natural_scroll"),
-        speed: store::option("input.sensitivity").and_then(|v| v.as_f64()).or_else(|| hypr::get_f64("input.sensitivity")).unwrap_or(0.0),
+        speed: store::option("input.sensitivity")
+            .and_then(|v| v.as_f64())
+            .or_else(|| hypr::get_f64("input.sensitivity"))
+            .unwrap_or(0.0),
     };
     if let Some(name) = &shown.device {
         let fields = store::read(|s| s.devices.get(name).cloned().unwrap_or_default());
@@ -149,17 +155,35 @@ fn draw_mouse(cr: &Context, p: &Pal, w: f64, h: f64, f: &Feel) {
 
 fn caption(cr: &Context, p: &Pal, title: &str, sub: &str, x: f64, y: f64, from_left: bool, hot: bool) {
     for (i, (text, bold)) in [(title, true), (sub, false)].into_iter().enumerate() {
-        cr.select_font_face("sans-serif", gtk::cairo::FontSlant::Normal, if bold { gtk::cairo::FontWeight::Bold } else { gtk::cairo::FontWeight::Normal });
+        cr.select_font_face(
+            "sans-serif",
+            gtk::cairo::FontSlant::Normal,
+            if bold { gtk::cairo::FontWeight::Bold } else { gtk::cairo::FontWeight::Normal },
+        );
         cr.set_font_size(if bold { 11.5 } else { 10.0 });
         let Ok(ext) = cr.text_extents(text) else { continue };
-        sketch::set(cr, if bold && hot { p.accent } else if bold { p.text } else { p.dim }, 1.0);
+        sketch::set(
+            cr,
+            if bold && hot {
+                p.accent
+            } else if bold {
+                p.text
+            } else {
+                p.dim
+            },
+            1.0,
+        );
         cr.move_to(if from_left { x } else { x - ext.x_advance() }, y + i as f64 * 14.0);
         let _ = cr.show_text(text);
     }
 }
 
 fn centred(cr: &Context, p: &Pal, text: &str, x: f64, y: f64, bold: bool) {
-    cr.select_font_face("sans-serif", gtk::cairo::FontSlant::Normal, if bold { gtk::cairo::FontWeight::Bold } else { gtk::cairo::FontWeight::Normal });
+    cr.select_font_face(
+        "sans-serif",
+        gtk::cairo::FontSlant::Normal,
+        if bold { gtk::cairo::FontWeight::Bold } else { gtk::cairo::FontWeight::Normal },
+    );
     cr.set_font_size(if bold { 11.5 } else { 10.0 });
     let Ok(ext) = cr.text_extents(text) else { return };
     sketch::set(cr, if bold { p.text } else { p.dim }, 1.0);
@@ -273,7 +297,11 @@ pub fn build(page: &Page) {
         Some(choices)
     };
     let slot = widgets::hbox(0);
-    let head = pv.head("Every mouse", "How the pointer and the wheel behave, unless a mouse has its own settings.", &[fit(&slot).upcast_ref()]);
+    let head = pv.head(
+        "Every mouse",
+        "How the pointer and the wheel behave, unless a mouse has its own settings.",
+        &[fit(&slot).upcast_ref()],
+    );
     if chooser.is_some() {
         tame_head(&head, 26);
     }
@@ -357,8 +385,15 @@ pub fn build(page: &Page) {
     }
 
     let redraw: Rc<dyn Fn()> = {
-        let (shown, mouse_pic, chart, chart_title, chart_line, title, line) =
-            (shown.clone(), mouse_pic.clone(), chart.clone(), chart_title.clone(), chart_line.clone(), title.clone(), line.clone());
+        let (shown, mouse_pic, chart, chart_title, chart_line, title, line) = (
+            shown.clone(),
+            mouse_pic.clone(),
+            chart.clone(),
+            chart_title.clone(),
+            chart_line.clone(),
+            title.clone(),
+            line.clone(),
+        );
         Rc::new(move || {
             let s = shown.borrow();
             let f = feel(&s);
@@ -400,24 +435,42 @@ pub fn build(page: &Page) {
     // ----- Pointer -----
     let g = page.group("Pointer");
     g.add(&tiled(
-        slim_slider(hypr_slider("input.sensitivity", "Speed", "Mice and trackpads. 0 is the default.", (-1.0, 1.0, 0.05), 2, "", false), 110),
+        slim_slider(
+            hypr_slider("input.sensitivity", "Speed", "Mice and trackpads. 0 is the default.", (-1.0, 1.0, 0.05), 2, "", false),
+            110,
+        ),
         "input-mouse-symbolic",
     ));
     widgets::keywords("pointer speed sensitivity");
     let accel = global_accel();
-    let accel_id = if accel == "flat" { "flat" } else if accel.is_empty() || accel == "adaptive" { "adaptive" } else { accel.as_str() };
+    let accel_id = if accel == "flat" {
+        "flat"
+    } else if accel.is_empty() || accel == "adaptive" {
+        "adaptive"
+    } else {
+        accel.as_str()
+    };
     let seg = widgets::segmented(&opts(&[("adaptive", "Adaptive"), ("flat", "Flat")]), accel_id, |id| {
         store::set_option("input.accel_profile", json!(id));
     });
     let r = widgets::row("Acceleration", "", Some(seg.upcast_ref()));
     g.add(&tiled(r, "power-profile-performance-symbolic"));
     widgets::keywords("acceleration accel flat adaptive gaming");
-    g.add(&tiled(hypr_switch("input.left_handed", "Left-handed", "Swap the left and right buttons."), "object-flip-horizontal-symbolic"));
+    g.add(&tiled(
+        hypr_switch("input.left_handed", "Left-handed", "Swap the left and right buttons."),
+        "object-flip-horizontal-symbolic",
+    ));
 
     // ----- Scrolling -----
     let g = page.group("Scrolling");
-    g.add(&tiled(hypr_switch("input.natural_scroll", "Natural scrolling", "Content moves with the wheel."), "view-continuous-symbolic"));
-    g.add(&tiled(slim_slider(hypr_slider("input.scroll_factor", "Scroll speed", "", (0.1, 3.0, 0.05), 2, "×", false), 120), "input-mouse-symbolic"));
+    g.add(&tiled(
+        hypr_switch("input.natural_scroll", "Natural scrolling", "Content moves with the wheel."),
+        "view-continuous-symbolic",
+    ));
+    g.add(&tiled(
+        slim_slider(hypr_slider("input.scroll_factor", "Scroll speed", "", (0.1, 3.0, 0.05), 2, "×", false), 120),
+        "input-mouse-symbolic",
+    ));
     widgets::keywords("scroll wheel natural reverse speed mouse");
 
     // ----- Mice -----
@@ -437,9 +490,13 @@ pub fn build(page: &Page) {
         };
         let n = name.clone();
         let redraw = redraw.clone();
-        let (r, _) = widgets::nav_row(Some("input-mouse-symbolic"), &short_device(name), &desc, if has_own { "Own" } else { "" }, move || {
-            open_device(&n, None, redraw.clone())
-        });
+        let (r, _) = widgets::nav_row(
+            Some("input-mouse-symbolic"),
+            &short_device(name),
+            &desc,
+            if has_own { "Own" } else { "" },
+            move || open_device(&n, None, redraw.clone()),
+        );
         r.set_tooltip_text(Some(name));
         g.add(&r);
     }
@@ -448,9 +505,13 @@ pub fn build(page: &Page) {
         let n = name.clone();
         let seen = devices::last_seen(profile.as_ref());
         let redraw = redraw.clone();
-        let (r, _) = widgets::nav_row(Some("document-open-recent-symbolic"), &short_device(&name), &format!("Not connected · {seen}"), "", move || {
-            open_device(&n, Some(()), redraw.clone())
-        });
+        let (r, _) = widgets::nav_row(
+            Some("document-open-recent-symbolic"),
+            &short_device(&name),
+            &format!("Not connected · {seen}"),
+            "",
+            move || open_device(&n, Some(()), redraw.clone()),
+        );
         r.set_tooltip_text(Some(&name));
         g.add(&r);
         widgets::keywords("remembered disconnected mouse forget");
@@ -486,17 +547,25 @@ fn open_device(name: &str, remembered: Option<()>, redraw: Rc<dyn Fn()>) {
 
         let sens = fields.get("sensitivity").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let n = name.clone();
-        let (r, s) = widgets::slider_row("Speed", "", (-1.0, 1.0, 0.05), sens, 2, "", move |v| set(&n, "sensitivity", json!((v * 100.0).round() / 100.0)));
+        let (r, s) = widgets::slider_row("Speed", "", (-1.0, 1.0, 0.05), sens, 2, "", move |v| {
+            set(&n, "sensitivity", json!((v * 100.0).round() / 100.0))
+        });
         s.scale.set_width_request(140);
         g.add(&tiled(r, "input-mouse-symbolic"));
 
         let accel = fields.get("accel_profile").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let n = name.clone();
-        let (r, _) = widgets::choice_row("Acceleration", "", opts(&[("", "Same as every mouse"), ("adaptive", "Adaptive"), ("flat", "Flat")]), &accel, move |id| {
-            if !id.is_empty() {
-                set(&n, "accel_profile", json!(id));
-            }
-        });
+        let (r, _) = widgets::choice_row(
+            "Acceleration",
+            "",
+            opts(&[("", "Same as every mouse"), ("adaptive", "Adaptive"), ("flat", "Flat")]),
+            &accel,
+            move |id| {
+                if !id.is_empty() {
+                    set(&n, "accel_profile", json!(id));
+                }
+            },
+        );
         g.add(&tiled(r, "power-profile-performance-symbolic"));
 
         let natural = fields.get("natural_scroll").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -507,14 +576,15 @@ fn open_device(name: &str, remembered: Option<()>, redraw: Rc<dyn Fn()>) {
         let g = p.group("");
         let n = name.clone();
         let w3 = w2.clone();
-        let (r, _) = widgets::button_row("Use the settings for every mouse", "Removes this mouse's own settings.", "Reset", move |_| {
-            store::reset_device(&n);
-            crate::window::toast("Device overrides removed");
-            if let Some(w) = w3.borrow().as_ref() {
-                w.close();
-            }
-            crate::window::rebuild("mouse");
-        });
+        let (r, _) =
+            widgets::button_row("Use the settings for every mouse", "Removes this mouse's own settings.", "Reset", move |_| {
+                store::reset_device(&n);
+                crate::window::toast("Device overrides removed");
+                if let Some(w) = w3.borrow().as_ref() {
+                    w.close();
+                }
+                crate::window::rebuild("mouse");
+            });
         g.add(&r);
         if remembered.is_some() {
             let n = name.clone();

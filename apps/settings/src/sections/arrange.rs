@@ -221,7 +221,11 @@ fn draw(
     cr.select_font_face("sans-serif", gtk::cairo::FontSlant::Normal, gtk::cairo::FontWeight::Normal);
     cr.set_font_size(11.0);
     sketch::set(cr, p.dim, 0.9);
-    let hint = if rs.len() > 1 { "Drag a screen to move it; the edges snap together." } else { "Plug in another screen to arrange them side by side." };
+    let hint = if rs.len() > 1 {
+        "Drag a screen to move it; the edges snap together."
+    } else {
+        "Plug in another screen to arrange them side by side."
+    };
     cr.move_to(14.0, h - 12.0);
     let _ = cr.show_text(hint);
 
@@ -241,7 +245,9 @@ fn draw(
     let oy = PAD + (ah - lh * scale) / 2.0 - min_y * scale;
     view.set((scale, ox, oy));
 
-    let screen_rect = |r: &Rect| R::new(ox + r.x * scale + 2.0, oy + r.y * scale + 2.0, (r.w * scale - 4.0).max(6.0), (r.h * scale - 4.0).max(6.0));
+    let screen_rect = |r: &Rect| {
+        R::new(ox + r.x * scale + 2.0, oy + r.y * scale + 2.0, (r.w * scale - 4.0).max(6.0), (r.h * scale - 4.0).max(6.0))
+    };
     for r in rs {
         let sr = screen_rect(r);
         let chosen = r.name == selected;
@@ -289,7 +295,16 @@ fn draw(
 /// over the detail when the line is wider than `room`. Returns the box it takes, and
 /// draws it if `paint`.
 #[allow(clippy::too_many_arguments)]
-fn caption(cr: &gtk::cairo::Context, p: &sketch::Pal, c: &Caption, cx: f64, y: f64, chosen: bool, room: f64, paint: bool) -> (f64, f64, f64, f64) {
+fn caption(
+    cr: &gtk::cairo::Context,
+    p: &sketch::Pal,
+    c: &Caption,
+    cx: f64,
+    y: f64,
+    chosen: bool,
+    room: f64,
+    paint: bool,
+) -> (f64, f64, f64, f64) {
     cr.select_font_face("sans-serif", gtk::cairo::FontSlant::Normal, gtk::cairo::FontWeight::Bold);
     cr.set_font_size(12.0);
     let tw = cr.text_extents(&c.title).map(|e| e.x_advance()).unwrap_or(0.0);

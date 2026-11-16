@@ -252,6 +252,9 @@ pub fn set_enabled(id: &str, on: bool) {
 pub fn remove(ext: &Extension) -> Result<()> {
     // Only ever delete inside the extensions folder.
     let base = paths::ext_dir();
+    if ext.packaged() {
+        bail!("{} is installed with its app; turn it off instead", ext.manifest.name);
+    }
     if !ext.root.starts_with(&base) || ext.root == base {
         bail!("{} isn't in {}", paths::pretty(&ext.root), paths::pretty(&base));
     }

@@ -411,7 +411,11 @@ fn info(name: &str) -> Info {
             &[
                 ("network-server-symbolic", "The Docker service", "dockerd and containerd, started with the computer"),
                 ("system-users-symbolic", "A docker group", "People in it run containers without a password"),
-                ("network-wired-symbolic", "A network for containers", "docker0, so containers reach each other and the internet"),
+                (
+                    "network-wired-symbolic",
+                    "A network for containers",
+                    "docker0, so containers reach each other and the internet",
+                ),
             ],
             Some("docker"),
             &["docker.service"],
@@ -475,7 +479,11 @@ fn info(name: &str) -> Info {
             "Ollama",
             "applications-science-symbolic",
             "Runs AI models on this computer, without the internet.",
-            &[("applications-science-symbolic", "The Ollama service", "Serves models to apps on this computer, at localhost:11434")],
+            &[(
+                "applications-science-symbolic",
+                "The Ollama service",
+                "Serves models to apps on this computer, at localhost:11434",
+            )],
             None,
             &["ollama.service"],
         ),
@@ -848,11 +856,12 @@ fn show_service(c: &Rc<Services>, i: usize) {
     let svc = &c.list[i];
     clear(&c.detail);
     let w = Rc::downgrade(c);
-    let seg = widgets::segmented(&options(&[("default", "Default"), ("on", "On"), ("off", "Off")]), svc.want.get().id(), move |v| {
-        if let Some(c) = w.upgrade() {
-            choose_service(&c, i, Want::from_id(&v));
-        }
-    });
+    let seg =
+        widgets::segmented(&options(&[("default", "Default"), ("on", "On"), ("off", "Off")]), svc.want.get().id(), move |v| {
+            if let Some(c) = w.upgrade() {
+                choose_service(&c, i, Want::from_id(&v));
+            }
+        });
     let (head, _, _) = preview_head(svc.what, svc.info.line, &[seg.upcast_ref()]);
     c.detail.append(&head);
 
@@ -1185,13 +1194,7 @@ pub fn software(page: &Page) {
     let foot = pv.foot("dialog-information-symbolic", "Other accounts on this computer install their own.");
     foot_end(&foot, &super::updates::undo_button("software"));
 
-    let sw = Rc::new(Software {
-        lists: [mine, everyone],
-        rows: RefCell::default(),
-        detail,
-        terminal,
-        which: Cell::new(0),
-    });
+    let sw = Rc::new(Software { lists: [mine, everyone], rows: RefCell::default(), detail, terminal, which: Cell::new(0) });
 
     // The controls: yours or everyone's, a search, the list, and where to get more.
     let g = page.plain_group("");
@@ -1411,7 +1414,9 @@ fn show_item(sw: &Rc<Software>, which: usize, i: Option<usize>) {
             let a = item.name.clone();
             widgets::confirm_button("Remove", &format!("Remove {a} for everyone?"), move |b| {
                 b.set_sensitive(false);
-                nyxos::apply(vec![Change::RemovePackages { packages: vec![a.clone()] }], "Removed", |_| window::rebuild("software"));
+                nyxos::apply(vec![Change::RemovePackages { packages: vec![a.clone()] }], "Removed", |_| {
+                    window::rebuild("software")
+                });
             })
         }
         Kind::NyxApp(app, _) => {
@@ -1619,7 +1624,11 @@ fn draw_sign_in(cr: &Context, b: &Boot, l: &Look, r: R) {
     }
     let now = glib::DateTime::now_local().ok();
     let clock = now.as_ref().and_then(|d| d.format("%H:%M").ok()).map(|s| s.to_string()).unwrap_or_default();
-    let day = now.as_ref().and_then(|d| d.format("%A %e %B").ok()).map(|s| s.split_whitespace().collect::<Vec<_>>().join(" ")).unwrap_or_default();
+    let day = now
+        .as_ref()
+        .and_then(|d| d.format("%A %e %B").ok())
+        .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "))
+        .unwrap_or_default();
     text(cr, &clock, r.cx(), r.y + u * 30.0, u * 17.0, false, l.text, 0.95, 0.5);
     text(cr, &day, r.cx(), r.y + u * 37.0, u * 4.2, false, l.text, 0.75, 0.5);
     let (ay, ar) = (r.y + u * 52.0, u * 7.5);
@@ -1741,7 +1750,12 @@ fn draw_swatch(cr: &Context, l: &Look, w: f64, h: f64) {
 
 /// What the preview shows: the boot menu, the boot screen or the sign-in screen.
 const VIEWS: [(&str, &str, &str, &str); 3] = [
-    ("menu", "Boot menu", "Every generation the computer can start.", "If a change goes wrong, start the generation before it. Your files stay."),
+    (
+        "menu",
+        "Boot menu",
+        "Every generation the computer can start.",
+        "If a change goes wrong, start the generation before it. Your files stay.",
+    ),
     ("boot", "Boot screen", "What shows while the computer starts.", "The logo takes the theme's colour."),
     ("signin", "Sign-in", "What everyone sees before signing in.", "Each person's own theme takes over once they've signed in."),
 ];
@@ -1948,11 +1962,9 @@ pub fn boot(page: &Page) {
         Rc::new(move |change: Option<Change>| {
             let logo = match &change {
                 Some(Change::Logo { value: Some(l) }) => match l.format {
-                    nyx_system_proto::LogoFormat::Svg => Some(brand::Logo {
-                        image: brand::Image::Svg(l.data.clone()),
-                        source: brand::Source::System,
-                        path: None,
-                    }),
+                    nyx_system_proto::LogoFormat::Svg => {
+                        Some(brand::Logo { image: brand::Image::Svg(l.data.clone()), source: brand::Source::System, path: None })
+                    }
                     nyx_system_proto::LogoFormat::Png => Some(brand::Logo {
                         image: brand::Image::Svg(format!(
                             "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\"><image width=\"1\" height=\"1\" href=\"data:image/png;base64,{}\"/></svg>",

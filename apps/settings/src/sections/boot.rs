@@ -108,7 +108,8 @@ fn nice(theme: &str) -> String {
 
 pub fn build(page: &Page) {
     let styled = cmd::present("omarchy-plymouth-set-by-theme");
-    let theme = if styled { cmd::output(&["omarchy-plymouth-current"]).unwrap_or_else(|| "default".into()) } else { String::new() };
+    let theme =
+        if styled { cmd::output(&["omarchy-plymouth-current"]).unwrap_or_else(|| "default".into()) } else { String::new() };
     let menu = boot_menu_shown();
     let auto = autologin_user();
     let hib_setup = cmd::present("omarchy-hibernation-setup");
@@ -168,16 +169,30 @@ fn preview(page: &Page, theme: &str, menu: Option<bool>, auto: Option<&str>, hib
 
     // 3. The login screen.
     let face = super::sign_in::login_face();
-    let me = crate::backend::accounts::people().into_iter().find(|u| Some(u.name.as_str()) == auto).map(|u| if u.full_name.is_empty() { u.name } else { u.full_name });
+    let me = crate::backend::accounts::people()
+        .into_iter()
+        .find(|u| Some(u.name.as_str()) == auto)
+        .map(|u| if u.full_name.is_empty() { u.name } else { u.full_name });
     let desc = match (auto, face) {
-        (Some(user), _) => format!("Skipped: {} signs in automatically. It still shows after you log out.", me.clone().unwrap_or(user.to_string())),
+        (Some(user), _) => format!(
+            "Skipped: {} signs in automatically. It still shows after you log out.",
+            me.clone().unwrap_or(user.to_string())
+        ),
         (None, true) => "Leave the password empty and press Enter to use your face.".to_string(),
         (None, false) => "Choose who's signing in and type the password.".to_string(),
     };
     let who = me.unwrap_or_else(crate::backend::accounts::me);
     let login_art = widgets::drawing(96, move |cr, p, _, w, h| draw_login(cr, p, w, h, colours, &who));
     let n = if theme.is_empty() { "2" } else { "3" };
-    steps.append(&step(&nums, n, Some(login_art.upcast()), "Login screen", &desc, Some(if auto.is_some() { "Skipped" } else { "Shown" }), auto.is_some()));
+    steps.append(&step(
+        &nums,
+        n,
+        Some(login_art.upcast()),
+        "Login screen",
+        &desc,
+        Some(if auto.is_some() { "Skipped" } else { "Shown" }),
+        auto.is_some(),
+    ));
 
     // 4. The desktop.
     let desc = if hibernates {
@@ -300,7 +315,14 @@ fn in_section_colour(w: &impl IsA<gtk::Widget>) {
 }
 
 /// Limine's menu, small: the menu's title and Omarchy picked.
-fn draw_menu(cr: &gtk::cairo::Context, p: &sketch::Pal, section: sketch::Rgb, w: f64, h: f64, colours: Option<(sketch::Rgb, sketch::Rgb, sketch::Rgb)>) {
+fn draw_menu(
+    cr: &gtk::cairo::Context,
+    p: &sketch::Pal,
+    section: sketch::Rgb,
+    w: f64,
+    h: f64,
+    colours: Option<(sketch::Rgb, sketch::Rgb, sketch::Rgb)>,
+) {
     let (bg, fg, accent) = colours.unwrap_or((sketch::mix(p.bg, (0.0, 0.0, 0.0), 0.4), p.text, section));
     sketch::set(cr, bg, 1.0);
     cr.rectangle(0.0, 0.0, w, h);
@@ -327,7 +349,14 @@ fn draw_menu(cr: &gtk::cairo::Context, p: &sketch::Pal, section: sketch::Rgb, w:
 }
 
 /// The login screen, small: who signs in and the password field, in the theme's colours.
-fn draw_login(cr: &gtk::cairo::Context, p: &sketch::Pal, w: f64, h: f64, colours: Option<(sketch::Rgb, sketch::Rgb, sketch::Rgb)>, who: &str) {
+fn draw_login(
+    cr: &gtk::cairo::Context,
+    p: &sketch::Pal,
+    w: f64,
+    h: f64,
+    colours: Option<(sketch::Rgb, sketch::Rgb, sketch::Rgb)>,
+    who: &str,
+) {
     let (bg, fg, accent) = colours.unwrap_or((sketch::mix(p.bg, (0.0, 0.0, 0.0), 0.4), p.text, p.accent));
     sketch::set(cr, bg, 1.0);
     cr.rectangle(0.0, 0.0, w, h);
@@ -410,7 +439,12 @@ fn look(page: &Page, current: &str) {
             in_terminal(&format!("omarchy-plymouth-set-by-theme {}", cmd::shell_quote(t)));
         }
     });
-    let r = widgets::icon_row("preferences-desktop-appearance-symbolic", "Style from a theme", "For start-up and login", Some(dd.upcast_ref()));
+    let r = widgets::icon_row(
+        "preferences-desktop-appearance-symbolic",
+        "Style from a theme",
+        "For start-up and login",
+        Some(dd.upcast_ref()),
+    );
     r.set_tooltip_text(Some("Colours and logo for the boot and login screens. A terminal opens and asks for your password."));
     widgets::keywords("plymouth sddm splash boot screen login greeter theme colors");
     g.add(&r);
@@ -448,7 +482,11 @@ fn signing_in(page: &Page, auto: Option<&str>, hib_setup: bool, hibernates: bool
     let r = widgets::icon_row(
         "weather-clear-night-symbolic",
         "Hibernation",
-        if hibernates { "Saves everything to disk, then switches off" } else { "Setting it up makes a swap file and changes the boot settings" },
+        if hibernates {
+            "Saves everything to disk, then switches off"
+        } else {
+            "Setting it up makes a swap file and changes the boot settings"
+        },
         Some(sw.upcast_ref()),
     );
     widgets::keywords("hibernate swap resume suspend sleep disk");
@@ -480,16 +518,19 @@ fn repairs(page: &Page) {
                     g.add(&r);
                 }
                 if cmd::present("omarchy-refresh-sddm") {
-                    let (r, _) =
-                        widgets::button_row("Repair login screen", "Reinstall the login screen if it looks broken.", "Repair…", |_| {
-                            in_terminal("omarchy-refresh-sddm")
-                        });
+                    let (r, _) = widgets::button_row(
+                        "Repair login screen",
+                        "Reinstall the login screen if it looks broken.",
+                        "Repair…",
+                        |_| in_terminal("omarchy-refresh-sddm"),
+                    );
                     g.add(&r);
                 }
                 if cmd::present("omarchy-refresh-limine") {
-                    let (r, _) = widgets::button_row("Repair the boot menu", "Rebuild the boot menu's settings.", "Repair…", |_| {
-                        in_terminal("omarchy-refresh-limine")
-                    });
+                    let (r, _) =
+                        widgets::button_row("Repair the boot menu", "Rebuild the boot menu's settings.", "Repair…", |_| {
+                            in_terminal("omarchy-refresh-limine")
+                        });
                     g.add(&r);
                 }
             });

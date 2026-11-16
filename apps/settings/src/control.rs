@@ -27,7 +27,10 @@ pub fn tools() -> Value {
 pub fn description(app_id: &str) -> Value {
     let x = [
         ("settings.pages", json!({"risk": "read_only", "aliases": ["find"], "positional": ["query"], "result": "object"})),
-        ("settings.open", json!({"icon": "emblem-system-symbolic", "risk": "writes", "confirmation": "never", "aliases": ["show"], "positional": ["page"], "suggest": {"page": "settings.page_names"}, "result": "object"})),
+        (
+            "settings.open",
+            json!({"icon": "emblem-system-symbolic", "risk": "writes", "confirmation": "never", "aliases": ["show"], "positional": ["page"], "suggest": {"page": "settings.page_names"}, "result": "object"}),
+        ),
         ("settings.capabilities", json!({"risk": "read_only", "positional": ["query"], "result": "object"})),
         ("settings.value", json!({"risk": "read_only", "positional": ["domain", "key"], "result": "object"})),
         ("settings.devices", json!({"risk": "read_only", "result": "object"})),
@@ -94,8 +97,15 @@ pub fn serve(app: &gtk::Application) {
         let failed = |e: String| nyx_actions::Error::new(nyx_actions::ErrorKind::Failed, e);
         match request.action.as_str() {
             "settings.open" | "devices.open" => {
-                let want = if request.action == "devices.open" { "devices".to_string() } else { request.arguments["page"].as_str().unwrap_or("").trim().to_lowercase() };
-                let page = sections::all().into_iter().filter(|s| s.shown()).find(|s| want.is_empty() || s.id == want || s.title.to_lowercase() == want);
+                let want = if request.action == "devices.open" {
+                    "devices".to_string()
+                } else {
+                    request.arguments["page"].as_str().unwrap_or("").trim().to_lowercase()
+                };
+                let page = sections::all()
+                    .into_iter()
+                    .filter(|s| s.shown())
+                    .find(|s| want.is_empty() || s.id == want || s.title.to_lowercase() == want);
                 match page {
                     Some(p) => {
                         window::present(&window_app, Some(p.id));
@@ -312,6 +322,11 @@ mod description_tests {
         let d = nyx_actions::Description::from_value(&super::description(crate::APP_ID), None).unwrap();
         assert!(d.action("devices.send").unwrap().asks(), "sending leaves this computer");
         assert!(!d.action("devices.ring").unwrap().asks());
-        assert!(d.actions.iter().filter(|a| a.id.starts_with("settings.") && a.id != "settings.open").all(|a| a.risk == nyx_actions::Risk::ReadOnly));
+        assert!(
+            d.actions
+                .iter()
+                .filter(|a| a.id.starts_with("settings.") && a.id != "settings.open")
+                .all(|a| a.risk == nyx_actions::Risk::ReadOnly)
+        );
     }
 }

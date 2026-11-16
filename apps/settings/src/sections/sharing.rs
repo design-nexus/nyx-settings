@@ -7,7 +7,7 @@ use crate::widgets::{self, Page};
 use crate::{cmd, window};
 use gtk::{gio, glib, prelude::*};
 use nyx_share_client::{
-    Client, ContentKind, ComputerInfo, Destination, Direction, Job, JobState, LinkedDevice, NasInfo, NearbyStatus, NearbyUpdate,
+    Client, ComputerInfo, ContentKind, Destination, Direction, Job, JobState, LinkedDevice, NasInfo, NearbyStatus, NearbyUpdate,
     PreferencesUpdate, ProviderInfo,
 };
 use serde_json::Value;
@@ -168,13 +168,8 @@ pub fn build(page: &Page) {
     let computers = super::connectivity::titled_group(page, "My computers", &[add.upcast_ref()]);
     let computer_rows = holder(&computers);
     let more = page.group("");
-    let (r, _) = widgets::nav_row(
-        Some("view-grid-symbolic"),
-        "Linked devices, NAS folders and the Share Sheet",
-        "",
-        "",
-        open_more,
-    );
+    let (r, _) =
+        widgets::nav_row(Some("view-grid-symbolic"), "Linked devices, NAS folders and the Share Sheet", "", "", open_more);
     widgets::keywords("linked devices nas folders share sheet destinations pin hide order default device key history");
     more.add(&r);
 

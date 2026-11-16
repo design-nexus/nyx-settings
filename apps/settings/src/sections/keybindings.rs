@@ -46,7 +46,12 @@ fn parse_keys(keys: &str) -> (u64, String) {
 /// What a key is called on its keycap.
 fn pretty_key(k: &str) -> String {
     if let Some(n) = k.strip_prefix("code:").and_then(|n| n.parse::<u32>().ok()) {
-        return kb::ROWS.iter().flat_map(|r| r.iter()).find(|key| key.code == n).map(|key| key.us.to_string()).unwrap_or_else(|| k.to_string());
+        return kb::ROWS
+            .iter()
+            .flat_map(|r| r.iter())
+            .find(|key| key.code == n)
+            .map(|key| key.us.to_string())
+            .unwrap_or_else(|| k.to_string());
     }
     let s = match k.to_lowercase().as_str() {
         "super" => "Super",
@@ -177,8 +182,12 @@ const MINE: usize = 5;
 const CLASH: Rgb = (0.98, 0.72, 0.18);
 
 /// The layers the map shows: Super, and Super with one more modifier.
-const LAYERS: [(u64, &str, &str); 4] =
-    [(64, "Super", "Super alone"), (65, "+ Shift", "Super + Shift"), (72, "+ Alt", "Super + Alt"), (68, "+ Ctrl", "Super + Ctrl")];
+const LAYERS: [(u64, &str, &str); 4] = [
+    (64, "Super", "Super alone"),
+    (65, "+ Shift", "Super + Shift"),
+    (72, "+ Alt", "Super + Alt"),
+    (68, "+ Ctrl", "Super + Ctrl"),
+];
 
 /// Keys that only change others; they're never the key of a shortcut on the map.
 const MODIFIER_KEYS: [&str; 8] = ["LFSH", "RTSH", "LCTL", "RCTL", "LALT", "RALT", "LWIN", "FN"];
@@ -543,7 +552,11 @@ fn fill_pop(m: &Rc<Map>) {
         }
         if s.mine.is_some() || s.command.is_some() {
             let change = gtk::Button::with_label("Change");
-            change.set_tooltip_text(Some(if s.mine.is_some() { "Change the keys, the name or what it runs" } else { "Move it to other keys" }));
+            change.set_tooltip_text(Some(if s.mine.is_some() {
+                "Change the keys, the name or what it runs"
+            } else {
+                "Move it to other keys"
+            }));
             let (m2, s2) = (m.clone(), s.clone());
             change.connect_clicked(move |_| editor(&m2, Some(s2.clone()), &s2.keys));
             actions.append(&change);
@@ -746,7 +759,11 @@ fn editor(m: &Rc<Map>, start: Option<Shortcut>, keys_prefill: &str) {
                 s.binds.push(Bind { keys: k.clone(), description: d, command: c });
             });
             store::flush();
-            window::toast(&if mine.is_some() { format!("Saved {}", pretty_keys(&k)) } else { format!("Added {}", pretty_keys(&k)) });
+            window::toast(&if mine.is_some() {
+                format!("Saved {}", pretty_keys(&k))
+            } else {
+                format!("Added {}", pretty_keys(&k))
+            });
             if let Some(w) = w3.get() {
                 w.close();
             }
@@ -788,11 +805,8 @@ pub fn build(page: &Page) {
             }
         })
     };
-    let head = pv.head(
-        "Super and…",
-        "Keys that do something with Super held, coloured by what they do.",
-        &[fit(&seg).upcast_ref()],
-    );
+    let head =
+        pv.head("Super and…", "Keys that do something with Super held, coloured by what they do.", &[fit(&seg).upcast_ref()]);
     tame_head(&head, 34);
 
     let card = widgets::vbox(0);
@@ -986,34 +1000,40 @@ pub fn build(page: &Page) {
     if !off.is_empty() {
         let g = page.group("");
         let n = off.len();
-        let (r, _) = widgets::nav_row(Some("view-conceal-symbolic"), "Turned off", "Free keys you can give to something else", &n.to_string(), move || {
-            let off = off.clone();
-            let win: Rc<OnceCell<gtk::Window>> = Rc::default();
-            let w2 = win.clone();
-            let w = widgets::subpage("Turned off", 460, move |p| {
-                let g = p.group("");
-                g.note("These keys do nothing now. Turn one back on to get what it did before.");
-                for key in off {
-                    let b = gtk::Button::with_label("Turn back on");
-                    b.set_valign(gtk::Align::Center);
-                    let (k, w3) = (key.clone(), w2.clone());
-                    b.connect_clicked(move |_| {
-                        let k = k.clone();
-                        store::update(true, |s| s.unbinds.retain(|u| *u != k));
-                        store::flush();
-                        if let Some(w) = w3.get() {
-                            w.close();
-                        }
-                        rebuild_soon();
-                    });
-                    let content = widgets::hbox(10);
-                    content.append(&caps(&normalise(&key)));
-                    content.append(&b);
-                    g.add(&widgets::row(&pretty_keys(&normalise(&key)), "", Some(content.upcast_ref())));
-                }
-            });
-            let _ = win.set(w);
-        });
+        let (r, _) = widgets::nav_row(
+            Some("view-conceal-symbolic"),
+            "Turned off",
+            "Free keys you can give to something else",
+            &n.to_string(),
+            move || {
+                let off = off.clone();
+                let win: Rc<OnceCell<gtk::Window>> = Rc::default();
+                let w2 = win.clone();
+                let w = widgets::subpage("Turned off", 460, move |p| {
+                    let g = p.group("");
+                    g.note("These keys do nothing now. Turn one back on to get what it did before.");
+                    for key in off {
+                        let b = gtk::Button::with_label("Turn back on");
+                        b.set_valign(gtk::Align::Center);
+                        let (k, w3) = (key.clone(), w2.clone());
+                        b.connect_clicked(move |_| {
+                            let k = k.clone();
+                            store::update(true, |s| s.unbinds.retain(|u| *u != k));
+                            store::flush();
+                            if let Some(w) = w3.get() {
+                                w.close();
+                            }
+                            rebuild_soon();
+                        });
+                        let content = widgets::hbox(10);
+                        content.append(&caps(&normalise(&key)));
+                        content.append(&b);
+                        g.add(&widgets::row(&pretty_keys(&normalise(&key)), "", Some(content.upcast_ref())));
+                    }
+                });
+                let _ = win.set(w);
+            },
+        );
         g.add(&r);
     }
 
@@ -1084,7 +1104,10 @@ pub fn build(page: &Page) {
                 found += hit as usize;
             }
             for c in &cards {
-                c.set_visible(std::iter::successors(c.first_child(), |r| r.next_sibling()).any(|r| r.is_visible() && r.has_css_class("ks-row")));
+                c.set_visible(
+                    std::iter::successors(c.first_child(), |r| r.next_sibling())
+                        .any(|r| r.is_visible() && r.has_css_class("ks-row")),
+                );
             }
             list_title.set_text(&match found {
                 0 => "Nothing matches".to_string(),

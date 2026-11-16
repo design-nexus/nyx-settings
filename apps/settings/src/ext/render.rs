@@ -956,7 +956,11 @@ fn deck(st: &Shared, b: &protocol::Block) -> gtk::Box {
             inner.append(&l);
         }
         key.set_child(Some(&inner));
-        key.set_tooltip_text(Some(&if k.label.is_empty() { format!("Key {}", i + 1) } else { format!("Key {}: {}", i + 1, k.label) }));
+        key.set_tooltip_text(Some(&if k.label.is_empty() {
+            format!("Key {}", i + 1)
+        } else {
+            format!("Key {}: {}", i + 1, k.label)
+        }));
         if !b.key.is_empty() {
             let (st, name) = (st.clone(), b.key.clone());
             key.connect_clicked(move |_| send(&st, &name, i.to_string(), true));

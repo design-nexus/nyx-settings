@@ -204,7 +204,14 @@ pub fn desktop(cr: &Context, p: &Pal, r: R) -> R {
     for i in 0..4 {
         let w = if i == 0 { dot * 2.4 } else { dot };
         set(cr, if i == 0 { p.accent } else { p.dim }, if i == 0 { 1.0 } else { 0.5 });
-        rounded(cr, r.x + bar_h * 0.6 + i as f64 * (dot * 1.6) + if i > 0 { dot * 1.4 } else { 0.0 }, r.y + (bar_h - dot) / 2.0, w, dot, dot / 2.0);
+        rounded(
+            cr,
+            r.x + bar_h * 0.6 + i as f64 * (dot * 1.6) + if i > 0 { dot * 1.4 } else { 0.0 },
+            r.y + (bar_h - dot) / 2.0,
+            w,
+            dot,
+            dot / 2.0,
+        );
         let _ = cr.fill();
     }
     set(cr, p.text, 0.75);

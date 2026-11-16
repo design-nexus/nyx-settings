@@ -136,10 +136,7 @@ fn system() -> (String, String) {
     }
     let text = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
     let field = |k: &str| {
-        text.lines()
-            .find_map(|l| l.strip_prefix(&format!("{k}=")))
-            .map(|v| v.trim_matches('"').to_string())
-            .unwrap_or_default()
+        text.lines().find_map(|l| l.strip_prefix(&format!("{k}="))).map(|v| v.trim_matches('"').to_string()).unwrap_or_default()
     };
     let name = field("NAME");
     let version = [field("VERSION_ID"), field("BUILD_ID")].into_iter().find(|v| !v.is_empty()).unwrap_or_default();
@@ -147,7 +144,8 @@ fn system() -> (String, String) {
 }
 
 fn read_specs() -> Specs {
-    let cores = std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default().lines().filter(|l| l.starts_with("processor")).count();
+    let cores =
+        std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default().lines().filter(|l| l.starts_with("processor")).count();
     let ghz = std::fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")
         .ok()
         .and_then(|t| t.trim().parse::<f64>().ok())
@@ -446,9 +444,10 @@ fn this_computer(page: &Page) {
         e.set_width_chars(16);
         g.add(&with_tile(r, "computer-symbolic"));
     } else {
-        let (r, _) = widgets::nav_row(Some("computer-symbolic"), "Name", "Shown on the network and to other devices.", &host, || {
-            window::navigate("region")
-        });
+        let (r, _) =
+            widgets::nav_row(Some("computer-symbolic"), "Name", "Shown on the network and to other devices.", &host, || {
+                window::navigate("region")
+            });
         g.add(&r);
     }
     widgets::keywords("hostname computer name network");
@@ -511,8 +510,12 @@ fn settings_group(page: &Page) {
         let r = widgets::row(&format!("Settings {} is available", s.latest), &desc, Some(line.upcast_ref()));
         g.add(&with_tile(r, "software-update-available-symbolic"));
     } else {
-        let (r, _) =
-            widgets::button_row(&format!("Settings {current}"), &format!("Up to date · {}", checked_text(&s)), "Check now", check_now);
+        let (r, _) = widgets::button_row(
+            &format!("Settings {current}"),
+            &format!("Up to date · {}", checked_text(&s)),
+            "Check now",
+            check_now,
+        );
         g.add(&with_tile(r, "preferences-system-symbolic"));
     }
     widgets::keywords("update upgrade version new release settings app check");
@@ -619,14 +622,23 @@ fn read_changes() -> Changes {
 }
 
 /// Everything changed here, by page, with a way to see it and to undo it.
+/// Whose defaults a reset goes back to.
+fn defaults_name() -> &'static str {
+    match crate::platform::PLATFORM {
+        crate::platform::Platform::NyxOS => "NyxOS's defaults",
+        crate::platform::Platform::Omarchy => "Omarchy's defaults",
+    }
+}
+
 fn changes_page(page: &Page, c: &Changes) {
     let g = page.group("");
     g.note(&match (c.total, c.others.is_empty()) {
-        (0, true) => "Nothing changed yet: everything uses your own config files and Omarchy's defaults.".to_string(),
+        (0, true) => format!("Nothing changed yet: everything uses your own config files and {}.", defaults_name()),
         (0, false) => "What Settings manages for you, by page.".to_string(),
         (n, _) => format!(
-            "{n} option{} changed here. Reset hands them back to your own config or Omarchy's defaults.",
-            if n == 1 { "" } else { "s" }
+            "{n} option{} changed here. Reset hands them back to your own config or {}.",
+            if n == 1 { "" } else { "s" },
+            defaults_name()
         ),
     });
     let close = |b: &gtk::Button| {
@@ -659,7 +671,7 @@ fn changes_page(page: &Page, c: &Changes) {
                 }
             });
             crate::backend::store::flush();
-            window::toast("Back to your own config and Omarchy's defaults");
+            window::toast(&format!("Back to your own config and {}", defaults_name()));
             r2.set_visible(false);
             // Its page shows the old values until redrawn.
             if let Some(id) = window::section_id(&sec) {
@@ -730,7 +742,9 @@ fn your_settings(page: &Page) {
     let desc = match (c.total, pages) {
         (0, 0) => "Nothing changed yet".to_string(),
         (0, p) => format!("Managed here, on {p} page{}", if p == 1 { "" } else { "s" }),
-        (n, p) => format!("{n} setting{} changed here, on {p} page{}", if n == 1 { "" } else { "s" }, if p == 1 { "" } else { "s" }),
+        (n, p) => {
+            format!("{n} setting{} changed here, on {p} page{}", if n == 1 { "" } else { "s" }, if p == 1 { "" } else { "s" })
+        }
     };
     let value = if c.total > 0 { c.total.to_string() } else { String::new() };
     let (r, _) = widgets::nav_row(Some("edit-undo-history-symbolic"), "Your changes", &desc, &value, move || {

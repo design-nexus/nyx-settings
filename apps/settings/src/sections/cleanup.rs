@@ -173,8 +173,9 @@ pub fn build(page: &Page) {
             );
         },
     );
-    let (r, _) =
-        widgets::button_row("Old snapshots", "Snapshots of the system, on Boot &amp; Sign-in.", "Open", |_| window::navigate("boot"));
+    let (r, _) = widgets::button_row("Old snapshots", "Snapshots of the system, on Boot &amp; Sign-in.", "Open", |_| {
+        window::navigate("boot")
+    });
     g.add(&r);
     widgets::keywords("clean cleanup free space cache pacman orphans journal logs trash thumbnails snapshots");
 }

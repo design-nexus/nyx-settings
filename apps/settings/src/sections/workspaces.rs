@@ -286,11 +286,8 @@ fn restyle_layout_cards(outer: &gtk::Box) {
         }
     });
     // The group is titled "Layout" already.
-    if let Some(t) = outer
-        .first_child()
-        .and_then(|head| head.first_child())
-        .and_then(|text| text.first_child())
-        .and_downcast::<gtk::Label>()
+    if let Some(t) =
+        outer.first_child().and_then(|head| head.first_child()).and_then(|text| text.first_child()).and_downcast::<gtk::Label>()
     {
         t.set_visible(false);
     }
@@ -398,7 +395,15 @@ pub fn build(page: &Page) {
         false,
     ));
     widgets::keywords("master new status stack");
-    master.append(&hypr_slider("master.mfact", "Master width", "How much of the screen the big window takes.", (0.2, 0.8, 0.01), 2, "", false));
+    master.append(&hypr_slider(
+        "master.mfact",
+        "Master width",
+        "How much of the screen the big window takes.",
+        (0.2, 0.8, 0.01),
+        2,
+        "",
+        false,
+    ));
     widgets::keywords("master width mfact ratio");
     let scrolling = widgets::vbox(0);
     scrolling.append(&hypr_slider(
@@ -449,9 +454,15 @@ pub fn build(page: &Page) {
     picture_tip(&typing, || Sketch::Focus(number(current("input.follow_mouse").as_ref()).unwrap_or(1.0).clamp(0.0, 3.0) as u8));
     g.add(&typing);
     widgets::keywords("focus follows mouse pointer click to focus hover keys never follow");
-    g.add(&tipped(hypr_switch("misc.focus_on_activate", "Apps that ask come forward", "Like a link opened from elsewhere."), Sketch::FocusOnActivate));
+    g.add(&tipped(
+        hypr_switch("misc.focus_on_activate", "Apps that ask come forward", "Like a link opened from elsewhere."),
+        Sketch::FocusOnActivate,
+    ));
     widgets::keywords("focus on activate attention front");
-    g.add(&tipped(hypr_switch("cursor.no_warps", "Keep the pointer still", "Moving focus with the keys leaves the pointer where it is."), Sketch::NoWarps));
+    g.add(&tipped(
+        hypr_switch("cursor.no_warps", "Keep the pointer still", "Moving focus with the keys leaves the pointer where it is."),
+        Sketch::NoWarps,
+    ));
     widgets::keywords("no warps cursor jump pointer");
 
     let g = page.group("");
@@ -468,7 +479,9 @@ pub fn build(page: &Page) {
         || open_sub("Workspaces and screens", workspace_rules::screens_page),
     );
     g.add(&r);
-    widgets::keywords("persistent empty always workspaces count monitor screen pin assign display press again back and forth previous");
+    widgets::keywords(
+        "persistent empty always workspaces count monitor screen pin assign display press again back and forth previous",
+    );
     let own = workspace_rules::own_count();
     let (r, _) = widgets::nav_row(
         Some("view-paged-symbolic"),
@@ -480,24 +493,18 @@ pub fn build(page: &Page) {
     g.add(&r);
     widgets::keywords("workspace rule layout name gaps decorations floating scrolling override");
     let wc_on = crate::backend::window_controls::enabled(&crate::backend::window_controls::settings());
-    let (r, _) = widgets::nav_row(
-        Some("window-new-symbolic"),
-        "Window controls",
-        "",
-        if wc_on { "Adaptive" } else { "Off" },
-        || open_sub("Window controls", window_controls_page),
-    );
+    let (r, _) =
+        widgets::nav_row(Some("window-new-symbolic"), "Window controls", "", if wc_on { "Adaptive" } else { "Off" }, || {
+            open_sub("Window controls", window_controls_page)
+        });
     g.add(&r);
     widgets::keywords(
         "window controls close button hover delay popover headerbar titlebar decorations terminal chromeless corner double click maximize minimize float tile per app own titlebar hyprbars",
     );
-    let (r, _) = widgets::nav_row(
-        Some("starred-symbolic"),
-        "Scratchpad and small habits",
-        "Swallowing, middle-click paste",
-        "",
-        || open_sub("Scratchpad and small habits", workspace_rules::scratchpad_page),
-    );
+    let (r, _) =
+        widgets::nav_row(Some("starred-symbolic"), "Scratchpad and small habits", "Swallowing, middle-click paste", "", || {
+            open_sub("Scratchpad and small habits", workspace_rules::scratchpad_page)
+        });
     g.add(&r);
     widgets::keywords("scratchpad special workspace hide empty terminal swallowing swallow middle click paste");
     shell(page);

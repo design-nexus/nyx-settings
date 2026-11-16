@@ -67,9 +67,10 @@ struct Route {
 impl Route {
     fn read() -> Route {
         let status = cmd::output(&["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"]).unwrap_or_default();
-        let link = status.lines().map(net::split_terse).find(|f| {
-            f.len() >= 4 && f[2] == "connected" && matches!(f[1].as_str(), "wifi" | "ethernet")
-        });
+        let link = status
+            .lines()
+            .map(net::split_terse)
+            .find(|f| f.len() >= 4 && f[2] == "connected" && matches!(f[1].as_str(), "wifi" | "ethernet"));
         let (link, router) = match link {
             Some(f) => {
                 let details = net::details(&f[0]);
@@ -280,7 +281,9 @@ fn draw_route(body: &gtk::Box, foot: &gtk::Label, r: &Route, speed: &gtk::Box) {
 
     foot.set_text(&match (&r.link, &r.vpn) {
         (None, _) => "Not connected to a network.".to_string(),
-        (Some(_), Some(v)) => format!("Everything leaving {} goes through {v}. Devices nearby, like a printer, still work.", r.host),
+        (Some(_), Some(v)) => {
+            format!("Everything leaving {} goes through {v}. Devices nearby, like a printer, still work.", r.host)
+        }
         (Some(_), None) => "Straight out through your router: no VPN is on.".to_string(),
     });
 }
@@ -423,7 +426,12 @@ fn connections(page: &Page) {
         let connected = f[2] == "connected";
         let desc = if connected { format!("{} · {}", f[3], ip(&f[0])) } else { "Not connected".into() };
         let end = state_chip(if connected { "Connected" } else { "Off" }, connected);
-        let r = widgets::icon_row("network-wireless-symbolic", "Wi-Fi", &gtk::glib::markup_escape_text(&desc), Some(end.upcast_ref()));
+        let r = widgets::icon_row(
+            "network-wireless-symbolic",
+            "Wi-Fi",
+            &gtk::glib::markup_escape_text(&desc),
+            Some(end.upcast_ref()),
+        );
         widgets::keywords("wifi wireless ip address");
         clickable(&r, || window::navigate("wifi"));
         g.add(&r);
@@ -434,7 +442,12 @@ fn connections(page: &Page) {
         let connected = f[2].starts_with("connected");
         let desc = if connected { format!("{} · {}", f[3], ip(&f[0])) } else { "Plug in a cable".to_string() };
         let end = state_chip(if connected { "Connected" } else { "Not plugged in" }, connected);
-        let r = widgets::icon_row("network-wired-symbolic", "Ethernet", &gtk::glib::markup_escape_text(&desc), Some(end.upcast_ref()));
+        let r = widgets::icon_row(
+            "network-wired-symbolic",
+            "Ethernet",
+            &gtk::glib::markup_escape_text(&desc),
+            Some(end.upcast_ref()),
+        );
         widgets::keywords("ip address ethernet wired lan cable");
         g.add(&r);
     }
@@ -492,7 +505,10 @@ fn vpn_row(g: &widgets::Group) {
         if active.is_none() {
             let end = widgets::hbox(0);
             end.append(&widgets::label("None set up", "row-value"));
-            let r = tiled(widgets::row("VPN", "Add one under VPN services below.", Some(end.upcast_ref())), "changes-prevent-symbolic");
+            let r = tiled(
+                widgets::row("VPN", "Add one under VPN services below.", Some(end.upcast_ref())),
+                "changes-prevent-symbolic",
+            );
             widgets::keywords("vpn nordvpn wireguard openvpn tunnel");
             g.add(&r);
         }
@@ -668,7 +684,9 @@ fn more(page: &Page) {
         &if count == 0 { String::new() } else { count.to_string() },
         crate::sections::vpn_accounts::subpage,
     );
-    widgets::keywords("vpn nordvpn expressvpn proton pia private internet access mullvad surfshark windscribe wireguard openvpn add");
+    widgets::keywords(
+        "vpn nordvpn expressvpn proton pia private internet access mullvad surfshark windscribe wireguard openvpn add",
+    );
     g.add(&r);
     let tools: Vec<&str> = [
         ("omarchy-network-band", "Wi-Fi band"),
@@ -875,22 +893,16 @@ fn ufw_rules(page: &Page) {
     }
     g.add(&load);
     g.add(&list);
-    let (r, _) = widgets::entry_row(
-        "Allow a port",
-        "Like 8080, or 8080/tcp. Press Enter.",
-        "",
-        "8080/tcp",
-        |t| {
-            let t = t.trim().to_string();
-            if t.is_empty() {
-                return;
-            }
-            match parse_rule(&t) {
-                Some((port, proto)) => run_admin(&["firewall", "allow", &port, &proto], None, "Port allowed", "network"),
-                None => window::toast("Use a port like 8080 or 8080/tcp"),
-            }
-        },
-    );
+    let (r, _) = widgets::entry_row("Allow a port", "Like 8080, or 8080/tcp. Press Enter.", "", "8080/tcp", |t| {
+        let t = t.trim().to_string();
+        if t.is_empty() {
+            return;
+        }
+        match parse_rule(&t) {
+            Some((port, proto)) => run_admin(&["firewall", "allow", &port, &proto], None, "Port allowed", "network"),
+            None => window::toast("Use a port like 8080 or 8080/tcp"),
+        }
+    });
     widgets::keywords("open port allow rule");
     g.add(&r);
 }
@@ -959,7 +971,6 @@ fn show_rules(button: Option<&gtk::Button>, list: &gtk::Box) {
     );
 }
 
-
 // ----- Tailscale -----
 
 struct Tailnet {
@@ -1005,7 +1016,6 @@ fn parse_tailscale(json: &str) -> Option<Tailnet> {
         peers,
     })
 }
-
 
 #[cfg(test)]
 mod tests {

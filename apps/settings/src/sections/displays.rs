@@ -200,11 +200,7 @@ fn title(m: &Value, live: &[LiveMonitor]) -> String {
     if built_in(name) && live.iter().filter(|l| built_in(&l.connector)).count() == 1 {
         return "Laptop screen".into();
     }
-    live.iter()
-        .find(|l| l.connector == name)
-        .filter(|l| l.identified())
-        .map(|l| l.label())
-        .unwrap_or_else(|| name.to_string())
+    live.iter().find(|l| l.connector == name).filter(|l| l.identified()).map(|l| l.label()).unwrap_or_else(|| name.to_string())
 }
 
 fn subtitle(m: &Value) -> String {
@@ -393,7 +389,8 @@ fn desk(pv: &widgets::Preview, monitors: &Rc<Vec<Value>>, live: &[LiveMonitor], 
         },
         |positions| {
             let previous = store::read(|s| s.monitors.clone());
-            let current: Vec<(String, Option<Monitor>)> = positions.iter().map(|(n, _, _)| (n.clone(), live_monitor(n))).collect();
+            let current: Vec<(String, Option<Monitor>)> =
+                positions.iter().map(|(n, _, _)| (n.clone(), live_monitor(n))).collect();
             let live = devices::live_monitors();
             store::update(true, move |s| {
                 for ((name, x, y), (_, current)) in positions.iter().zip(current) {
@@ -454,7 +451,11 @@ fn desk(pv: &widgets::Preview, monitors: &Rc<Vec<Value>>, live: &[LiveMonitor], 
         let times = format!("{scale:.2}").trim_end_matches('0').trim_end_matches('.').to_string();
         line.set_text(&format!(
             "{} which leaves windows {} × {} of room. Higher makes things bigger and the room smaller.",
-            if (scale - 1.0).abs() < 0.01 { "Drawn at their own size,".to_string() } else { format!("Drawn {times} times as big as at 100%,") },
+            if (scale - 1.0).abs() < 0.01 {
+                "Drawn at their own size,".to_string()
+            } else {
+                format!("Drawn {times} times as big as at 100%,")
+            },
             w.round() as i64,
             h.round() as i64
         ));
@@ -611,7 +612,8 @@ fn picker(page: &Page, monitors: &[Value], live: &[LiveMonitor], chooser: &Rc<Ch
             first = Some(b.clone());
         }
         let inner = widgets::hbox(10);
-        let icon = gtk::Image::from_icon_name(if built_in(&name) { "computer-laptop-symbolic" } else { "video-display-symbolic" });
+        let icon =
+            gtk::Image::from_icon_name(if built_in(&name) { "computer-laptop-symbolic" } else { "video-display-symbolic" });
         icon.set_valign(gtk::Align::Center);
         inner.append(&icon);
         let words = widgets::vbox(1);
@@ -728,7 +730,8 @@ fn display_cards(page: &Page, m: &Value, monitors: &[Value], live: &[LiveMonitor
         .iter()
         .enumerate()
         .map(|(i, r)| {
-            let label = if i + 1 == rates.len() && rates.len() <= 4 { format!("{} Hz", r.round()) } else { format!("{}", r.round()) };
+            let label =
+                if i + 1 == rates.len() && rates.len() <= 4 { format!("{} Hz", r.round()) } else { format!("{}", r.round()) };
             (format!("{r:.2}"), label)
         })
         .collect();
@@ -825,7 +828,12 @@ fn display_cards(page: &Page, m: &Value, monitors: &[Value], live: &[LiveMonitor
                 window::toast(&e);
             }
         });
-        g.add(&widgets::icon_row("user-desktop-symbolic", "Bar, dock and widgets", "Turn off for a TV or a projector.", Some(sw.upcast_ref())));
+        g.add(&widgets::icon_row(
+            "user-desktop-symbolic",
+            "Bar, dock and widgets",
+            "Turn off for a TV or a projector.",
+            Some(sw.upcast_ref()),
+        ));
         widgets::keywords("desktop on this display bar dock widgets shell screen projector tv");
     }
     if g.list.first_child().is_none() {
@@ -840,13 +848,9 @@ fn display_cards(page: &Page, m: &Value, monitors: &[Value], live: &[LiveMonitor
         if monitors.len() > 1 {
             let pos = format!("{}x{}", int(m, "x"), int(m, "y"));
             let n = name.clone();
-            let (r, e) = widgets::entry_row(
-                "Position",
-                "Like <tt>2560x0</tt> or <tt>auto-right</tt>.",
-                &pos,
-                "auto",
-                move |p| change(&n, |mon| mon.position = Some(p.trim().to_string())),
-            );
+            let (r, e) = widgets::entry_row("Position", "Like <tt>2560x0</tt> or <tt>auto-right</tt>.", &pos, "auto", move |p| {
+                change(&n, |mon| mon.position = Some(p.trim().to_string()))
+            });
             e.set_width_chars(11);
             r.prepend(&widgets::tile("view-grid-symbolic"));
             r.add_css_class("with-tile");
@@ -928,7 +932,9 @@ fn more(page: &Page, monitors: &Rc<Vec<Value>>, live: &Rc<Vec<LiveMonitor>>) {
             "On"
         };
         g.add(&row(Sub::Laptop, "computer-laptop-symbolic", "Laptop screen", state));
-        widgets::keywords("built-in screen internal laptop display eDP clamshell off disable mirror duplicate projector presentation recover black dark blank fix");
+        widgets::keywords(
+            "built-in screen internal laptop display eDP clamshell off disable mirror duplicate projector presentation recover black dark blank fix",
+        );
     }
 }
 
@@ -1030,7 +1036,9 @@ fn laptop_screen(page: &Page) {
         "Built-in screen",
         "Turn the laptop's own screen off, for example with the lid closed on a desk.",
         !flag("internal-monitor-disable"),
-        move |on| run(if on { &["omarchy-hyprland-monitor-internal", "on"] } else { &["omarchy-hyprland-monitor-internal", "off"] }),
+        move |on| {
+            run(if on { &["omarchy-hyprland-monitor-internal", "on"] } else { &["omarchy-hyprland-monitor-internal", "off"] })
+        },
     );
     g.add(&r);
     widgets::keywords("internal laptop display eDP clamshell off disable");

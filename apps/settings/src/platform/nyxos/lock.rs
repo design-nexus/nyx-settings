@@ -234,7 +234,23 @@ fn draw_axis(cr: &Context, p: &sketch::Pal, accent: Rgb, w: f64, secs: &[i64; 3]
             continue;
         }
         let s = if *m == end { format!("{} min", *m as i64) } else { format!("{}", *m as i64) };
-        pages::text(cr, &s, x, y + 38.0, 10.5, false, p.dim, 0.9, if *m == end { 1.0 } else if i == 0 { 0.0 } else { 0.5 });
+        pages::text(
+            cr,
+            &s,
+            x,
+            y + 38.0,
+            10.5,
+            false,
+            p.dim,
+            0.9,
+            if *m == end {
+                1.0
+            } else if i == 0 {
+                0.0
+            } else {
+                0.5
+            },
+        );
         last = x;
     }
     // A handle for each step, its name above or, when it'd crowd the one before, under.
@@ -251,7 +267,13 @@ fn draw_axis(cr: &Context, p: &sketch::Pal, accent: Rgb, w: f64, secs: &[i64; 3]
         glyph(cr, *i, x, y, (0.12, 0.12, 0.14));
         let below = previous.is_some_and(|px| x - px < 92.0);
         let label = format!("{} · {}", TIMES[*i].5, minutes_label(*s));
-        let align = if x < x0 + 40.0 { 0.0 } else if x > x1 - 40.0 { 1.0 } else { 0.5 };
+        let align = if x < x0 + 40.0 {
+            0.0
+        } else if x > x1 - 40.0 {
+            1.0
+        } else {
+            0.5
+        };
         pages::text(cr, &label, x, if below { y + 24.0 } else { y - 18.0 }, 11.0, true, p.text, 0.9, align);
         previous = if below { None } else { Some(x) };
     }
@@ -280,8 +302,11 @@ pub fn build(page: &Page) {
     lock.set_child(Some(&inner));
     lock.connect_clicked(|_| cmd::spawn(&["loginctl", "lock-session"]));
     let column = pages::preview_column(&pv);
-    let (head, _, _) =
-        pages::preview_head("After your last touch", "What this computer does when you walk away, as you set it.", &[lock.upcast_ref()]);
+    let (head, _, _) = pages::preview_head(
+        "After your last touch",
+        "What this computer does when you walk away, as you set it.",
+        &[lock.upcast_ref()],
+    );
     column.append(&head);
 
     let strip = widgets::hbox(6);
@@ -486,7 +511,8 @@ pub fn build(page: &Page) {
             format!("{} or {last}, whichever comes first.", ways.join(", "))
         }
     };
-    let (r, v) = widgets::nav_row(Some("security-high-symbolic"), "Ways to unlock", &desc, "Sign-in", || window::navigate("sign-in"));
+    let (r, v) =
+        widgets::nav_row(Some("security-high-symbolic"), "Ways to unlock", &desc, "Sign-in", || window::navigate("sign-in"));
     v.set_ellipsize(gtk::pango::EllipsizeMode::None);
     widgets::keywords("unlock password fingerprint face security key");
     g.add(&r);

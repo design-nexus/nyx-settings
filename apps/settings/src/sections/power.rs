@@ -82,7 +82,10 @@ fn battery_lines(shell: &str) -> (String, String) {
 
 /// One `key\tvalue` field of the battery's shell lines.
 fn field(shell: &str, k: &str) -> String {
-    shell.lines().find_map(|l| l.split_once('\t').filter(|(key, _)| *key == k).map(|(_, v)| v.trim().to_string())).unwrap_or_default()
+    shell
+        .lines()
+        .find_map(|l| l.split_once('\t').filter(|(key, _)| *key == k).map(|(_, v)| v.trim().to_string()))
+        .unwrap_or_default()
 }
 
 /// The battery's own folder in sysfs, for what the status lines don't say.
@@ -98,7 +101,8 @@ fn battery_sysfs() -> Option<std::path::PathBuf> {
 fn health() -> Option<f64> {
     let dir = battery_sysfs()?;
     let read = |n: &str| std::fs::read_to_string(dir.join(n)).ok()?.trim().parse::<f64>().ok();
-    let (full, design) = read("energy_full").zip(read("energy_full_design")).or_else(|| read("charge_full").zip(read("charge_full_design")))?;
+    let (full, design) =
+        read("energy_full").zip(read("energy_full_design")).or_else(|| read("charge_full").zip(read("charge_full_design")))?;
     (design > 0.0).then(|| (full / design * 100.0).min(100.0))
 }
 
@@ -191,7 +195,9 @@ pub fn build(page: &Page) {
     let g = page.group("");
     let options: Vec<(String, String)> = profiles.iter().map(|p| (p.clone(), profile_label(p))).collect();
     let on_battery = on_battery();
-    for (when, title, icon) in [("ac", "When plugged in", "ac-adapter-symbolic"), ("battery", "On battery", "battery-level-80-symbolic")] {
+    for (when, title, icon) in
+        [("ac", "When plugged in", "ac-adapter-symbolic"), ("battery", "On battery", "battery-level-80-symbolic")]
+    {
         let in_use = (when == "battery") == on_battery;
         let desc = if in_use { "In use now" } else { "" };
         let saved = effective_profile(read_saved(when).as_deref(), when, &profiles);
@@ -312,7 +318,12 @@ fn battery_preview(pv: &widgets::Preview) {
         pill.set_visible(false);
         let card = pv.card();
         card.add_css_class("pwr-none");
-        let r = widgets::icon_row("ac-adapter-symbolic", "No battery", "This computer runs on mains power. The profiles still choose between quiet and fast.", None);
+        let r = widgets::icon_row(
+            "ac-adapter-symbolic",
+            "No battery",
+            "This computer runs on mains power. The profiles still choose between quiet and fast.",
+            None,
+        );
         card.append(&r);
         pv.foot("emblem-ok-symbolic", "Power saver, Balanced and Performance change how fast the processor may run.");
         return;
@@ -504,9 +515,11 @@ fn session_group(page: &Page) {
     }
     g.add(&widgets::icon_row("system-lock-screen-symbolic", "Lock or sleep", "", Some(now.upcast_ref())));
     let end = widgets::hbox(8);
-    for (label, confirm, what) in
-        [("Log out", "Click again to log out", "logout"), ("Restart", "Click again to restart", "reboot"), ("Shut down", "Click again to shut down", "shutdown")]
-    {
+    for (label, confirm, what) in [
+        ("Log out", "Click again to log out", "logout"),
+        ("Restart", "Click again to restart", "reboot"),
+        ("Shut down", "Click again to shut down", "shutdown"),
+    ] {
         let b = widgets::confirm_button(label, confirm, move |_| cmd::spawn(crate::platform::session_command(what)));
         b.add_css_class("destructive-action");
         end.append(&b);
@@ -699,23 +712,17 @@ fn timeout_row() -> Option<gtk::Box> {
     if !kbdidle::CHOICES.iter().any(|(s, _)| *s == cur) {
         options.push((cur.to_string(), format!("{cur} seconds")));
     }
-    let (r, _) = widgets::choice_row(
-        "Turn the keyboard light off after",
-        "",
-        options,
-        &cur.to_string(),
-        |v| {
-            let secs = v.parse::<u32>().unwrap_or(0);
-            cmd::background(
-                move || kbdidle::apply(&kbdidle::Config { timeout_secs: secs }).map_err(|e| format!("{e:#}")),
-                move |r| match r {
-                    Ok(()) if secs == 0 => window::toast("Keyboard backlight stays on"),
-                    Ok(()) => window::toast("Keyboard backlight timeout set"),
-                    Err(e) => window::toast(&format!("Couldn't set the timeout: {e}")),
-                },
-            );
-        },
-    );
+    let (r, _) = widgets::choice_row("Turn the keyboard light off after", "", options, &cur.to_string(), |v| {
+        let secs = v.parse::<u32>().unwrap_or(0);
+        cmd::background(
+            move || kbdidle::apply(&kbdidle::Config { timeout_secs: secs }).map_err(|e| format!("{e:#}")),
+            move |r| match r {
+                Ok(()) if secs == 0 => window::toast("Keyboard backlight stays on"),
+                Ok(()) => window::toast("Keyboard backlight timeout set"),
+                Err(e) => window::toast(&format!("Couldn't set the timeout: {e}")),
+            },
+        );
+    });
     widgets::keywords("keyboard backlight timeout idle off sleep dim inactivity typing trackpad");
     Some(r)
 }

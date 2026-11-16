@@ -918,7 +918,16 @@ fn drive_row(d: &Drive) -> gtk::Box {
         }
         let foot = widgets::hbox(8);
         let (h, ok) = health_line(d).unwrap_or_else(|| ("Health not reported".into(), true));
-        let hl = widgets::label(&h, if !d.health.supported { "dsk-dim" } else if ok { "dsk-ok" } else { "dsk-bad" });
+        let hl = widgets::label(
+            &h,
+            if !d.health.supported {
+                "dsk-dim"
+            } else if ok {
+                "dsk-ok"
+            } else {
+                "dsk-bad"
+            },
+        );
         hl.set_hexpand(true);
         hl.set_xalign(0.0);
         foot.append(&hl);
@@ -1030,7 +1039,13 @@ fn drive_preview(shown: &gtk::Box, d: &Drive) {
     key.add_css_class("dsk-key");
     let mut seen: Vec<String> = Vec::new();
     for p in &d.parts {
-        let name = if p.encrypted { "Encrypted".to_string() } else if p.fs.is_empty() { "Unknown".to_string() } else { udisks::fs_name(&p.fs) };
+        let name = if p.encrypted {
+            "Encrypted".to_string()
+        } else if p.fs.is_empty() {
+            "Unknown".to_string()
+        } else {
+            udisks::fs_name(&p.fs)
+        };
         if seen.contains(&name) {
             continue;
         }
@@ -1351,7 +1366,11 @@ pub fn build(page: &Page) {
         g.add(&widgets::row("No drives", "UDisks doesn't list any drives.", None));
     }
     let chosen = CHOSEN.with(|c| c.borrow().clone());
-    let chosen = if drives.iter().any(|d| d.block == chosen) { chosen } else { drives.first().map(|d| d.block.clone()).unwrap_or_default() };
+    let chosen = if drives.iter().any(|d| d.block == chosen) {
+        chosen
+    } else {
+        drives.first().map(|d| d.block.clone()).unwrap_or_default()
+    };
     let drives = Rc::new(drives);
     let rows: Rc<RefCell<Vec<(String, gtk::Box)>>> = Rc::default();
     let choose = {

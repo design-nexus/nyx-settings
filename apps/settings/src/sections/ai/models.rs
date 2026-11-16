@@ -176,7 +176,8 @@ fn origin(m: &Value) -> String {
     let id = m["id"].as_str().unwrap_or("");
     if m["source"].as_str() == Some("folder") {
         let home = glib::home_dir().to_string_lossy().to_string();
-        let folder = m["path"].as_str().and_then(|p| p.rsplit_once('/')).map(|(d, _)| d.replacen(&home, "~", 1)).unwrap_or_default();
+        let folder =
+            m["path"].as_str().and_then(|p| p.rsplit_once('/')).map(|(d, _)| d.replacen(&home, "~", 1)).unwrap_or_default();
         return format!("In a model folder · {folder}");
     }
     format!("From Hugging Face · {}", id.split(':').next().unwrap_or(id))
@@ -378,7 +379,8 @@ fn render(
         if downloading {
             upd.append(&progress_bar(&id, 160));
         } else if let Some((done, total)) = updating {
-            let text = if *total > 0 { format!("Updating · {} of {}", size(*done), size(*total)) } else { "Updating".to_string() };
+            let text =
+                if *total > 0 { format!("Updating · {} of {}", size(*done), size(*total)) } else { "Updating".to_string() };
             upd.append(&widgets::label(&text, "dim"));
         } else {
             let target = id.clone();
@@ -407,7 +409,9 @@ pub fn build(page: &Page) {
         .into_iter()
         .flatten()
         .filter(|d| matches!(d["state"].as_str(), Some("queued" | "running")))
-        .filter_map(|d| Some((d["model"].as_str()?.to_string(), (d["completed"].as_u64().unwrap_or(0), d["total"].as_u64().unwrap_or(0)))))
+        .filter_map(|d| {
+            Some((d["model"].as_str()?.to_string(), (d["completed"].as_u64().unwrap_or(0), d["total"].as_u64().unwrap_or(0))))
+        })
         .collect();
     let settings = call(&["service"]).unwrap_or(Value::Null);
     let status = call(&["status"]).unwrap_or(Value::Null);
@@ -415,7 +419,11 @@ pub fn build(page: &Page) {
     let loaded: Vec<Value> = status["resources"]["loaded"].as_array().cloned().unwrap_or_default();
     let installed: Vec<Value> = models.iter().filter(|m| m["state"].as_str() != Some("missing")).cloned().collect();
     let used_by = |id: &str| -> Vec<(&'static str, &'static str, &'static str)> {
-        ROLES.iter().filter(|(role, ..)| settings["defaults"][*role].as_str() == Some(id)).map(|(_, who, icon, when)| (*icon, *who, *when)).collect()
+        ROLES
+            .iter()
+            .filter(|(role, ..)| settings["defaults"][*role].as_str() == Some(id))
+            .map(|(_, who, icon, when)| (*icon, *who, *when))
+            .collect()
     };
     let kept_by = |id: &str| -> Vec<String> {
         loaded
@@ -434,7 +442,10 @@ pub fn build(page: &Page) {
         .or_else(|| installed.iter().find(|m| is_loaded(m)).and_then(|m| m["id"].as_str().map(str::to_string)))
         .or_else(|| {
             ROLES.iter().find_map(|(role, ..)| {
-                settings["defaults"][*role].as_str().filter(|id| installed.iter().any(|m| m["id"].as_str() == Some(id))).map(str::to_string)
+                settings["defaults"][*role]
+                    .as_str()
+                    .filter(|id| installed.iter().any(|m| m["id"].as_str() == Some(id)))
+                    .map(str::to_string)
             })
         })
         .or_else(|| installed.first().and_then(|m| m["id"].as_str().map(str::to_string)));
@@ -447,10 +458,12 @@ pub fn build(page: &Page) {
     let rows: Rc<RefCell<Vec<(String, gtk::Box)>>> = Rc::default();
     let narrow = Rc::new(std::cell::Cell::new(false));
     let pick: Rc<dyn Fn(&str)> = {
-        let (pv_head, holder, rows, installed, running, narrow) = (pv_head.clone(), holder.clone(), rows.clone(), installed.clone(), running.clone(), narrow.clone());
+        let (pv_head, holder, rows, installed, running, narrow) =
+            (pv_head.clone(), holder.clone(), rows.clone(), installed.clone(), running.clone(), narrow.clone());
         let used_by: Vec<(String, Vec<(&'static str, &'static str, &'static str)>)> =
             installed.iter().filter_map(|m| m["id"].as_str().map(|id| (id.to_string(), used_by(id)))).collect();
-        let kept_by: Vec<(String, Vec<String>)> = installed.iter().filter_map(|m| m["id"].as_str().map(|id| (id.to_string(), kept_by(id)))).collect();
+        let kept_by: Vec<(String, Vec<String>)> =
+            installed.iter().filter_map(|m| m["id"].as_str().map(|id| (id.to_string(), kept_by(id)))).collect();
         Rc::new(move |key: &str| {
             SELECTED.with(|s| *s.borrow_mut() = Some(key.to_string()));
             for (k, r) in rows.borrow().iter() {
@@ -485,7 +498,8 @@ pub fn build(page: &Page) {
     let top = widgets::hbox(6);
     top.add_css_class("lmx-top");
     let entry = gtk::SearchEntry::new();
-    entry.set_tooltip_text(Some("Search the models here, or paste a Hugging Face name like org/model-GGUF:Q4_K_M to download it"));
+    entry
+        .set_tooltip_text(Some("Search the models here, or paste a Hugging Face name like org/model-GGUF:Q4_K_M to download it"));
     entry.set_hexpand(true);
     top.append(&entry);
     let check = icon_button("view-refresh-symbolic", "Check for updates", |b| {
@@ -495,7 +509,11 @@ pub fn build(page: &Page) {
             |r| {
                 match r {
                     Ok(Value::Array(found)) if found.is_empty() => window::toast("Every model is on its newest version"),
-                    Ok(Value::Array(found)) => window::toast(&format!("{} model update{} available", found.len(), if found.len() == 1 { "" } else { "s" })),
+                    Ok(Value::Array(found)) => window::toast(&format!(
+                        "{} model update{} available",
+                        found.len(),
+                        if found.len() == 1 { "" } else { "s" }
+                    )),
                     Ok(_) => {}
                     Err(e) => window::toast(&format!("Couldn't check: {e}")),
                 }
@@ -592,7 +610,8 @@ pub fn build(page: &Page) {
         if DOWNLOADS.with(|d| d.borrow().contains_key(&id)) || running.contains_key(&id) {
             bits.push("updating".into());
         }
-        let users: Vec<&str> = used_by(&id).iter().map(|(_, who, _)| if *who == "Search and knowledge" { "Search" } else { *who }).collect();
+        let users: Vec<&str> =
+            used_by(&id).iter().map(|(_, who, _)| if *who == "Search and knowledge" { "Search" } else { *who }).collect();
         let end: gtk::Widget = if DOWNLOADS.with(|d| d.borrow().contains_key(&id)) {
             progress_bar(&id, 120).upcast()
         } else if let Some((done, total)) = running.get(&id) {
@@ -649,8 +668,15 @@ pub fn build(page: &Page) {
     // Show the rows the search and the filter leave.
     let library = Rc::new(library);
     let refilter = {
-        let (library, entry, empty, offer, offer_title, offer_desc, offer_button) =
-            (library.clone(), entry.clone(), empty.clone(), offer.clone(), offer_title.clone(), offer_desc.clone(), offer_button.clone());
+        let (library, entry, empty, offer, offer_title, offer_desc, offer_button) = (
+            library.clone(),
+            entry.clone(),
+            empty.clone(),
+            offer.clone(),
+            offer_title.clone(),
+            offer_desc.clone(),
+            offer_button.clone(),
+        );
         let handler: Rc<RefCell<Option<glib::SignalHandlerId>>> = Rc::default();
         move || {
             let text = entry.text().trim().to_string();
@@ -660,7 +686,8 @@ pub fn build(page: &Page) {
             let name = text.contains('/');
             let mut shown = 0;
             for (row, search, tags) in library.iter() {
-                let visible = (filter == "all" || tags.split(' ').any(|t| t == filter)) && (name || query.is_empty() || search.contains(&query));
+                let visible = (filter == "all" || tags.split(' ').any(|t| t == filter))
+                    && (name || query.is_empty() || search.contains(&query));
                 row.set_visible(visible);
                 shown += visible as usize;
             }
@@ -725,7 +752,11 @@ pub fn build(page: &Page) {
     let sum = super::icon_line("drive-harddisk-symbolic", &summary.join(" · "), "lmx-sum");
     g.add(&sum);
     widgets::keywords("models on this computer check for updates");
-    g.add(&super::icon_line("info-symbolic", "Models in another app's folder are listed too, but Settings never deletes them.", "lmx-sum"));
+    g.add(&super::icon_line(
+        "info-symbolic",
+        "Models in another app's folder are listed too, but Settings never deletes them.",
+        "lmx-sum",
+    ));
     widgets::keywords("ai model models llm gguf hugging face download remove update llama local from hugging face");
 
     if let Some(key) = &chosen {
@@ -737,7 +768,11 @@ pub fn build(page: &Page) {
         let (pick, narrow_now, entry) = (pick.clone(), narrow.clone(), entry.clone());
         super::on_narrow(&page.body, move |narrow| {
             narrow_now.set(narrow);
-            entry.set_placeholder_text(Some(if narrow { "Search, or paste a Hugging Face name" } else { "Search or paste a name" }));
+            entry.set_placeholder_text(Some(if narrow {
+                "Search, or paste a Hugging Face name"
+            } else {
+                "Search or paste a name"
+            }));
             if let Some(key) = SELECTED.with(|s| s.borrow().clone()) {
                 pick(&key);
             }

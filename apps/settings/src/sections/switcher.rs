@@ -428,7 +428,13 @@ pub fn build(page: &Page) {
                         t
                     });
                     for (i, w) in all.iter().take(8).enumerate() {
-                        grid.attach(&thumb(w, &icon_of(&w.class), 72, i == 0, true), (i % per_row) as i32, (i / per_row) as i32, 1, 1);
+                        grid.attach(
+                            &thumb(w, &icon_of(&w.class), 72, i == 0, true),
+                            (i % per_row) as i32,
+                            (i / per_row) as i32,
+                            1,
+                            1,
+                        );
                     }
                     panel.append(&grid);
                 }
@@ -553,20 +559,45 @@ pub fn build(page: &Page) {
         r.add_css_class("with-tile");
         r
     };
-    g.add(&switch("view-dual-symbolic", "Tabbed windows once", "↓ shows a group's tabs.", "collapse_groups", true, Some(refresh.clone())));
+    g.add(&switch(
+        "view-dual-symbolic",
+        "Tabbed windows once",
+        "↓ shows a group's tabs.",
+        "collapse_groups",
+        true,
+        Some(refresh.clone()),
+    ));
     widgets::keywords("one entry per group tabbed windows tabs collapse");
-    g.add(&switch("starred-symbolic", "Assistant workspaces", "Windows assistants work in.", "show_agent_workspaces", false, Some(refresh.clone())));
+    g.add(&switch(
+        "starred-symbolic",
+        "Assistant workspaces",
+        "Windows assistants work in.",
+        "show_agent_workspaces",
+        false,
+        Some(refresh.clone()),
+    ));
     widgets::keywords("agent workspaces nyx-agent assistants");
 
     let g = page.group("How it looks");
-    g.add(&switch("image-x-generic-symbolic", "Window thumbnails", "Off: app icons only.", "thumbnails", true, Some(refresh.clone())));
+    g.add(&switch(
+        "image-x-generic-symbolic",
+        "Window thumbnails",
+        "Off: app icons only.",
+        "thumbnails",
+        true,
+        Some(refresh.clone()),
+    ));
     widgets::keywords("thumbnails previews icons");
     let size_seg = {
         let refresh = refresh.clone();
-        widgets::segmented(&opts(&[("small", "Small"), ("medium", "Medium"), ("large", "Large")]), &s("thumbnail_size", "medium"), move |v| {
-            set(None, "thumbnail_size", toml::Value::String(v));
-            refresh();
-        })
+        widgets::segmented(
+            &opts(&[("small", "Small"), ("medium", "Medium"), ("large", "Large")]),
+            &s("thumbnail_size", "medium"),
+            move |v| {
+                set(None, "thumbnail_size", toml::Value::String(v));
+                refresh();
+            },
+        )
     };
     g.add(&widgets::icon_row("view-fullscreen-symbolic", "Thumbnail size", "", Some(size_seg.upcast_ref())));
     widgets::keywords("thumbnail size small medium large");
@@ -577,7 +608,15 @@ pub fn build(page: &Page) {
     let g = page.group("Timing");
     let (r, sl) = {
         let sd = set_delay.clone();
-        widgets::slider_row("Show after", "A quicker tap switches without showing it.", (0.0, 400.0, 10.0), delay.get(), 0, " ms", move |v| sd(v))
+        widgets::slider_row(
+            "Show after",
+            "A quicker tap switches without showing it.",
+            (0.0, 400.0, 10.0),
+            delay.get(),
+            0,
+            " ms",
+            move |v| sd(v),
+        )
     };
     sl.scale.set_width_request(120);
     *narrow_slider.borrow_mut() = Some(sl.scale.clone());
@@ -608,14 +647,21 @@ pub fn build(page: &Page) {
         "keys shortcut keybinding super tab alt grave overview conflict switch windows apps backwards windows of this app show all windows",
     );
     let current = s("gesture", "");
-    let label_of = |id: &str| GESTURES.iter().find(|(g, _)| *g == id).map(|(_, l)| l.to_string()).unwrap_or_else(|| id.to_string());
+    let label_of =
+        |id: &str| GESTURES.iter().find(|(g, _)| *g == id).map(|(_, l)| l.to_string()).unwrap_or_else(|| id.to_string());
     let value_slot: Rc<RefCell<Option<gtk::Label>>> = Rc::default();
     let vs = value_slot.clone();
-    let (r, value) = widgets::nav_row(Some("input-touchpad-symbolic"), "Touchpad gesture", "Opens Show all windows", &label_of(&current), move || {
-        if let Some(v) = vs.borrow().clone() {
-            widgets::subpage("Touchpad gesture", 520, move |sp| gesture_page(sp, v));
-        }
-    });
+    let (r, value) = widgets::nav_row(
+        Some("input-touchpad-symbolic"),
+        "Touchpad gesture",
+        "Opens Show all windows",
+        &label_of(&current),
+        move || {
+            if let Some(v) = vs.borrow().clone() {
+                widgets::subpage("Touchpad gesture", 520, move |sp| gesture_page(sp, v));
+            }
+        },
+    );
     *value_slot.borrow_mut() = Some(value);
     g.add(&r);
     widgets::keywords("gesture swipe touchpad trackpad fingers overview spread");

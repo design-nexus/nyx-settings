@@ -236,8 +236,14 @@ fn workspace_lines(state: &State) -> Vec<String> {
             // Omarchy's modes where its helpers are loaded; elsewhere Hyprland's own layout
             // (floating needs Omarchy).
             let (ws, m) = (quote(&id.to_string()), quote(mode));
-            let fallback = if mode == "floating" { String::new() } else { format!(" else hl.workspace_rule({{ workspace = {ws}, layout = {m} }})") };
-            out.push(format!("if o and o.workspace_mode then o.workspace_mode({{ workspace = {ws}, mode = {m} }}){fallback} end"));
+            let fallback = if mode == "floating" {
+                String::new()
+            } else {
+                format!(" else hl.workspace_rule({{ workspace = {ws}, layout = {m} }})")
+            };
+            out.push(format!(
+                "if o and o.workspace_mode then o.workspace_mode({{ workspace = {ws}, mode = {m} }}){fallback} end"
+            ));
         }
     }
     out

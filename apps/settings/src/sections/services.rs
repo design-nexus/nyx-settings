@@ -162,7 +162,9 @@ fn journal_lines(text: &str) -> Vec<(i64, String, String, u8)> {
             let msg = match &j["MESSAGE"] {
                 serde_json::Value::String(s) => s.clone(),
                 // Messages that aren't valid text come as a list of bytes.
-                serde_json::Value::Array(b) => String::from_utf8_lossy(&b.iter().filter_map(|v| v.as_u64().map(|n| n as u8)).collect::<Vec<_>>()).into(),
+                serde_json::Value::Array(b) => {
+                    String::from_utf8_lossy(&b.iter().filter_map(|v| v.as_u64().map(|n| n as u8)).collect::<Vec<_>>()).into()
+                }
                 _ => String::new(),
             };
             let prio = j["PRIORITY"].as_str().and_then(|p| p.parse().ok()).unwrap_or(6);
@@ -251,10 +253,12 @@ fn read_detail(user: bool, name: &str) -> Detail {
     } else {
         e.extend(["-u", name]);
     }
-    let ids: Vec<String> = [STARTED, STOPPED, DEACTIVATED, FAILED, START_FAILED].iter().map(|i| format!("MESSAGE_ID={i}")).collect();
+    let ids: Vec<String> =
+        [STARTED, STOPPED, DEACTIVATED, FAILED, START_FAILED].iter().map(|i| format!("MESSAGE_ID={i}")).collect();
     e.extend(ids.iter().map(String::as_str));
     e.extend([since_arg.as_str(), "-o", "json", "--output-fields=MESSAGE_ID", "--no-pager"]);
-    let events: Vec<(i64, String)> = journal_lines(&cmd::output(&e).unwrap_or_default()).into_iter().map(|(t, id, _, _)| (t, id)).collect();
+    let events: Vec<(i64, String)> =
+        journal_lines(&cmd::output(&e).unwrap_or_default()).into_iter().map(|(t, id, _, _)| (t, id)).collect();
     let boots: Vec<(i64, i64)> = cmd::output(&["journalctl", "--list-boots", "-o", "json"])
         .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
         .and_then(|v| v.as_array().cloned())
@@ -264,9 +268,10 @@ fn read_detail(user: bool, name: &str) -> Detail {
         .filter(|b| b.1 > 0)
         .collect();
     let active_since = props.get("ActiveEnterTimestamp").and_then(|t| t.trim_start_matches('@').parse().ok());
-    let running_now = props.get("MainPID").is_some_and(|p| p != "0") || active_since.is_some_and(|a| {
-        props.get("InactiveEnterTimestamp").and_then(|t| t.trim_start_matches('@').parse::<i64>().ok()).is_none_or(|i| i < a)
-    });
+    let running_now = props.get("MainPID").is_some_and(|p| p != "0")
+        || active_since.is_some_and(|a| {
+            props.get("InactiveEnterTimestamp").and_then(|t| t.trim_start_matches('@').parse::<i64>().ok()).is_none_or(|i| i < a)
+        });
     let history = build_history(&events, &boots, active_since.filter(|_| running_now), since, now());
     Detail { props, log, history }
 }
@@ -519,7 +524,10 @@ fn show(holder: &gtk::Box, u: &Unit, user: bool, can_edit: bool, turn: Rc<Cell<u
         card.append(&r);
     }
     if !can_edit {
-        card.append(&widgets::label("Changing system services needs Settings' system helper (see the top of this page).", "sv-why-text"));
+        card.append(&widgets::label(
+            "Changing system services needs Settings' system helper (see the top of this page).",
+            "sv-why-text",
+        ));
     }
     holder.append(&card);
 
@@ -651,7 +659,11 @@ fn show(holder: &gtk::Box, u: &Unit, user: bool, can_edit: bool, turn: Rc<Cell<u
             for (t, m, p) in d.log {
                 let r = widgets::hbox(12);
                 r.append(&widgets::label(
-                    &glib::DateTime::from_unix_local(t).ok().and_then(|d| d.format("%H:%M:%S").ok()).map(|s| s.to_string()).unwrap_or_default(),
+                    &glib::DateTime::from_unix_local(t)
+                        .ok()
+                        .and_then(|d| d.format("%H:%M:%S").ok())
+                        .map(|s| s.to_string())
+                        .unwrap_or_default(),
                     "sv-log-time",
                 ));
                 let l = widgets::label(&m, "sv-log-text");
@@ -678,7 +690,8 @@ fn list_row(u: &Unit, user: bool) -> gtk::Box {
     if state_class(u) == "fail" {
         value.add_css_class("sv-bad");
     }
-    let r = widgets::row(&friendly(u), &gtk::glib::markup_escape_text(u.name.trim_end_matches(".service")), Some(value.upcast_ref()));
+    let r =
+        widgets::row(&friendly(u), &gtk::glib::markup_escape_text(u.name.trim_end_matches(".service")), Some(value.upcast_ref()));
     r.add_css_class("sv-row");
     r.prepend(&dot(state_class(u)));
     cap_text(&r, 22);
@@ -893,9 +906,9 @@ pub fn build(page: &Page) {
             }
         });
     }
-    let picked = chosen.as_ref().and_then(|(user, u)| {
-        rows.borrow().iter().find(|(m, n, _, _)| m == user && *n == u.name).map(|x| x.3.clone())
-    });
+    let picked = chosen
+        .as_ref()
+        .and_then(|(user, u)| rows.borrow().iter().find(|(m, n, _, _)| m == user && *n == u.name).map(|x| x.3.clone()));
     mark_picked(rows.borrow().iter().map(|x| &x.3), picked.as_ref());
     apply();
     if chosen.is_none() {

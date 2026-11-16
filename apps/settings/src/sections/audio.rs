@@ -258,7 +258,16 @@ fn y_gain(y: f64, h: f64) -> f64 {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn draw_curve(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w: f64, h: f64, gains: &[f64; 9], on: bool, focus: Option<usize>) {
+fn draw_curve(
+    cr: &gtk::cairo::Context,
+    p: &sketch::Pal,
+    accent: sketch::Rgb,
+    w: f64,
+    h: f64,
+    gains: &[f64; 9],
+    on: bool,
+    focus: Option<usize>,
+) {
     let colour = if on { accent } else { p.dim };
     // The grid, with dB at the left.
     cr.select_font_face("sans-serif", gtk::cairo::FontSlant::Normal, gtk::cairo::FontWeight::Normal);
@@ -274,7 +283,13 @@ fn draw_curve(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w:
         cr.line_to(w - 4.0, y);
         let _ = cr.stroke();
         cr.set_dash(&[], 0.0);
-        let label = if g > 0.0 { format!("+{g}") } else if g < 0.0 { format!("−{}", -g) } else { "0".into() };
+        let label = if g > 0.0 {
+            format!("+{g}")
+        } else if g < 0.0 {
+            format!("−{}", -g)
+        } else {
+            "0".into()
+        };
         sketch::set(cr, p.dim, 0.9);
         if let Ok(ext) = cr.text_extents(&label) {
             cr.move_to(LEFT - 8.0 - ext.x_advance(), y + 4.0);
@@ -361,7 +376,8 @@ fn curve(gains: [f64; 9], on: bool, on_change: impl Fn(usize, f64) + 'static) ->
     area.update_property(&[gtk::accessible::Property::Label("Equalizer bands")]);
     let on_change = Rc::new(on_change);
 
-    let nearest = |x: f64, w: f64| (0..9).min_by(|a, b| (band_x(*a, w) - x).abs().total_cmp(&(band_x(*b, w) - x).abs())).unwrap_or(0);
+    let nearest =
+        |x: f64, w: f64| (0..9).min_by(|a, b| (band_x(*a, w) - x).abs().total_cmp(&(band_x(*b, w) - x).abs())).unwrap_or(0);
     let drag = gtk::GestureDrag::new();
     {
         let (a, f, g, cb) = (area.clone(), focus.clone(), gains.clone(), on_change.clone());
@@ -608,10 +624,11 @@ pub fn build(page: &Page) {
     if !outs.is_empty() || !ins.is_empty() {
         let n = outs.len() + ins.len();
         let (sinks, sources) = (sinks.clone(), sources.clone());
-        let (r, _) = widgets::nav_row(Some("document-open-recent-symbolic"), "Remembered devices", "", &n.to_string(), move || {
-            let (sinks, sources) = (sinks.clone(), sources.clone());
-            widgets::subpage("Remembered devices", 560, move |p| remembered(p, &sinks, &sources));
-        });
+        let (r, _) =
+            widgets::nav_row(Some("document-open-recent-symbolic"), "Remembered devices", "", &n.to_string(), move || {
+                let (sinks, sources) = (sinks.clone(), sources.clone());
+                widgets::subpage("Remembered devices", 560, move |p| remembered(p, &sinks, &sources));
+            });
         widgets::keywords("remembered disconnected headset speaker microphone forget");
         g.add(&r);
     }
@@ -665,7 +682,8 @@ fn equalizer(pv: &widgets::Preview, eq: &Rc<RefCell<Eq>>, running: bool, routed:
         b.append(&start);
         pv.add(&b);
     } else if running && !routed {
-        let b = widgets::banner("<b>Sound isn't going through the equalizer.</b> Another output was chosen as the default.", false);
+        let b =
+            widgets::banner("<b>Sound isn't going through the equalizer.</b> Another output was chosen as the default.", false);
         let use_it = gtk::Button::with_label("Use the equalizer");
         use_it.set_valign(gtk::Align::Center);
         let eq2 = eq.clone();
@@ -726,7 +744,8 @@ fn equalizer(pv: &widgets::Preview, eq: &Rc<RefCell<Eq>>, running: bool, routed:
     };
     let curve = {
         let (gains, on) = (eq.borrow().gains, eq.borrow().enabled);
-        let (eq, applier, guard, rh, mark) = (eq.clone(), applier.clone(), guard.clone(), refresh_headroom.clone(), mark_chip.clone());
+        let (eq, applier, guard, rh, mark) =
+            (eq.clone(), applier.clone(), guard.clone(), refresh_headroom.clone(), mark_chip.clone());
         curve(gains, on, move |i, v| {
             {
                 let mut e = eq.borrow_mut();
@@ -762,7 +781,8 @@ fn equalizer(pv: &widgets::Preview, eq: &Rc<RefCell<Eq>>, running: bool, routed:
     pre_col.append(&pre_value);
     row.append(&pre_col);
     {
-        let (eq, applier, guard, rh, label) = (eq.clone(), applier.clone(), guard.clone(), refresh_headroom.clone(), pre_value.clone());
+        let (eq, applier, guard, rh, label) =
+            (eq.clone(), applier.clone(), guard.clone(), refresh_headroom.clone(), pre_value.clone());
         pre.connect_value_changed(move |s| {
             let v = (s.value() * 2.0).round() / 2.0;
             label.set_text(&fmt_db(v));

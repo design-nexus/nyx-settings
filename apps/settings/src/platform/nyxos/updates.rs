@@ -270,7 +270,9 @@ fn kind_summary(s: &Status, kind: &str) -> (String, bool) {
     let news: Vec<&&Target> = list.iter().filter(|t| t.available.is_some()).collect();
     let restart = news.iter().any(|t| t.restart == "computer");
     let text = match news.as_slice() {
-        [one] => format!("{} {}{}", one.name, one.available.as_deref().unwrap_or(""), if restart { " · restart needed" } else { "" }),
+        [one] => {
+            format!("{} {}{}", one.name, one.available.as_deref().unwrap_or(""), if restart { " · restart needed" } else { "" })
+        }
         [] if kind == "firmware" => match &s.firmware {
             Firmware::Unavailable { reason } => reason.clone(),
             Firmware::NotChecked => "Not checked.".into(),
@@ -463,7 +465,13 @@ pub fn page(page: &Page) {
             b.set_sensitive(!busy());
             b
         });
-        let card = generation_card(&format!("Generation {}", g.number), &short_date(g.created), &pills, back.as_ref().map(|b| b.upcast_ref()), &[]);
+        let card = generation_card(
+            &format!("Generation {}", g.number),
+            &short_date(g.created),
+            &pills,
+            back.as_ref().map(|b| b.upcast_ref()),
+            &[],
+        );
         if g.current {
             card.add_css_class("nx2-upd-running");
         }
@@ -634,7 +642,11 @@ pub fn page(page: &Page) {
             return;
         };
         let when = if s.last_checked > 0 { format!("Checked {}", short_date(s.last_checked)) } else { "Checked just now".into() };
-        checked_text.set_text(&if s.offline { format!("{when}. There's no network connection, so this is that check's.") } else { when });
+        checked_text.set_text(&if s.offline {
+            format!("{when}. There's no network connection, so this is that check's.")
+        } else {
+            when
+        });
         mark.set_icon_name(Some(if s.offline { "dialog-warning-symbolic" } else { "emblem-ok-symbolic" }));
         let mut waiting = 0;
         for (kind, summary) in &kinds {
@@ -680,7 +692,13 @@ pub fn page(page: &Page) {
             if let Some(n) = current {
                 after.push_str(&format!(" Generation {n} stays in the boot menu."));
             }
-            let card = generation_card(&title, "After this update", &[pages::pill("Built first", "accent")], None, &[&system.join(" and "), &after]);
+            let card = generation_card(
+                &title,
+                "After this update",
+                &[pages::pill("Built first", "accent")],
+                None,
+                &[&system.join(" and "), &after],
+            );
             card.add_css_class("nx2-upd-next");
             let (node, _) = timeline_node(Dot::Next, Rc::new(Cell::new(false)), !list.is_empty(), &card);
             next.append(&node);

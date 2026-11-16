@@ -213,7 +213,11 @@ pub fn parameters(p: &str) -> String {
 /// How closely a quantization keeps the original model, in a word.
 pub fn quality(q: &str) -> String {
     let t = q.to_ascii_lowercase();
-    let bits = ["ptq", "pq", "iq", "q"].iter().find_map(|p| t.strip_prefix(p)).and_then(|r| r.chars().next()).and_then(|c| c.to_digit(10));
+    let bits = ["ptq", "pq", "iq", "q"]
+        .iter()
+        .find_map(|p| t.strip_prefix(p))
+        .and_then(|r| r.chars().next())
+        .and_then(|c| c.to_digit(10));
     let word = match (t.as_str(), bits) {
         ("f16" | "bf16" | "f32", _) => "Full",
         (_, Some(8..)) => "High",
@@ -464,7 +468,9 @@ pub fn on_click(row: &impl IsA<gtk::Widget>, f: impl Fn() + 'static) {
     click.connect_released(move |g, _, x, y| {
         // A click on a button inside the row is the button's own.
         let inner = g.widget().and_then(|w| w.pick(x, y, gtk::PickFlags::DEFAULT));
-        if inner.is_some_and(|w| std::iter::successors(Some(w), |w| w.parent()).any(|w| w.is::<gtk::Button>() || w.is::<gtk::DropDown>())) {
+        if inner.is_some_and(|w| {
+            std::iter::successors(Some(w), |w| w.parent()).any(|w| w.is::<gtk::Button>() || w.is::<gtk::DropDown>())
+        }) {
             return;
         }
         f();

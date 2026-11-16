@@ -97,10 +97,46 @@ fn pictured(key: &'static str, title: &str, desc: &str, s: Sketch) -> gtk::Box {
 
 /// Starting points: gaps, border, rounding and shadow (and for Glass, see-through windows).
 const PRESETS: &[(&str, &[(&str, f64)])] = &[
-    ("Omarchy", &[("general.gaps_in", 5.0), ("general.gaps_out", 10.0), ("general.border_size", 2.0), ("decoration.rounding", 0.0), ("decoration.shadow.range", 0.0)]),
-    ("Tight", &[("general.gaps_in", 2.0), ("general.gaps_out", 2.0), ("general.border_size", 1.0), ("decoration.rounding", 0.0), ("decoration.shadow.range", 0.0)]),
-    ("Airy", &[("general.gaps_in", 16.0), ("general.gaps_out", 24.0), ("general.border_size", 2.0), ("decoration.rounding", 8.0), ("decoration.shadow.range", 14.0)]),
-    ("Soft", &[("general.gaps_in", 10.0), ("general.gaps_out", 14.0), ("general.border_size", 2.0), ("decoration.rounding", 10.0), ("decoration.shadow.range", 18.0)]),
+    (
+        "Omarchy",
+        &[
+            ("general.gaps_in", 5.0),
+            ("general.gaps_out", 10.0),
+            ("general.border_size", 2.0),
+            ("decoration.rounding", 0.0),
+            ("decoration.shadow.range", 0.0),
+        ],
+    ),
+    (
+        "Tight",
+        &[
+            ("general.gaps_in", 2.0),
+            ("general.gaps_out", 2.0),
+            ("general.border_size", 1.0),
+            ("decoration.rounding", 0.0),
+            ("decoration.shadow.range", 0.0),
+        ],
+    ),
+    (
+        "Airy",
+        &[
+            ("general.gaps_in", 16.0),
+            ("general.gaps_out", 24.0),
+            ("general.border_size", 2.0),
+            ("decoration.rounding", 8.0),
+            ("decoration.shadow.range", 14.0),
+        ],
+    ),
+    (
+        "Soft",
+        &[
+            ("general.gaps_in", 10.0),
+            ("general.gaps_out", 14.0),
+            ("general.border_size", 2.0),
+            ("decoration.rounding", 10.0),
+            ("decoration.shadow.range", 18.0),
+        ],
+    ),
     (
         "Glass",
         &[
@@ -112,7 +148,16 @@ const PRESETS: &[(&str, &[(&str, f64)])] = &[
             ("decoration.inactive_opacity", 0.85),
         ],
     ),
-    ("Flat", &[("general.gaps_in", 8.0), ("general.gaps_out", 8.0), ("general.border_size", 0.0), ("decoration.rounding", 4.0), ("decoration.shadow.range", 0.0)]),
+    (
+        "Flat",
+        &[
+            ("general.gaps_in", 8.0),
+            ("general.gaps_out", 8.0),
+            ("general.border_size", 0.0),
+            ("decoration.rounding", 4.0),
+            ("decoration.shadow.range", 0.0),
+        ],
+    ),
 ];
 
 fn value_now(key: &str) -> Option<f64> {
@@ -266,14 +311,20 @@ pub fn build(page: &Page) {
     );
     g.add(&r);
     let animations = value_now("animations.enabled").is_none_or(|v| v > 0.5);
-    let (r, value) = widgets::nav_row(Some("media-playback-start-symbolic"), "Animations", "", if animations { "On" } else { "Off" }, || {
-        let d = widgets::subpage("Animations", 560, |p| {
-            let g = p.group("Animations");
-            g.add(&pictured("animations.enabled", "Animations", "Windows and workspaces slide and fade as they open, move and switch.", Sketch::Animations));
-            g.add(&hypr_switch("misc.animate_manual_resizes", "Animate resizing", "Smooth out keyboard and mouse resizes."));
+    let (r, value) =
+        widgets::nav_row(Some("media-playback-start-symbolic"), "Animations", "", if animations { "On" } else { "Off" }, || {
+            let d = widgets::subpage("Animations", 560, |p| {
+                let g = p.group("Animations");
+                g.add(&pictured(
+                    "animations.enabled",
+                    "Animations",
+                    "Windows and workspaces slide and fade as they open, move and switch.",
+                    Sketch::Animations,
+                ));
+                g.add(&hypr_switch("misc.animate_manual_resizes", "Animate resizing", "Smooth out keyboard and mouse resizes."));
+            });
+            widgets::forget_rows(&d);
         });
-        widgets::forget_rows(&d);
-    });
     store::subscribe(&r, "animations.enabled", move |_, v| {
         if let Some(on) = v.and_then(Value::as_bool) {
             value.set_text(if on { "On" } else { "Off" });
@@ -293,13 +344,23 @@ fn details(page: &Page) {
 
     let g = page.group("Blur");
     g.note("Blur shows behind see-through windows, the bar and menus. It costs some GPU time.");
-    g.add(&pictured("decoration.blur.enabled", "Blur", "What's behind a see-through window looks frosted, so its text stays readable.", Sketch::Blur));
+    g.add(&pictured(
+        "decoration.blur.enabled",
+        "Blur",
+        "What's behind a see-through window looks frosted, so its text stays readable.",
+        Sketch::Blur,
+    ));
     g.add(&slider("decoration.blur.size", "Blur size", "", (1.0, 20.0, 1.0), "", true));
     g.add(&slider("decoration.blur.passes", "Blur passes", "More passes look smoother.", (1.0, 6.0, 1.0), "", true));
     g.add(&slider("decoration.blur.vibrancy", "Vibrancy", "How colourful the blur stays.", (0.0, 1.0, 0.01), "", false));
 
     let g = page.group("Shadows");
-    g.add(&pictured("decoration.shadow.enabled", "Window shadows", "A soft shadow lifts each window off the wallpaper.", Sketch::Shadow));
+    g.add(&pictured(
+        "decoration.shadow.enabled",
+        "Window shadows",
+        "A soft shadow lifts each window off the wallpaper.",
+        Sketch::Shadow,
+    ));
     g.add(&slider("decoration.shadow.range", "Shadow size", "", (0.0, 50.0, 1.0), " px", true));
     g.add(&slider("decoration.shadow.render_power", "Shadow falloff", "Higher is a sharper edge.", (1.0, 4.0, 1.0), "", true));
 
@@ -316,6 +377,14 @@ fn details(page: &Page) {
         cmd::spawn(&["hyprctl", "setcursor", &theme, &n]);
     });
     g.add(&r);
-    g.add(&hypr_slider("cursor.inactive_timeout", "Hide cursor after", "Seconds without movement. 0 never hides it.", (0.0, 30.0, 1.0), 0, " s", false));
+    g.add(&hypr_slider(
+        "cursor.inactive_timeout",
+        "Hide cursor after",
+        "Seconds without movement. 0 never hides it.",
+        (0.0, 30.0, 1.0),
+        0,
+        " s",
+        false,
+    ));
     g.add(&hypr_switch("cursor.hide_on_key_press", "Hide cursor while typing", ""));
 }

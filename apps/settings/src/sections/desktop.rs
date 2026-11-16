@@ -304,7 +304,15 @@ pub(super) fn window(cr: &Context, p: &Pal, r: R, kind: Kind, focused: bool) {
                 let (side, main) = b.hsplit(0.27, 7.0);
                 for i in 0..4 {
                     let first = i == 0;
-                    bar(cr, side.x, side.y + i as f64 * step, side.w * if first { 0.9 } else { 0.72 }, lh, if first { p.accent } else { p.dim }, if first { 0.85 } else { 0.4 });
+                    bar(
+                        cr,
+                        side.x,
+                        side.y + i as f64 * step,
+                        side.w * if first { 0.9 } else { 0.72 },
+                        lh,
+                        if first { p.accent } else { p.dim },
+                        if first { 0.85 } else { 0.4 },
+                    );
                 }
                 bar(cr, main.x, main.y, main.w * 0.5, lh, p.text, 0.45);
                 let rh = (step * 1.15).max(5.0);
@@ -362,10 +370,7 @@ pub(super) fn window(cr: &Context, p: &Pal, r: R, kind: Kind, focused: bool) {
 
 /// Every installed app's icon by its desktop id (without `.desktop`).
 pub(super) fn app_icons() -> std::collections::HashMap<String, gio::Icon> {
-    gio::AppInfo::all()
-        .into_iter()
-        .filter_map(|a| Some((a.id()?.trim_end_matches(".desktop").to_string(), a.icon()?)))
-        .collect()
+    gio::AppInfo::all().into_iter().filter_map(|a| Some((a.id()?.trim_end_matches(".desktop").to_string(), a.icon()?))).collect()
 }
 
 /// An app's icon by its desktop id, from [`app_icons`] (or a generic one).
@@ -407,11 +412,31 @@ pub fn set_dock(key: &str, value: toml::Value) {
 
 /// The dock's look and behaviour, which "Back to the defaults" hands back (pins and
 /// folders stay).
-const DOCK_LOOK: &[&str] =
-    &["position", "icon_size", "hide", "hide_delay_ms", "running", "previews", "preview_delay_ms", "trash", "folder_counts", "apps", "app_names", "apps_search_bar", "click_animation"];
+const DOCK_LOOK: &[&str] = &[
+    "position",
+    "icon_size",
+    "hide",
+    "hide_delay_ms",
+    "running",
+    "previews",
+    "preview_delay_ms",
+    "trash",
+    "folder_counts",
+    "apps",
+    "app_names",
+    "apps_search_bar",
+    "click_animation",
+];
 
-const ANIMS: &[(&str, &str)] =
-    &[("squish", "Squish"), ("bounce", "Bounce"), ("ripple", "Ripple"), ("pop", "Pop"), ("glow", "Glow"), ("depress", "Depress"), ("none", "None")];
+const ANIMS: &[(&str, &str)] = &[
+    ("squish", "Squish"),
+    ("bounce", "Bounce"),
+    ("ripple", "Ripple"),
+    ("pop", "Pop"),
+    ("glow", "Glow"),
+    ("depress", "Depress"),
+    ("none", "None"),
+];
 
 /// What the dock picture shows: the settings, and whether a window is drawn over it.
 struct DockLook {
@@ -660,8 +685,17 @@ pub fn build_dock(page: &Page) {
     pv.add(&stage);
 
     let refresh: Rc<dyn Fn()> = {
-        let (look, dock, holder, measure, measure_label, tag, tag_label, desk_area, line) =
-            (look.clone(), dock.clone(), holder.clone(), measure.clone(), measure_label.clone(), tag.clone(), tag_label.clone(), desk_area.clone(), line.clone());
+        let (look, dock, holder, measure, measure_label, tag, tag_label, desk_area, line) = (
+            look.clone(),
+            dock.clone(),
+            holder.clone(),
+            measure.clone(),
+            measure_label.clone(),
+            tag.clone(),
+            tag_label.clone(),
+            desk_area.clone(),
+            line.clone(),
+        );
         let (balance, measure_slot) = (balance.clone(), measure_slot.clone());
         Rc::new(move || {
             let l = look.borrow();
@@ -889,12 +923,10 @@ pub fn build_dock(page: &Page) {
     hide_row_holder.append(&seg);
     g.add(&hide_row);
     widgets::keywords("autohide hide smart automatically never");
-    let (r, _) = widgets::switch_row(
-        "Window previews",
-        "Rest the pointer on an app to see its windows.",
-        b("previews", true),
-        |on| set_dock("previews", toml::Value::Boolean(on)),
-    );
+    let (r, _) =
+        widgets::switch_row("Window previews", "Rest the pointer on an app to see its windows.", b("previews", true), |on| {
+            set_dock("previews", toml::Value::Boolean(on))
+        });
     g.add(&r);
     widgets::keywords("previews thumbnails hover");
 
@@ -918,9 +950,10 @@ pub fn build_dock(page: &Page) {
             refresh();
         })
     };
-    let (search_tile, ssw) = dock_tile("system-search-symbolic", "Search bar", "Always in Apps", b("apps_search_bar", false), |on| {
-        set_dock("apps_search_bar", toml::Value::Boolean(on))
-    });
+    let (search_tile, ssw) =
+        dock_tile("system-search-symbolic", "Search bar", "Always in Apps", b("apps_search_bar", false), |on| {
+            set_dock("apps_search_bar", toml::Value::Boolean(on))
+        });
     search_tile.set_sensitive(b("apps", true));
     *search_switch.borrow_mut() = Some(ssw);
     let (badge_tile, _) = dock_tile("folder-download-symbolic", "Badges", "Counts on folders", b("folder_counts", true), |on| {
@@ -937,7 +970,10 @@ pub fn build_dock(page: &Page) {
     let tiles = [
         (&apps_tile, "Apps button First in the dock: every app in a grid, with search. launcher"),
         (&search_tile, "Apps search bar Always show the search bar in the Apps panel. Off: it appears when you start typing."),
-        (&badge_tile, "Folder item counts badges A badge with how many items each folder holds. Right-click a folder to set it for that folder."),
+        (
+            &badge_tile,
+            "Folder item counts badges A badge with how many items each folder holds. Right-click a folder to set it for that folder.",
+        ),
         (&trash_tile, "Trash Keep the Trash at the end of the dock."),
     ];
     for (tile, words) in tiles.iter() {
@@ -978,7 +1014,12 @@ pub fn build_dock(page: &Page) {
         }
         glib::timeout_add_local_once(std::time::Duration::from_millis(300), || window::rebuild("dock"));
     });
-    g.add(&widgets::icon_row("view-refresh-symbolic", "Back to the defaults", "Pinned apps and folders stay.", Some(reset.upcast_ref())));
+    g.add(&widgets::icon_row(
+        "view-refresh-symbolic",
+        "Back to the defaults",
+        "Pinned apps and folders stay.",
+        Some(reset.upcast_ref()),
+    ));
     widgets::keywords(
         "reset defaults position size hide autohide previews thumbnails trash apps launcher search running monitor screen folder count badge click animation bounce squish ripple pop glow depress",
     );
@@ -1369,7 +1410,9 @@ fn cc_tile(t: &CcTile, (cols, _): (u32, u32)) -> gtk::Box {
                     "amber",
                     &[("Living room", "Lights on", ""), ("Thermostat", "21°", ""), ("Front door", "Locked", "")],
                 ),
-                _ => ("ccp-list", "blue", &[("Last backup", "2 h ago", ""), ("Next", "Tonight 02:00", ""), ("Size", "48 GB", "")]),
+                _ => {
+                    ("ccp-list", "blue", &[("Last backup", "2 h ago", ""), ("Next", "Tonight 02:00", ""), ("Size", "48 GB", "")])
+                }
             };
             let b = cc_frame(class, swatch);
             let head = widgets::hbox(6);
@@ -1477,7 +1520,8 @@ fn cc_panel(pages: &[Vec<CcTile>], index: usize, remember: bool, notes: &Notes) 
             dots.append(&d);
         }
         panel.append(&dots);
-        let (bold, rest) = if remember { ("Opens on the last page", " you left") } else { ("Always opens", " on the first page") };
+        let (bold, rest) =
+            if remember { ("Opens on the last page", " you left") } else { ("Always opens", " on the first page") };
         n.push((dots.upcast(), bold.into(), rest.into()));
     }
     panel
@@ -1543,7 +1587,13 @@ fn cc_bar_strip(status: bool, button: bool) -> (gtk::Box, gtk::Box, gtk::Box) {
     let st = widgets::hbox(8);
     st.add_css_class("cc-status");
     tint(&st);
-    for icon in ["weather-few-clouds-symbolic", "utilities-system-monitor-symbolic", "network-wireless-symbolic", "audio-volume-high-symbolic", "battery-good-symbolic"] {
+    for icon in [
+        "weather-few-clouds-symbolic",
+        "utilities-system-monitor-symbolic",
+        "network-wireless-symbolic",
+        "audio-volume-high-symbolic",
+        "battery-good-symbolic",
+    ] {
         st.append(&gtk::Image::from_icon_name(icon));
     }
     strip_mark(&st, status);
@@ -1659,7 +1709,12 @@ pub fn build_control_center(page: &Page) {
             show();
         });
     }
-    g.add(&widgets::icon_row("view-paged-symbolic", "Open on the last page", "Off: it always opens on the first.", Some(sw.upcast_ref())));
+    g.add(&widgets::icon_row(
+        "view-paged-symbolic",
+        "Open on the last page",
+        "Off: it always opens on the first.",
+        Some(sw.upcast_ref()),
+    ));
 
     // Omarchy's bar takes these as its plugins; Nyx Bar's items (NyxOS) are its own
     // plugins, under Bar Plugins.
@@ -1689,36 +1744,49 @@ pub fn build_control_center(page: &Page) {
     let g = page.group("Tiles");
     let count = if n_pages == 1 { "1 page".to_string() } else { format!("{n_pages} pages") };
     let pages2 = pages.clone();
-    let (r, _) = widgets::nav_row(Some("view-grid-symbolic"), "Change the tiles", "Add, take off and move them, page by page.", &count, move || {
-        let pages = pages2.clone();
-        widgets::subpage("The tiles", 520, move |sp| {
-            let g = sp.group("");
-            g.note("The tiles are changed in the panel itself: open it and press the pencil at its top. Drag a tile to move it; × takes it off.");
-            let (r, _) = widgets::button_row("Open the Control Center", "", "Open", |_| cmd::spawn(&["nyx-control-center", "--show"]));
-            g.add(&r);
-            for (i, tiles) in pages.iter().enumerate() {
-                let g = sp.group(&format!("Page {}", i + 1));
-                for t in tiles {
-                    let (name, icon) = cc_name_icon(&t.widget);
-                    g.add(&widgets::icon_row(icon, &name, &format!("{} × {}", t.cols, t.rows), None));
+    let (r, _) = widgets::nav_row(
+        Some("view-grid-symbolic"),
+        "Change the tiles",
+        "Add, take off and move them, page by page.",
+        &count,
+        move || {
+            let pages = pages2.clone();
+            widgets::subpage("The tiles", 520, move |sp| {
+                let g = sp.group("");
+                g.note("The tiles are changed in the panel itself: open it and press the pencil at its top. Drag a tile to move it; × takes it off.");
+                let (r, _) =
+                    widgets::button_row("Open the Control Center", "", "Open", |_| cmd::spawn(&["nyx-control-center", "--show"]));
+                g.add(&r);
+                for (i, tiles) in pages.iter().enumerate() {
+                    let g = sp.group(&format!("Page {}", i + 1));
+                    for t in tiles {
+                        let (name, icon) = cc_name_icon(&t.widget);
+                        g.add(&widgets::icon_row(icon, &name, &format!("{} × {}", t.cols, t.rows), None));
+                    }
+                    if tiles.is_empty() {
+                        g.add(&widgets::row("No tiles", "", None));
+                    }
                 }
-                if tiles.is_empty() {
-                    g.add(&widgets::row("No tiles", "", None));
-                }
-            }
-        });
-    });
+            });
+        },
+    );
     g.add(&r);
     widgets::keywords("tiles layout pages edit pencil change add remove move");
     // The user's own layout goes; NyxOS's (or the Control Center's own) shows through.
-    let reset = widgets::confirm_button("Restore", "Click again to restore", move |_| match reset_key("control-center", "pages") {
-        Ok(()) => run(&["systemctl", "--user", "try-restart", "nyx-control-center.service"], || {
-            window::toast("The Control Center has its standard tiles again");
-            window::rebuild("control-center");
-        }),
-        Err(e) => window::toast(&format!("Couldn't restore: {e}")),
-    });
-    g.add(&widgets::icon_row("view-refresh-symbolic", "Standard layout", "Put back the standard tiles and pages.", Some(reset.upcast_ref())));
+    let reset =
+        widgets::confirm_button("Restore", "Click again to restore", move |_| match reset_key("control-center", "pages") {
+            Ok(()) => run(&["systemctl", "--user", "try-restart", "nyx-control-center.service"], || {
+                window::toast("The Control Center has its standard tiles again");
+                window::rebuild("control-center");
+            }),
+            Err(e) => window::toast(&format!("Couldn't restore: {e}")),
+        });
+    g.add(&widgets::icon_row(
+        "view-refresh-symbolic",
+        "Standard layout",
+        "Put back the standard tiles and pages.",
+        Some(reset.upcast_ref()),
+    ));
     widgets::keywords("control center quick settings tiles layout pages reset restore standard");
 
     on_narrow(page, move |narrow| {
@@ -1921,7 +1989,14 @@ fn time_field(value: &str, on_apply: impl Fn(String) + 'static) -> gtk::Entry {
 }
 
 /// Each app's pop-ups and history, one level down.
-fn notify_apps(sp: &Page, apps: &[serde_json::Value], nyx: bool, state: &Rc<RefCell<serde_json::Value>>, save: &Rc<dyn Fn()>, changed: &Rc<dyn Fn()>) {
+fn notify_apps(
+    sp: &Page,
+    apps: &[serde_json::Value],
+    nyx: bool,
+    state: &Rc<RefCell<serde_json::Value>>,
+    save: &Rc<dyn Fn()>,
+    changed: &Rc<dyn Fn()>,
+) {
     let g = sp.group("");
     g.note(if nyx {
         "Turn off pop-ups to have an app's notifications arrive quietly in the Inbox; turn off history to keep none of them."
@@ -2051,8 +2126,11 @@ pub fn build_notifications(page: &Page) {
     let mut senders: Vec<&serde_json::Value> = apps.iter().collect();
     senders.sort_by_key(|a| std::cmp::Reverse(a["count"].as_i64().unwrap_or(0)));
     let icons = app_icons();
-    let senders: Vec<(String, gio::Icon)> =
-        senders.iter().take(2).map(|a| (notifyd::app_name(a["app"].as_str().unwrap_or_default()), notify_icon(&icons, a))).collect();
+    let senders: Vec<(String, gio::Icon)> = senders
+        .iter()
+        .take(2)
+        .map(|a| (notifyd::app_name(a["app"].as_str().unwrap_or_default()), notify_icon(&icons, a)))
+        .collect();
     let narrow_now = Rc::new(Cell::new(false));
     let fill_pops: Rc<dyn Fn()> = {
         let (pops, with_text, narrow_now) = (pops.clone(), with_text.clone(), narrow_now.clone());
@@ -2133,7 +2211,8 @@ pub fn build_notifications(page: &Page) {
     keep.append(&kl);
     night.append(&keep);
     let describe_night: Rc<dyn Fn()> = {
-        let (state, night_line, chip, chip_label, strip) = (state.clone(), night_line.clone(), chip.clone(), chip_label.clone(), strip.clone());
+        let (state, night_line, chip, chip_label, strip) =
+            (state.clone(), night_line.clone(), chip.clone(), chip_label.clone(), strip.clone());
         Rc::new(move || {
             let s = state.borrow();
             let on = s["schedule"]["enabled"].as_bool().unwrap_or(false);
@@ -2150,7 +2229,10 @@ pub fn build_notifications(page: &Page) {
         })
     };
     describe_night();
-    let foot = pv.foot("dialog-information-symbolic", "Super N or the bell opens the Notification Center. It keeps an Inbox, pinned notifications and the history.");
+    let foot = pv.foot(
+        "dialog-information-symbolic",
+        "Super N or the bell opens the Notification Center. It keeps an Inbox, pinned notifications and the history.",
+    );
 
     // ---- The controls.
     let g = page.group(if omarchy { "Pop-ups shown by" } else { "Pop-ups" });
@@ -2196,32 +2278,30 @@ pub fn build_notifications(page: &Page) {
     }
     if nyx {
         let (s2, sv, wt, fp, seg) = (state.clone(), save.clone(), with_text.clone(), fill_pops.clone(), text_seg.clone());
-        let (r, _) = widgets::switch_row("Show text in pop-ups", "Off: only the app and the title.", with_text.get(), move |on| {
-            s2.borrow_mut()["hide_popup_text"] = (!on).into();
-            sv();
-            wt.set(on);
-            fp();
-            let want = if on { "With" } else { "Title" };
-            let mut c = seg.first_child();
-            while let Some(child) = c {
-                if let Some(b) = child.downcast_ref::<gtk::ToggleButton>()
-                    && b.label().is_some_and(|l| l.starts_with(want))
-                {
-                    b.set_active(true);
+        let (r, _) =
+            widgets::switch_row("Show text in pop-ups", "Off: only the app and the title.", with_text.get(), move |on| {
+                s2.borrow_mut()["hide_popup_text"] = (!on).into();
+                sv();
+                wt.set(on);
+                fp();
+                let want = if on { "With" } else { "Title" };
+                let mut c = seg.first_child();
+                while let Some(child) = c {
+                    if let Some(b) = child.downcast_ref::<gtk::ToggleButton>()
+                        && b.label().is_some_and(|l| l.starts_with(want))
+                    {
+                        b.set_active(true);
+                    }
+                    c = child.next_sibling();
                 }
-                c = child.next_sibling();
-            }
-        });
+            });
         g.add(&r);
         widgets::keywords("privacy preview text popups content");
     }
     if omarchy {
         let (bell_on, corner) = (bell_on.clone(), corner.clone());
-        let (r, _) = widgets::switch_row(
-            "Bell in the bar",
-            "Unread count; right-click for Do not disturb.",
-            bell_on.get(),
-            move |on| {
+        let (r, _) =
+            widgets::switch_row("Bell in the bar", "Unread count; right-click for Do not disturb.", bell_on.get(), move |on| {
                 if on {
                     run(&["omarchy-plugin-enable", "design-nexus.notification-center", "right"], || {});
                 } else {
@@ -2229,8 +2309,7 @@ pub fn build_notifications(page: &Page) {
                 }
                 bell_on.set(on);
                 corner.queue_draw();
-            },
-        );
+            });
         g.add(&r);
         widgets::keywords("bell bar unread");
     }
@@ -2264,7 +2343,11 @@ pub fn build_notifications(page: &Page) {
             }
             None => window::toast("Use a 24-hour time like 22:30"),
         });
-        e.set_tooltip_text(Some(if i == 0 { "Starts at, as a 24-hour time like 22:30" } else { "Ends at, as a 24-hour time like 07:00" }));
+        e.set_tooltip_text(Some(if i == 0 {
+            "Starts at, as a 24-hour time like 22:30"
+        } else {
+            "Ends at, as a 24-hour time like 07:00"
+        }));
         times.append(&e);
     }
     g.add(&widgets::row("Quiet hours", "", Some(times.upcast_ref())));

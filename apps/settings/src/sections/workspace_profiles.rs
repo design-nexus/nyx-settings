@@ -451,7 +451,10 @@ fn board_workspaces(p: &Profile, active: bool) -> Vec<Ws> {
             )
         })
     } else {
-        (p.workspaces, p.workspace_list.iter().map(|w| Ws { id: w.id, name: w.name.clone(), monitor: w.monitor.clone() }).collect())
+        (
+            p.workspaces,
+            p.workspace_list.iter().map(|w| Ws { id: w.id, name: w.name.clone(), monitor: w.monitor.clone() }).collect(),
+        )
     };
     let highest = p
         .apps
@@ -626,10 +629,15 @@ fn board(pv: &widgets::Preview, p: &Profile, active: bool) {
     let spaces = board_workspaces(p, active);
     let labels: Vec<(u32, String)> = spaces
         .iter()
-        .map(|w| (w.id, match &w.name {
-            Some(n) => format!("Workspace {}: {n}", w.id),
-            None => format!("Workspace {}", w.id),
-        }))
+        .map(|w| {
+            (
+                w.id,
+                match &w.name {
+                    Some(n) => format!("Workspace {}: {n}", w.id),
+                    None => format!("Workspace {}", w.id),
+                },
+            )
+        })
         .collect();
     let grid = gtk::Grid::new();
     grid.set_column_homogeneous(true);

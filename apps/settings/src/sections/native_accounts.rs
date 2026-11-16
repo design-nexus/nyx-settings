@@ -146,7 +146,8 @@ pub fn build_with_preview(page: &Page, pv: &widgets::Preview) {
             // `None` shows the providers to add an account from.
             let render: Rc<std::cell::RefCell<Option<Rc<dyn Fn(Option<String>)>>>> = Rc::default();
             let f: Rc<dyn Fn(Option<String>)> = {
-                let (accounts, rows, shown, foot, render) = (accounts.clone(), rows.clone(), shown.clone(), foot.clone(), render.clone());
+                let (accounts, rows, shown, foot, render) =
+                    (accounts.clone(), rows.clone(), shown.clone(), foot.clone(), render.clone());
                 Rc::new(move |id: Option<String>| {
                     let id = id.filter(|id| accounts.iter().any(|a| a.id == *id));
                     SCREEN.with(|s| s.set(if id.is_some() { Screen::List } else { Screen::Add }));
@@ -192,7 +193,10 @@ pub fn build_with_preview(page: &Page, pv: &widgets::Preview) {
             rows.borrow_mut().push((None, add.clone()));
             holder.append(&add);
             let chosen = if on_list() {
-                SELECTED.with(|s| s.borrow().clone()).filter(|id| accounts.iter().any(|a| a.id == *id)).or_else(|| accounts.first().map(|a| a.id.clone()))
+                SELECTED
+                    .with(|s| s.borrow().clone())
+                    .filter(|id| accounts.iter().any(|a| a.id == *id))
+                    .or_else(|| accounts.first().map(|a| a.id.clone()))
             } else {
                 None
             };
@@ -259,7 +263,7 @@ fn account_preview(shown: &gtk::Box, foot: &gtk::Label, account: &Account) {
     let mut end: Vec<gtk::Widget> = Vec::new();
     if account.status == "needs_sign_in" && oauth {
         let b = widgets::labeled_button("view-refresh-symbolic", "Sign in again");
-    b.add_css_class("acc-small");
+        b.add_css_class("acc-small");
         b.add_css_class("suggested-action");
         let id = account.id.clone();
         b.connect_clicked(move |_| {
@@ -355,7 +359,8 @@ fn account_preview(shown: &gtk::Box, foot: &gtk::Label, account: &Account) {
             continue;
         }
         let on = account.enabled.contains(&service);
-        let title = if service == Service::Files && account.provider == "google" { "Google Drive" } else { service_name(&service) };
+        let title =
+            if service == Service::Files && account.provider == "google" { "Google Drive" } else { service_name(&service) };
         let desc = if !on {
             format!("Off · stays on {provider}")
         } else {
@@ -830,8 +835,12 @@ enum Part {
 }
 
 impl Part {
-    const ALL: [(Part, &'static str, &'static str); 4] =
-        [(Part::SignIn, "signin", "Sign-in"), (Part::Files, "files", "Files"), (Part::Notes, "notes", "Notes"), (Part::Sync, "sync", "Sync & versions")];
+    const ALL: [(Part, &'static str, &'static str); 4] = [
+        (Part::SignIn, "signin", "Sign-in"),
+        (Part::Files, "files", "Files"),
+        (Part::Notes, "notes", "Notes"),
+        (Part::Sync, "sync", "Sync & versions"),
+    ];
 
     fn key(self) -> &'static str {
         Part::ALL.iter().find(|(p, ..)| *p == self).map(|(_, k, _)| *k).unwrap_or("signin")
@@ -916,7 +925,9 @@ fn connection_settings(shown: &gtk::Box, foot: &gtk::Label, account: &Account, p
         Part::Files | Part::Notes => cloud_part(&body, account, part, redo),
         Part::Sync => sync_part(&page),
     }
-    foot.set_text(&format!("Switches and lists change at once; typed changes wait for Save. Nothing here deletes anything on {provider}."));
+    foot.set_text(&format!(
+        "Switches and lists change at once; typed changes wait for Save. Nothing here deletes anything on {provider}."
+    ));
 }
 
 /// A bar at the foot that shows once something typed has changed: Cancel and Save.
@@ -1057,7 +1068,13 @@ fn sign_in_part(page: &Page, body: &gtk::Box, account: &Account, redo: Rc<dyn Fn
     }
     let mut servers = Vec::new();
     if !oauth {
-        for (key, title) in [("imap", "Incoming mail"), ("smtp", "Outgoing mail"), ("caldav", "Calendars"), ("carddav", "Contacts"), ("webdav", "Files")] {
+        for (key, title) in [
+            ("imap", "Incoming mail"),
+            ("smtp", "Outgoing mail"),
+            ("caldav", "Calendars"),
+            ("carddav", "Contacts"),
+            ("webdav", "Files"),
+        ] {
             if let Some(value) = account.endpoints.get(key) {
                 let e = gtk::Entry::new();
                 e.set_text(value);
@@ -1136,7 +1153,14 @@ fn icon_switch(icon: &str, title: &str, desc: &str, active: bool, on_change: imp
 }
 
 /// A row with an icon and a list to choose from, applied at once.
-fn icon_choice(icon: &str, title: &str, desc: &str, options: Vec<(String, String)>, current: &str, on_change: impl Fn(String) + 'static) -> gtk::Box {
+fn icon_choice(
+    icon: &str,
+    title: &str,
+    desc: &str,
+    options: Vec<(String, String)>,
+    current: &str,
+    on_change: impl Fn(String) + 'static,
+) -> gtk::Box {
     let dd = widgets::dropdown(&options, current);
     dd.set_valign(gtk::Align::Center);
     dd.connect_selected_notify(move |d| {
@@ -1164,7 +1188,10 @@ fn cloud_part(body: &gtk::Box, account: &Account, part: Part, redo: Rc<dyn Fn()>
             let remote = match result {
                 Ok(remotes) => remotes.into_iter().find(|r| r.account_id.as_deref() == Some(account.id.as_str())),
                 Err(_) => {
-                    holder.append(&widgets::banner("Files and Notes need Nyx Cloud and rclone. Install them, then open this again.", true));
+                    holder.append(&widgets::banner(
+                        "Files and Notes need Nyx Cloud and rclone. Install them, then open this again.",
+                        true,
+                    ));
                     return;
                 }
             };
@@ -1230,10 +1257,11 @@ fn files_part(page: &Page, account: &Account, remote: nyx_cloud::Remote, redo: R
     let g = page.group(&format!("{name} in Files"));
     {
         let (r, redo) = (remote.clone(), redo.clone());
-        let row = icon_switch("folder-symbolic", "Show in Files", "Under Cloud in its sidebar", remote.storage_enabled, move |on| {
-            let (id, account_id, notes) = (r.id.clone(), r.account_id.clone(), r.notes.clone());
-            cloud_now(redo.clone(), move |c| c.configure_services(&id, account_id.as_deref(), on, &notes));
-        });
+        let row =
+            icon_switch("folder-symbolic", "Show in Files", "Under Cloud in its sidebar", remote.storage_enabled, move |on| {
+                let (id, account_id, notes) = (r.id.clone(), r.account_id.clone(), r.notes.clone());
+                cloud_now(redo.clone(), move |c| c.configure_services(&id, account_id.as_deref(), on, &notes));
+            });
         g.add(&row);
     }
     let connected = remote.mount_status == "mounted";
@@ -1321,17 +1349,27 @@ fn files_part(page: &Page, account: &Account, remote: nyx_cloud::Remote, redo: R
         g.add(&row);
     }
     let mut limits: Vec<(String, String)> =
-        [("", "No limit"), ("1M", "1 MB/s"), ("5M", "5 MB/s"), ("10M", "10 MB/s"), ("50M", "50 MB/s")].iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        [("", "No limit"), ("1M", "1 MB/s"), ("5M", "5 MB/s"), ("10M", "10 MB/s"), ("50M", "50 MB/s")]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
     if !limits.iter().any(|(k, _)| *k == remote.preferences.bandwidth) {
         limits.push((remote.preferences.bandwidth.clone(), remote.preferences.bandwidth.clone()));
     }
     {
         let (r, redo) = (remote.clone(), redo.clone());
-        let row = icon_choice("network-transmit-receive-symbolic", "Speed limit", "So big uploads don't slow everything else", limits, &remote.preferences.bandwidth, move |v| {
-            let (id, name, mut prefs) = (r.id.clone(), r.name.clone(), r.preferences.clone());
-            prefs.bandwidth = v;
-            cloud_now(redo.clone(), move |c| c.update(&id, &name, &prefs));
-        });
+        let row = icon_choice(
+            "network-transmit-receive-symbolic",
+            "Speed limit",
+            "So big uploads don't slow everything else",
+            limits,
+            &remote.preferences.bandwidth,
+            move |v| {
+                let (id, name, mut prefs) = (r.id.clone(), r.name.clone(), r.preferences.clone());
+                prefs.bandwidth = v;
+                cloud_now(redo.clone(), move |c| c.update(&id, &name, &prefs));
+            },
+        );
         g.add(&row);
     }
     widgets::keywords("cache space keep offline bandwidth speed limit upload");
@@ -1387,7 +1425,11 @@ fn notes_part(page: &Page, body: &gtk::Box, account: &Account, remote: nyx_cloud
     g.add(&widgets::stacked_row(&format!("On {name}"), "A folder of its own", folder.upcast_ref()));
     widgets::keywords("notes sync vault folder markdown versions");
     save.connect_clicked(move |button| {
-        let notes = nyx_cloud::NotesPreferences { enabled: on.is_active(), vault: vault.text().trim().into(), folder: folder.text().trim().into() };
+        let notes = nyx_cloud::NotesPreferences {
+            enabled: on.is_active(),
+            vault: vault.text().trim().into(),
+            folder: folder.text().trim().into(),
+        };
         if notes.enabled && !(std::path::Path::new(&notes.vault).is_absolute() && std::path::Path::new(&notes.vault).is_dir()) {
             note.set_text("Choose a folder on this computer first.");
             return;
@@ -1440,7 +1482,12 @@ fn sync_part(page: &Page) {
                         let review = gtk::Button::with_label("Review…");
                         let i = issue.clone();
                         review.connect_clicked(move |_| review_issue(i.clone()));
-                        issues.append(&widgets::icon_row("dialog-warning-symbolic", &issue.source_label, detail, Some(review.upcast_ref())));
+                        issues.append(&widgets::icon_row(
+                            "dialog-warning-symbolic",
+                            &issue.source_label,
+                            detail,
+                            Some(review.upcast_ref()),
+                        ));
                     }
                 }
                 Err(_) => issues.append(&widgets::label("Couldn't read them. Open this again in a moment.", "dim")),

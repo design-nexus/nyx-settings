@@ -318,7 +318,9 @@ pub(super) fn strip_card(open: impl Fn() + 'static) -> gtk::Box {
     let screens = screens();
     let rules = rules();
     let current = active_workspace();
-    let pinned_to = |id: u32| rules.iter().find(|r| r.workspace == id).and_then(|r| r.monitor.clone()).filter(|m| screens.iter().any(|s| s.name == *m));
+    let pinned_to = |id: u32| {
+        rules.iter().find(|r| r.workspace == id).and_then(|r| r.monitor.clone()).filter(|m| screens.iter().any(|s| s.name == *m))
+    };
     let mut columns: Vec<(String, &str, Vec<u32>)> = Vec::new();
     // Only screens with workspaces of their own get a column; the rest share "Any screen".
     for s in &screens {
@@ -453,7 +455,9 @@ fn pictured(key: &'static str, title: &str, desc: &str, s: Sketch) -> gtk::Box {
 /// One level down: the workspaces with settings of their own.
 pub(super) fn own_page(page: &Page) {
     let g = page.group("Workspaces with their own settings");
-    g.note("A layout, name, gaps or bare windows for one workspace: a scrolling workspace for writing, a floating one for tools.");
+    g.note(
+        "A layout, name, gaps or bare windows for one workspace: a scrolling workspace for writing, a floating one for tools.",
+    );
     let list = widgets::vbox(0);
     g.add(&list);
     // The list redraws itself after a change, so it holds a (weak) handle on itself.

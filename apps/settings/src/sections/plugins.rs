@@ -53,9 +53,9 @@ impl Plugin {
             }
             None
         });
-        git.or_else(|| self.meta("repository")).or_else(|| self.meta("homepage")).map(|u| {
-            u.trim_start_matches("https://").trim_start_matches("http://").trim_end_matches(".git").to_string()
-        })
+        git.or_else(|| self.meta("repository"))
+            .or_else(|| self.meta("homepage"))
+            .map(|u| u.trim_start_matches("https://").trim_start_matches("http://").trim_end_matches(".git").to_string())
     }
 
     fn kinds_text(&self) -> String {
@@ -204,19 +204,20 @@ pub fn build(page: &Page) {
 
     // ----- Keep up to date -----
     let g = page.group("");
-    let (r, _) = widgets::button_row("Update plugins", "Fetch the latest version of every plugin added from git.", "Update all", |b| {
-        b.set_sensitive(false);
-        let b = b.clone();
-        let args: &[&str] = if nyxos() { &["nyx", "plugin", "update", "--yes"] } else { &["omarchy-plugin-update", "--yes"] };
-        cmd::run_async(args, move |r| {
-            b.set_sensitive(true);
-            match r {
-                Ok(_) => window::toast("Plugins updated"),
-                Err(e) => window::toast(&format!("{e}")),
-            }
-            refresh_later();
+    let (r, _) =
+        widgets::button_row("Update plugins", "Fetch the latest version of every plugin added from git.", "Update all", |b| {
+            b.set_sensitive(false);
+            let b = b.clone();
+            let args: &[&str] = if nyxos() { &["nyx", "plugin", "update", "--yes"] } else { &["omarchy-plugin-update", "--yes"] };
+            cmd::run_async(args, move |r| {
+                b.set_sensitive(true);
+                match r {
+                    Ok(_) => window::toast("Plugins updated"),
+                    Err(e) => window::toast(&format!("{e}")),
+                }
+                refresh_later();
+            });
         });
-    });
     r.prepend(&widgets::tile("software-update-available-symbolic"));
     r.add_css_class("with-tile");
     r.add_css_class("pg-update");
@@ -270,7 +271,11 @@ pub fn build(page: &Page) {
         card.append(&r);
     }
     if added.is_empty() {
-        card.append(&widgets::row("None yet", if nyxos() { "Plugins you add appear here." } else { "Find more in the Omarchy plugin catalog." }, None));
+        card.append(&widgets::row(
+            "None yet",
+            if nyxos() { "Plugins you add appear here." } else { "Find more in the Omarchy plugin catalog." },
+            None,
+        ));
     }
     g.add(&card);
 
@@ -282,18 +287,26 @@ pub fn build(page: &Page) {
         let names: Vec<&str> = own.iter().take(3).map(|p| p.name.as_str()).collect();
         let desc = format!("{} and more", names.join(", "));
         let own2 = own.clone();
-        let (r, _) = widgets::nav_row(Some("emblem-system-symbolic"), title, &desc, &format!("{on} of {} on", own.len()), move || {
-            let own = own2.clone();
-            let d = widgets::subpage(title, 600, move |p| {
-                let g = p.group(title);
-                g.note(if nyxos() { "These come with NyxOS; they can be turned off, not removed." } else { "These come with Omarchy; they can be turned off, not removed." });
-                for plugin in &own {
-                    g.add(&widgets::row(&plugin.name, &plugin.kinds_text(), Some(plugin_switch(plugin).upcast_ref())));
-                }
+        let (r, _) =
+            widgets::nav_row(Some("emblem-system-symbolic"), title, &desc, &format!("{on} of {} on", own.len()), move || {
+                let own = own2.clone();
+                let d = widgets::subpage(title, 600, move |p| {
+                    let g = p.group(title);
+                    g.note(if nyxos() {
+                        "These come with NyxOS; they can be turned off, not removed."
+                    } else {
+                        "These come with Omarchy; they can be turned off, not removed."
+                    });
+                    for plugin in &own {
+                        g.add(&widgets::row(&plugin.name, &plugin.kinds_text(), Some(plugin_switch(plugin).upcast_ref())));
+                    }
+                });
+                widgets::forget_rows(&d);
             });
-            widgets::forget_rows(&d);
-        });
-        widgets::keywords(&format!("first party built in system plugins {}", own.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" ")));
+        widgets::keywords(&format!(
+            "first party built in system plugins {}",
+            own.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" ")
+        ));
         g.add(&r);
     }
 }
@@ -311,7 +324,9 @@ fn bar_section(id: &str) -> Option<&'static str> {
 fn about_kind(p: &Plugin, kind: &str) -> String {
     match kind {
         "bar widget" if nyxos() => "A part of the bar".into(),
-        "bar widget" => bar_section(&p.id).map(String::from).unwrap_or_else(|| if p.enabled { "Not placed on the bar".into() } else { "Off".into() }),
+        "bar widget" => bar_section(&p.id)
+            .map(String::from)
+            .unwrap_or_else(|| if p.enabled { "Not placed on the bar".into() } else { "Off".into() }),
         "panel" => "Opens from its widget".into(),
         "overlay" => "Shows over the screen".into(),
         "menu" => "Adds to a menu".into(),

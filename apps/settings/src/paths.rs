@@ -10,6 +10,23 @@ pub fn ext_dir() -> PathBuf {
     data_dir().join("extensions")
 }
 
+/// Packaged extensions: `nyx-settings/extensions` in each of `$XDG_DATA_DIRS`, first
+/// wins. Folders that really live under `$HOME` are left out (anything there can be
+/// written without a package manager; a Nix profile resolves into the read-only store).
+pub fn system_ext_dirs() -> Vec<PathBuf> {
+    let dirs =
+        std::env::var("XDG_DATA_DIRS").ok().filter(|v| !v.is_empty()).unwrap_or_else(|| "/usr/local/share:/usr/share".into());
+    let home = std::env::var_os("HOME").map(PathBuf::from).filter(|h| h != std::path::Path::new("/"));
+    dirs.split(':')
+        .filter(|d| !d.is_empty())
+        .map(|d| PathBuf::from(d).join("nyx-settings/extensions"))
+        .filter(|d| {
+            let Some(home) = &home else { return true };
+            !d.canonicalize().unwrap_or_else(|_| d.clone()).starts_with(home)
+        })
+        .collect()
+}
+
 /// What extensions said they offer last time, so the sidebar fills in without waiting.
 pub fn ext_cache_dir() -> PathBuf {
     cache_dir().join("extensions")

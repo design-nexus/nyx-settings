@@ -1974,7 +1974,7 @@ dependencies = [
 [[package]]
 name = "nyx-system-proto"
 version = "0.1.0"
-source = "git+https://github.com/nyxos-project/nyx-system.git?rev=88962d876b30df66e3c5db3c70f28876b7e39db2#88962d876b30df66e3c5db3c70f28876b7e39db2"
+source = "git+https://github.com/nyxos-project/nyx-system.git?rev=ee28efd1893cd4110d8cf2b9ef7c99bbfd787a65#ee28efd1893cd4110d8cf2b9ef7c99bbfd787a65"
 dependencies = [
  "anyhow",
  "serde",

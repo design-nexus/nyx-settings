@@ -48,7 +48,9 @@ fn device_row(cfg: &serde_json::Value, key: &'static str, icon: &str, title: &st
     if !options.iter().any(|(id, _)| *id == current) {
         options.push((current.clone(), current.clone()));
     }
-    let (r, _) = widgets::choice_row(title, "Changing it restarts the assistant.", options, &current, move |id| save(key, client::quoted(&id)));
+    let (r, _) = widgets::choice_row(title, "Changing it restarts the assistant.", options, &current, move |id| {
+        save(key, client::quoted(&id))
+    });
     r.prepend(&widgets::tile(icon));
     r.add_css_class("with-tile");
     r
@@ -57,7 +59,12 @@ fn device_row(cfg: &serde_json::Value, key: &'static str, icon: &str, title: &st
 fn speech_model_row() -> gtk::Box {
     let asr = client::json(&["models", "list", "--json"]).map(|v| v["asr"].clone()).unwrap_or_default();
     if asr["installed"] == true {
-        return widgets::icon_row("audio-input-microphone-symbolic", "Speech to text", "On this computer · ready", Some(chip("Ready", "asst-ok").upcast_ref()));
+        return widgets::icon_row(
+            "audio-input-microphone-symbolic",
+            "Speech to text",
+            "On this computer · ready",
+            Some(chip("Ready", "asst-ok").upcast_ref()),
+        );
     }
     let b = gtk::Button::with_label("Download");
     b.connect_clicked(|b| {
@@ -93,7 +100,11 @@ struct Over {
 
 /// Bar heights for a voice track, 0–1, the same every time for a `seed`.
 fn bars(n: usize, seed: u32) -> Vec<f64> {
-    (0..n).map(|i| 0.18 + (((i as u32).wrapping_mul(2654435761).wrapping_add(seed.wrapping_mul(97531)) >> 9) % 100) as f64 / 100.0 * 0.82).collect()
+    (0..n)
+        .map(|i| {
+            0.18 + (((i as u32).wrapping_mul(2654435761).wrapping_add(seed.wrapping_mul(97531)) >> 9) % 100) as f64 / 100.0 * 0.82
+        })
+        .collect()
 }
 
 /// Its voice and yours on two tracks: its voice dropping (or pausing) while you speak,
@@ -192,7 +203,15 @@ fn draw_wave(cr: &gtk::cairo::Context, c: sketch::Rgb, w: f64, h: f64, playing: 
 fn fine_tuning(page: &Page, _: &super::Again) {
     let cfg = client::config();
     let g = page.group("Fine-tuning");
-    g.add(&slider(&cfg, "duplex.min_rms", "Quietest speech", "Lower hears softer speech, and more background noise.", (0.0, 0.1, 0.001), 3, ""));
+    g.add(&slider(
+        &cfg,
+        "duplex.min_rms",
+        "Quietest speech",
+        "Lower hears softer speech, and more background noise.",
+        (0.0, 0.1, 0.001),
+        3,
+        "",
+    ));
     g.add(&slider(
         &cfg,
         "barge_in.grace_ms",
@@ -207,7 +226,8 @@ fn fine_tuning(page: &Page, _: &super::Again) {
 pub fn build(page: &Page) {
     let Some(cfg) = super::config_or_banner(page) else { return };
     let name = client::get_str(&cfg, "assistant.name");
-    let picked = Rc::new(RefCell::new((client::get_str(&cfg, "tts.voice"), client::get(&cfg, "tts.speed").as_f64().unwrap_or(1.0))));
+    let picked =
+        Rc::new(RefCell::new((client::get_str(&cfg, "tts.voice"), client::get(&cfg, "tts.speed").as_f64().unwrap_or(1.0))));
     let over = Rc::new(Over {
         name: name.clone(),
         barge: Cell::new(client::get(&cfg, "barge_in.enabled").as_bool().unwrap_or(false)),
@@ -362,7 +382,12 @@ pub fn build(page: &Page) {
         &client::get_str(&cfg, "stt.device"),
         |id| save("stt.device", client::quoted(&id)),
     );
-    let r = widgets::icon_row("system-run-symbolic", "Runs on", "The graphics card is faster, but shares memory with the model.", None);
+    let r = widgets::icon_row(
+        "system-run-symbolic",
+        "Runs on",
+        "The graphics card is faster, but shares memory with the model.",
+        None,
+    );
     if let Some(text) = row_text(&r) {
         seg.set_halign(gtk::Align::Start);
         seg.set_margin_top(6);
@@ -421,11 +446,21 @@ pub fn build(page: &Page) {
     widgets::keywords("pause duck lower its voice");
     let r = {
         let (over, tracks) = (over.clone(), tracks.clone());
-        icon_slider(&cfg, "duplex.duck_gain", "preferences-system-symbolic", "Lowered to", "", (0.0, 1.0, 0.05), 2, "", move |v, l| {
-            l.set_text(&format!("{}%", (v * 100.0).round() as i64));
-            over.gain.set(v);
-            tracks.queue_draw();
-        })
+        icon_slider(
+            &cfg,
+            "duplex.duck_gain",
+            "preferences-system-symbolic",
+            "Lowered to",
+            "",
+            (0.0, 1.0, 0.05),
+            2,
+            "",
+            move |v, l| {
+                l.set_text(&format!("{}%", (v * 100.0).round() as i64));
+                over.gain.set(v);
+                tracks.queue_draw();
+            },
+        )
     };
     g.add(&r);
     widgets::keywords("lowered volume duck gain");

@@ -283,7 +283,9 @@ pub fn build(page: &Page) {
         ));
     }
     g.add(&super::accounts::add_row("Add a VPN", || show_add(true)));
-    widgets::keywords("vpn control center tile nordvpn expressvpn proton pia private internet access mullvad surfshark windscribe wireguard openvpn");
+    widgets::keywords(
+        "vpn control center tile nordvpn expressvpn proton pia private internet access mullvad surfshark windscribe wireguard openvpn",
+    );
 }
 
 /// Every service set up, as (id, name), the way the Control Center names them.
@@ -369,10 +371,12 @@ fn services(page: &Page, on_add: impl Fn() + 'static) {
     if !any {
         g.add(&widgets::row("No VPN set up", "Add NordVPN, ExpressVPN, Proton, PIA, Mullvad or a WireGuard/OpenVPN file.", None));
     }
-    let (r, _) =
-        widgets::button_row("Add a VPN", "Choose a service, then install and sign in, or import its file.", "Add…", move |_| {
-            on_add()
-        });
+    let (r, _) = widgets::button_row(
+        "Add a VPN",
+        "Choose a service, then install and sign in, or import its file.",
+        "Add…",
+        move |_| on_add(),
+    );
     g.add(&r);
     widgets::keywords("vpn nordvpn expressvpn proton pia private internet access mullvad surfshark windscribe wireguard openvpn");
 }
@@ -399,12 +403,19 @@ fn providers(page: &Page) {
         let label = match (p.install, installed) {
             (Install::None, _) => "Import…",
             (_, true) => "Sign in",
+            (Install::Aur(..), false) if aur_missing() => "Import…",
             (Install::Aur(..), false) => "Install",
             (Install::Page(_), false) => "Get it",
         };
         let b = gtk::Button::with_label(label);
         b.connect_clicked(move |_| set_up(prov));
-        let desc = if installed { format!("{} · installed", p.desc) } else { p.desc.to_string() };
+        let desc = match (p.install, installed) {
+            (_, true) => format!("{} · installed", p.desc),
+            (Install::Aur(..), false) if aur_missing() => {
+                "Its app isn't available on NyxOS: import a WireGuard or OpenVPN file from your account".to_string()
+            }
+            _ => p.desc.to_string(),
+        };
         g.add(&widgets::row(p.name, &desc, Some(b.upcast_ref())));
     }
 }
@@ -414,6 +425,8 @@ fn set_up(p: Provider) {
     match (p.install, installed) {
         (Install::None, _) => sign_in(p),
         (_, true) => sign_in(p),
+        // NyxOS has no AUR: the provider's own WireGuard or OpenVPN file instead.
+        (Install::Aur(..), false) if aur_missing() => import_file(p.name, None),
         (Install::Aur(pkg, then), false) => {
             // In a terminal: the AUR build and sudo need one. Sign in afterwards.
             let command =
@@ -466,6 +479,18 @@ fn sign_in(p: Provider) {
     }
 }
 
+/// Software comes from the system configuration, not the AUR (NyxOS).
+fn aur_missing() -> bool {
+    crate::platform::PLATFORM == crate::platform::Platform::NyxOS || !cmd::present("omarchy-pkg-aur-add")
+}
+
+/// NetworkManager's OpenVPN plugin: Arch's path, or NixOS's (`networking.networkmanager.plugins`).
+fn openvpn_plugin() -> bool {
+    ["/usr/lib/NetworkManager/VPN", "/etc/NetworkManager/VPN"]
+        .iter()
+        .any(|d| std::path::Path::new(d).join("nm-openvpn-service.name").exists())
+}
+
 /// Pick a WireGuard or OpenVPN file and import it into NetworkManager.
 fn import_file(provider: &'static str, page: Option<&'static str>) {
     if let Some(url) = page {
@@ -487,7 +512,11 @@ fn import_file(provider: &'static str, page: Option<&'static str>) {
         let Ok(file) = res else { return };
         let Some(path) = file.path() else { return };
         let openvpn = path.extension().is_some_and(|e| e == "ovpn");
-        if openvpn && !std::path::Path::new("/usr/lib/NetworkManager/VPN/nm-openvpn-service.name").exists() {
+        if openvpn && !openvpn_plugin() {
+            if aur_missing() {
+                window::toast("OpenVPN files need NetworkManager's OpenVPN plugin, which this system doesn't include");
+                return;
+            }
             super::accounts::terminal(
                 "omarchy-pkg-add networkmanager-openvpn && echo && echo 'Done. Import the file again in Settings.'",
             );

@@ -336,8 +336,11 @@ fn draw_map(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w: f
 fn legend(changed: bool) -> gtk::Box {
     let b = widgets::hbox(16);
     b.add_css_class("nxr-legend");
-    let items: &[(&str, &str)] =
-        if changed { &[("zone", "Your new zone"), ("now", "Now"), ("night", "Night")] } else { &[("zone", "Your zone"), ("night", "Night")] };
+    let items: &[(&str, &str)] = if changed {
+        &[("zone", "Your new zone"), ("now", "Now"), ("night", "Night")]
+    } else {
+        &[("zone", "Your zone"), ("night", "Night")]
+    };
     for (kind, text) in items {
         let item = widgets::hbox(6);
         let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -420,11 +423,8 @@ fn formats(locale: &str, zone: &str) -> Option<Formats> {
             "t_fmt",
         ],
     )?;
-    let k: HashMap<&str, String> = keys
-        .lines()
-        .filter_map(|l| l.split_once('='))
-        .map(|(a, b)| (a, b.trim_matches('"').to_string()))
-        .collect();
+    let k: HashMap<&str, String> =
+        keys.lines().filter_map(|l| l.split_once('=')).map(|(a, b)| (a, b.trim_matches('"').to_string())).collect();
     let get = |key: &str| k.get(key).cloned().unwrap_or_default();
     let date = in_locale(locale, zone, &["date", "+%x"])?;
     let t_fmt = get("t_fmt");
@@ -501,7 +501,16 @@ impl Samples {
         (col, Samples { title, after, grid, note })
     }
 
-    fn show(&self, language: &str, language_now: &str, changed: bool, checked: bool, zone: &str, now: Option<&Formats>, picked: Option<&Formats>) {
+    fn show(
+        &self,
+        language: &str,
+        language_now: &str,
+        changed: bool,
+        checked: bool,
+        zone: &str,
+        now: Option<&Formats>,
+        picked: Option<&Formats>,
+    ) {
         while let Some(c) = self.grid.first_child() {
             self.grid.remove(&c);
         }
@@ -514,7 +523,8 @@ impl Samples {
         self.note.set_text(&format!("{language} isn't installed on this computer yet; its formats show once it's applied."));
         let Some(f) = shown.or(now) else { return };
         let old = if changed { now.filter(|_| picked.is_some()) } else { None };
-        let values = |f: &Formats| [f.date.clone(), time_text(zone, f.twelve_hour), f.number.clone(), f.money.clone(), f.week.clone()];
+        let values =
+            |f: &Formats| [f.date.clone(), time_text(zone, f.twelve_hour), f.number.clone(), f.money.clone(), f.week.clone()];
         let new = values(f);
         let was = old.map(values);
         for (i, (icon, name)) in SAMPLE_ROWS.iter().enumerate() {

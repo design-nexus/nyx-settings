@@ -211,7 +211,12 @@ pub fn build(page: &Page) {
         }
     });
     sw.set_sensitive(can_edit);
-    g.add(&widgets::icon_row("printer-symbolic", "Printing", "Sends documents to printers. Off if you never print.", Some(sw.upcast_ref())));
+    g.add(&widgets::icon_row(
+        "printer-symbolic",
+        "Printing",
+        "Sends documents to printers. Off if you never print.",
+        Some(sw.upcast_ref()),
+    ));
     widgets::keywords("printing service cups print spooler");
     if !on {
         shown.append(&preview_head("Printing is off", "Turn it on to add a printer or print to one.", None));
@@ -291,7 +296,11 @@ fn add_group(page: &Page) {
                         results.remove(&c);
                     }
                     if found.is_empty() {
-                        results.append(&widgets::row("No printers found", "Check that the printer is on and on the same network.", None));
+                        results.append(&widgets::row(
+                            "No printers found",
+                            "Check that the printer is on and on the same network.",
+                            None,
+                        ));
                     }
                     for (name, uri) in found {
                         let add = gtk::Button::with_label("Add");
@@ -310,7 +319,12 @@ fn add_group(page: &Page) {
             );
         });
     }
-    let r = widgets::icon_row("network-wireless-symbolic", "Find printers", "On your network, without a driver.", Some(search.upcast_ref()));
+    let r = widgets::icon_row(
+        "network-wireless-symbolic",
+        "Find printers",
+        "On your network, without a driver.",
+        Some(search.upcast_ref()),
+    );
     widgets::keywords("add discover scan network ipp airprint avahi search");
     if !cmd::present("avahi-browse") {
         r.set_visible(false);

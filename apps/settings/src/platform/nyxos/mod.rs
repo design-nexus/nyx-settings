@@ -9,9 +9,9 @@ pub mod lock;
 pub mod mounts;
 pub mod pages;
 pub mod pending;
-pub mod region;
 pub mod power;
 pub mod printers;
+pub mod region;
 pub mod updates;
 pub mod users;
 
@@ -513,7 +513,8 @@ pub fn home_updates(page: &Page, hero: &Hero) {
             // Apps that come with the system update with it.
             .filter(|t| t.provider != "channel" || t.category == "system")
             .collect();
-        let (firmware, rest): (Vec<&UpdateTarget>, Vec<&UpdateTarget>) = ready.into_iter().partition(|t| t.category == "firmware");
+        let (firmware, rest): (Vec<&UpdateTarget>, Vec<&UpdateTarget>) =
+            ready.into_iter().partition(|t| t.category == "firmware");
         let system = rest.iter().find(|t| t.category == "system");
         let others: Vec<&str> = rest.iter().filter(|t| t.category != "system").map(|t| t.name.as_str()).collect();
         let total = rest.len() + firmware.len();
@@ -577,10 +578,17 @@ pub fn home_updates(page: &Page, hero: &Hero) {
                 let b = gtk::Button::with_label("Sign in");
                 b.set_valign(gtk::Align::Center);
                 b.connect_clicked(|_| window::navigate("online-accounts"));
-                let desc = a.error.clone().filter(|e| !e.trim().is_empty()).unwrap_or_else(|| {
-                    "Its mail, calendar and files wait until you do.".to_string()
-                });
-                let r = widgets::icon_row("mail-unread-symbolic", &format!("{name} needs you to sign in"), &desc, Some(b.upcast_ref()));
+                let desc = a
+                    .error
+                    .clone()
+                    .filter(|e| !e.trim().is_empty())
+                    .unwrap_or_else(|| "Its mail, calendar and files wait until you do.".to_string());
+                let r = widgets::icon_row(
+                    "mail-unread-symbolic",
+                    &format!("{name} needs you to sign in"),
+                    &desc,
+                    Some(b.upcast_ref()),
+                );
                 widgets::keywords("account sign in again expired online accounts");
                 n.add(2, &r);
             }

@@ -22,6 +22,72 @@ pub fn available() -> bool {
     cmd::present(CTL)
 }
 
+/// NyxOS: the system configuration says which ways sign in where (`nyx.biometrics`), and
+/// the System Manager changes it; nyx-authctl only enrolls and reports.
+fn nyxos() -> bool {
+    crate::platform::PLATFORM == crate::platform::Platform::NyxOS
+}
+
+/// The configuration's `nyx.biometrics`, as the module publishes it, or what the System
+/// Manager last set.
+fn system_bio() -> nyx_system_proto::Biometrics {
+    std::fs::read_to_string("/etc/nyx/biometrics.json")
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .or_else(|| crate::platform::nyxos::settings().biometrics)
+        .unwrap_or_default()
+}
+
+/// The configuration's name for an nyx-authctl surface.
+fn system_surface(key: &str) -> &str {
+    if key == "lock-screen" { "lock" } else { key }
+}
+
+/// Change `nyx.biometrics` through the System Manager (one rebuild), then refresh.
+fn change_bio(edit: impl FnOnce(&mut nyx_system_proto::Biometrics), done: &'static str) {
+    let mut b = system_bio();
+    b.enable = true;
+    edit(&mut b);
+    b.surfaces.retain(|_, m| !m.is_empty());
+    if let Err(e) = b.validate() {
+        window::toast(&format!("{e:#}"));
+        window::rebuild(ID);
+        return;
+    }
+    crate::platform::nyxos::apply(vec![nyx_system_proto::Change::Biometrics { value: Some(b) }], done, |_| window::rebuild(ID));
+}
+
+/// Turn one way on or off for one place in the configuration, turning the way itself on
+/// when it's first used. The standard order: face, fingerprint, key.
+fn set_system_method(surface: &str, method: &str, on: bool, face_backend: Option<String>) {
+    let (surface, method) = (system_surface(surface).to_string(), method.to_string());
+    change_bio(
+        move |b| {
+            let list = b.surfaces.entry(surface.clone()).or_default();
+            list.retain(|m| *m != method);
+            if on {
+                list.push(method.clone());
+                let rank = |m: &String| ["face", "fingerprint", "security-key"].iter().position(|x| x == m).unwrap_or(9);
+                list.sort_by_key(rank);
+                match method.as_str() {
+                    "fingerprint" => b.fingerprint = true,
+                    "security-key" => b.security_key = true,
+                    _ => {
+                        if b.face == "none" {
+                            b.face = face_backend.unwrap_or_else(|| "irlume".into());
+                        }
+                        // Ticking it for the lock screen is the choice a webcam needs.
+                        if b.face == "gaze" && surface == "lock" {
+                            b.allow_webcam_face = true;
+                        }
+                    }
+                }
+            }
+        },
+        "Sign-in updated",
+    );
+}
+
 /// Run an `nyx-authctl` command in the background, then refresh the page.
 fn ctl(args: Vec<String>, done: &'static str) {
     cmd::background(
@@ -120,6 +186,18 @@ const STYLES: [(&str, &str); 5] = [
 ];
 
 pub fn build(page: &Page) {
+    if !available() && nyxos() {
+        let g = page.group("Sign-in & Security");
+        let (r, _) = widgets::button_row(
+            "Sign in with your face, a fingerprint or a security key",
+            "Nyx Biometrics becomes part of the system configuration, which is rebuilt. Your password always works too.",
+            "Turn on…",
+            |_| change_bio(|_| {}, "Nyx Biometrics is on"),
+        );
+        g.add(&r);
+        widgets::keywords("biometrics face fingerprint security key");
+        return;
+    }
     if !available() {
         let g = page.group("Sign-in & Security");
         g.add(&widgets::row(
@@ -139,7 +217,9 @@ pub fn build(page: &Page) {
     undo.set_tooltip_text(Some("Put the sign-in files back the way they were before the last change"));
     undo.connect_clicked(|_| in_terminal("nyx-authctl pam restore"));
     let content = roomy(&pv);
-    content.append(&head("What unlocks what", "Each place tries the ways in order. Your password always works too.", &[undo.upcast()]));
+    // NyxOS: each change is a system generation; going back is the boot menu's.
+    let undo: Vec<gtk::Widget> = if nyxos() { vec![] } else { vec![undo.upcast()] };
+    content.append(&head("What unlocks what", "Each place tries the ways in order. Your password always works too.", &undo));
     let table = widgets::vbox(0);
     table.add_css_class("preview-card");
     table.add_css_class("sgn-table");
@@ -149,7 +229,11 @@ pub fn build(page: &Page) {
     content.append(&banners);
     let foot = pv.foot(
         "dialog-information-symbolic",
-        "Changes to sign-in open a terminal that shows exactly what changes and tests it before keeping it.",
+        if nyxos() {
+            "Changes to sign-in become part of the system configuration, which is rebuilt and switched to when it builds."
+        } else {
+            "Changes to sign-in open a terminal that shows exactly what changes and tests it before keeping it."
+        },
     );
 
     // The ways to sign in.
@@ -170,7 +254,9 @@ pub fn build(page: &Page) {
             widgets::subpage("How a scan looks", 560, look_group);
         },
     );
-    widgets::keywords("overlay style circular cyberpunk minimal edge glow halo animation lock screen look polkit sudo intensity login screen sddm greeter theme");
+    widgets::keywords(
+        "overlay style circular cyberpunk minimal edge glow halo animation lock screen look polkit sudo intensity login screen sddm greeter theme",
+    );
     more.add(&r);
     let (r, ssh_count) = widgets::nav_row(Some("utilities-terminal-symbolic"), "SSH keys on a security key", "", "", {
         let status = status.clone();
@@ -209,9 +295,10 @@ pub fn build(page: &Page) {
     });
     widgets::keywords("camera reader helper hardware check");
     more.add(&r);
-    let (r, _) = widgets::nav_row(Some("edit-undo-symbolic"), "If something goes wrong", "Undo the last change, or recover", "", || {
-        widgets::subpage("If something goes wrong", 600, recovery);
-    });
+    let (r, _) =
+        widgets::nav_row(Some("edit-undo-symbolic"), "If something goes wrong", "Undo the last change, or recover", "", || {
+            widgets::subpage("If something goes wrong", 600, recovery);
+        });
     widgets::keywords("undo restore rollback pam recovery");
     more.add(&r);
 
@@ -232,7 +319,7 @@ pub fn build(page: &Page) {
         };
         *status.borrow_mut() = parsed.clone();
         let s = &parsed;
-        if s["helper"] != "ready" {
+        if s["helper"] != "ready" && !nyxos() {
             let (r, _) = widgets::button_row(
                 "Finish installing",
                 "Nyx Biometrics needs its small administrator helper to make sign-in changes.",
@@ -242,7 +329,8 @@ pub fn build(page: &Page) {
             ways_h.append(&r);
         }
         let surfaces: Vec<Value> = s["surfaces"].as_array().cloned().unwrap_or_default();
-        let places = |m: &str| surfaces.iter().filter(|x| x["methods"].as_array().is_some_and(|ms| ms.iter().any(|v| v == m))).count();
+        let places =
+            |m: &str| surfaces.iter().filter(|x| x["methods"].as_array().is_some_and(|ms| ms.iter().any(|v| v == m))).count();
         face_row(&ways_h, &s["face"], places("face"));
         fingerprint_row(&ways_h, &s["fingerprint"], places("fingerprint"));
         keys_row(&ways_h, &s["keys"]);
@@ -254,7 +342,12 @@ pub fn build(page: &Page) {
         let n_ssh = s["ssh_keys"].as_array().map_or(0, Vec::len);
         ssh_count.set_text(&n_ssh.to_string());
         ssh_count.set_visible(n_ssh > 0);
-        let checks = s["findings"].as_array().into_iter().flatten().filter(|f| matches!(f["status"].as_str(), Some("warn" | "missing" | "error"))).count();
+        let checks = s["findings"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|f| matches!(f["status"].as_str(), Some("warn" | "missing" | "error")))
+            .count();
         hw_value.set_text(&if checks == 0 { "All good".to_string() } else { format!("{checks} to check") });
         hw_value.remove_css_class(if checks == 0 { "sgn-check" } else { "sgn-good" });
         hw_value.add_css_class(if checks == 0 { "sgn-good" } else { "sgn-check" });
@@ -293,10 +386,17 @@ fn unlock_table(table: &gtk::Box, status: &Value) {
     table.append(&head);
 
     let autologin = status["autologin"] == true;
+    let bio = if nyxos() { system_bio() } else { Default::default() };
+    let face_backend = status["face"]["backend"].as_str().map(str::to_lowercase);
     for s in status["surfaces"].as_array().into_iter().flatten() {
         let key = s["key"].as_str().unwrap_or_default().to_string();
-        let methods: Vec<String> =
-            s["methods"].as_array().into_iter().flatten().filter_map(|m| m.as_str().map(String::from)).collect();
+        let system = s["system"] == true;
+        let managed = system && nyxos();
+        let methods: Vec<String> = if managed {
+            bio.surfaces.get(system_surface(&key)).cloned().unwrap_or_default()
+        } else {
+            s["methods"].as_array().into_iter().flatten().filter_map(|m| m.as_str().map(String::from)).collect()
+        };
         let mut order = methods.clone();
         if !order.iter().any(|m| m == "password") {
             order.push("password".into());
@@ -310,11 +410,12 @@ fn unlock_table(table: &gtk::Box, status: &Value) {
             })
             .collect();
         let mut desc: Vec<String> = vec![names.join(", then ")];
-        let system = s["system"] == true;
-        if let Some(err) = s["in_effect"]["error"].as_str() {
+        if let Some(err) = s["in_effect"]["error"].as_str()
+            && !managed
+        {
             desc.push(err.to_string());
         }
-        if s["check"]["ok"] == false {
+        if s["check"]["ok"] == false && !managed {
             desc.extend(s["check"]["errors"].as_array().into_iter().flatten().filter_map(Value::as_str).map(String::from));
         }
 
@@ -331,7 +432,7 @@ fn unlock_table(table: &gtk::Box, status: &Value) {
         title.set_wrap(true);
         title.set_wrap_mode(gtk::pango::WrapMode::WordChar);
         line.append(&title);
-        if system && s["in_effect"] == "no" {
+        if system && !managed && s["in_effect"] == "no" {
             line.append(&pill("Not applied", "warn"));
         } else if !system {
             line.append(&pill("App", "accent"));
@@ -374,7 +475,12 @@ fn unlock_table(table: &gtk::Box, status: &Value) {
                 if have(status, m) {
                     check.set_tooltip_text(Some(&format!("{name} for {}", s["label"].as_str().unwrap_or_default())));
                     let (key, m) = (key.clone(), m.to_string());
+                    let backend = face_backend.clone();
                     check.connect_toggled(move |c| {
+                        if managed {
+                            set_system_method(&key, &m, c.is_active(), backend.clone());
+                            return;
+                        }
                         let on = if c.is_active() { "on" } else { "off" };
                         ctl(vec!["policy".into(), "set".into(), key.clone(), m.clone(), on.into()], "");
                     });
@@ -393,6 +499,10 @@ fn unlock_table(table: &gtk::Box, status: &Value) {
 /// One banner per place whose new settings aren't in use yet, with its Apply button.
 fn apply_banners(banners: &gtk::Box, status: &Value) {
     clear(banners);
+    // NyxOS applies a change by rebuilding the system: nothing waits to be applied.
+    if nyxos() {
+        return;
+    }
     for s in status["surfaces"].as_array().into_iter().flatten() {
         if s["system"] != true || s["in_effect"] != "no" {
             continue;
@@ -400,9 +510,7 @@ fn apply_banners(banners: &gtk::Box, status: &Value) {
         let key = s["key"].as_str().unwrap_or_default().to_string();
         let label = gtk::glib::markup_escape_text(s["label"].as_str().unwrap_or_default());
         let b = widgets::banner(
-            &format!(
-                "<b>{label} is ready to apply</b>\nA terminal shows exactly what changes and tests it before keeping it."
-            ),
+            &format!("<b>{label} is ready to apply</b>\nA terminal shows exactly what changes and tests it before keeping it."),
             true,
         );
         b.add_css_class("sgn-apply");
@@ -419,6 +527,14 @@ fn apply_banners(banners: &gtk::Box, status: &Value) {
 
 fn recovery(page: &Page) {
     let g = page.group("If something goes wrong");
+    if nyxos() {
+        g.note(
+            "Every sign-in change is a new system generation, and your password always works. If sudo and \
+             administrator prompts both stop working, restart and choose the previous generation in the boot menu.",
+        );
+        widgets::keywords("undo restore rollback pam recovery generation boot menu");
+        return;
+    }
     let (r, _) = widgets::button_row(
         "Undo the last change",
         "Put the sign-in files back the way they were before the last change.",
@@ -459,11 +575,22 @@ fn face_row(h: &gtk::Box, face: &Value, places: usize) {
         b.add_css_class("suggested-action");
         b.connect_clicked(|_| in_terminal("nyx-authctl face enroll"));
         controls.append(&b);
-        (format!("{} is installed. Look at the camera to enroll your face.", face["backend"].as_str().unwrap_or("")), false, String::new())
+        (
+            format!("{} is installed. Look at the camera to enroll your face.", face["backend"].as_str().unwrap_or("")),
+            false,
+            String::new(),
+        )
     } else {
         let backend = face["backend"].as_str().unwrap_or("Irlume").to_lowercase();
-        let b = gtk::Button::with_label("Install…");
-        b.connect_clicked(move |_| in_terminal(&format!("yay -S {backend}")));
+        let b = gtk::Button::with_label(if nyxos() { "Turn on…" } else { "Install…" });
+        b.connect_clicked(move |_| {
+            if nyxos() {
+                let backend = backend.clone();
+                change_bio(move |b| b.face = backend, "Face sign-in is installed: set it up here");
+            } else {
+                in_terminal(&format!("yay -S {backend}"))
+            }
+        });
         controls.append(&b);
         (face["reason"].as_str().unwrap_or("").to_string(), false, String::new())
     };
@@ -499,8 +626,14 @@ fn fingerprint_row(h: &gtk::Box, fp: &Value, places: usize) {
             }
         }
         Some("not-installed") => {
-            let b = gtk::Button::with_label("Install…");
-            b.connect_clicked(|_| in_terminal("sudo pacman -S --needed fprintd libfprint"));
+            let b = gtk::Button::with_label(if nyxos() { "Turn on…" } else { "Install…" });
+            b.connect_clicked(|_| {
+                if nyxos() {
+                    change_bio(|b| b.fingerprint = true, "Fingerprint sign-in is installed: add a finger here");
+                } else {
+                    in_terminal("sudo pacman -S --needed fprintd libfprint")
+                }
+            });
             controls.append(&b);
             "A reader is connected, but fprintd isn't installed".to_string()
         }
@@ -588,10 +721,13 @@ fn keys_page(page: &Page, keys: &[Value]) {
     );
     widgets::keywords("security key yubikey fido2 pin touch");
     g.add(&r);
-    let (r, _) = widgets::entry_row("Add a security key", &desc, "", "name, such as Primary YubiKey", move |name| match safe_name(&name) {
-        Some(n) => in_terminal(&format!("nyx-authctl keys add '{n}'{}", if ask_pin.get() { " --pin" } else { "" })),
-        None => window::toast("Use letters, numbers, spaces, dashes or dots in the name"),
-    });
+    let (r, _) =
+        widgets::entry_row("Add a security key", &desc, "", "name, such as Primary YubiKey", move |name| {
+            match safe_name(&name) {
+                Some(n) => in_terminal(&format!("nyx-authctl keys add '{n}'{}", if ask_pin.get() { " --pin" } else { "" })),
+                None => window::toast("Use letters, numbers, spaces, dashes or dots in the name"),
+            }
+        });
     widgets::keywords("security key yubikey fido2 u2f add register backup pin");
     g.add(&r);
 }

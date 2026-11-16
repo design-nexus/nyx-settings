@@ -138,11 +138,8 @@ fn default_row(
         let label = id.clone();
         // An app Omarchy's setter doesn't know is offered by its desktop entry (Browser) and
         // set the XDG way.
-        let argv: Vec<&str> = if id.ends_with(".desktop") {
-            vec!["xdg-settings", "set", "default-web-browser", &id]
-        } else {
-            vec![setter, &id]
-        };
+        let argv: Vec<&str> =
+            if id.ends_with(".desktop") { vec!["xdg-settings", "set", "default-web-browser", &id] } else { vec![setter, &id] };
         cmd::run_async(&argv, move |r| match r {
             Ok(_) => window::toast(&format!("Default set to {label}")),
             Err(e) => window::toast(&format!("{e}")),
@@ -193,7 +190,9 @@ fn everyday(page: &Page, icons: &Icons) {
         widgets::keywords("email mail mailto");
         g.add(&r);
     }
-    if let Some(r) = category("File manager").and_then(|c| mime_row(c, icons, "system-file-manager-symbolic", "Folders from every app")) {
+    if let Some(r) =
+        category("File manager").and_then(|c| mime_row(c, icons, "system-file-manager-symbolic", "Folders from every app"))
+    {
         widgets::keywords("folders files browse file manager");
         g.add(&r);
     }
@@ -258,13 +257,21 @@ fn tools(page: &Page, icons: &Icons) {
             if !options.is_empty() {
                 let names = options.clone();
                 let faces: Vec<_> = options.iter().map(|(id, _)| icons.find(id)).collect();
-                g.add(&app_row("accessories-text-editor-symbolic", "Text editor", EDITOR_DESC, options, &current, &faces, move |id| {
-                    let name = names.iter().find(|(i, _)| *i == id).map(|(_, n)| n.clone()).unwrap_or_default();
-                    match defaults::set_editor(&id) {
-                        Ok(()) => window::toast(&format!("Text editor set to {name}; new terminals use it")),
-                        Err(e) => window::toast(&format!("Couldn't set the editor: {e}")),
-                    }
-                }));
+                g.add(&app_row(
+                    "accessories-text-editor-symbolic",
+                    "Text editor",
+                    EDITOR_DESC,
+                    options,
+                    &current,
+                    &faces,
+                    move |id| {
+                        let name = names.iter().find(|(i, _)| *i == id).map(|(_, n)| n.clone()).unwrap_or_default();
+                        match defaults::set_editor(&id) {
+                            Ok(()) => window::toast(&format!("Text editor set to {name}; new terminals use it")),
+                            Err(e) => window::toast(&format!("Couldn't set the editor: {e}")),
+                        }
+                    },
+                ));
                 widgets::keywords("editor text config open");
             }
             if let Some(r) = nyxos_agent_row(icons) {
@@ -390,8 +397,11 @@ pub fn build(page: &Page) {
     tools(page, &icons);
 
     let g = page.group("");
-    let all: Vec<&'static Category> =
-        CATEGORIES.iter().filter(|c| !matches!(c.title, "Email" | "File manager")).filter(|c| !defaults::options(c).0.is_empty()).collect();
+    let all: Vec<&'static Category> = CATEGORIES
+        .iter()
+        .filter(|c| !matches!(c.title, "Email" | "File manager"))
+        .filter(|c| !defaults::options(c).0.is_empty())
+        .collect();
     let words: Vec<&str> = all.iter().map(|c| c.keywords).collect();
     let (r, _) = widgets::nav_row(
         Some("text-x-generic-symbolic"),

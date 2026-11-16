@@ -220,10 +220,17 @@ fn action_body(action: &str, arg: Option<&str>, loop_count: Option<u32>) -> Opti
         "last-workspace" => format!("action = {}", dispatch("hl.dsp.focus({ workspace = \"previous\" })")),
         "menu" => format!("action = {}", exec(sys("omarchy-menu toggle root", "nyx-glimpse --toggle"))),
         "apps" => format!("action = {}", exec(sys("omarchy-menu toggle apps", "nyx-glimpse --toggle"))),
-        "notifications" => format!("action = {}", exec(sys("omarchy-shell notifications showHistory", "nyx-notification-center --toggle"))),
+        "notifications" => {
+            format!("action = {}", exec(sys("omarchy-shell notifications showHistory", "nyx-notification-center --toggle")))
+        }
         "screenshot" => format!("action = {}", exec(sys("omarchy-capture-screenshot", "nyx-capture --capture"))),
-        "volume-up" => format!("action = {}", exec(sys("omarchy-audio-output-volume raise", "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"))),
-        "volume-down" => format!("action = {}", exec(sys("omarchy-audio-output-volume lower", "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"))),
+        "volume-up" => format!(
+            "action = {}",
+            exec(sys("omarchy-audio-output-volume raise", "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"))
+        ),
+        "volume-down" => {
+            format!("action = {}", exec(sys("omarchy-audio-output-volume lower", "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-")))
+        }
         "brightness-up" => format!("action = {}", exec(sys("omarchy-brightness-display +5%", "brightnessctl set 5%+"))),
         "brightness-down" => format!("action = {}", exec(sys("omarchy-brightness-display 5%-", "brightnessctl set 5%-"))),
         "lock" => format!("action = {}", exec(sys("omarchy-system-lock", "loginctl lock-session"))),
@@ -299,7 +306,9 @@ fn set_lines(fingers: u8, set: &FingerSet, loop_count: Option<u32>, out: &mut Ve
     let mut follow_invert = None;
     let follow = set.action("left") == "workspace-follow" || set.action("right") == "workspace-follow";
     if follow {
-        out.push(format!("hl.gesture({{ fingers = {fingers}, direction = \"horizontal\", action = \"workspace\"{PAST_INHIBIT} }})"));
+        out.push(format!(
+            "hl.gesture({{ fingers = {fingers}, direction = \"horizontal\", action = \"workspace\"{PAST_INHIBIT} }})"
+        ));
         follow_invert = Some(set.reverse_horizontal);
     }
     for dir in DIRECTIONS {

@@ -73,7 +73,12 @@ const MODES: [(&str, &str, &str, &str); 5] = [
     ("region", "Region", "edit-select-all-symbolic", "Settings steps aside, then you drag over what you want."),
     ("windows", "Window", "window-restore-symbolic", "Settings steps aside, then you click the window you want."),
     ("fullscreen", "Screen", "video-display-symbolic", "Settings steps aside, and the whole screen is captured."),
-    ("scroll", "Scrolling", "go-down-symbolic", "Scroll through a page longer than the screen; it's put together as one picture."),
+    (
+        "scroll",
+        "Scrolling",
+        "go-down-symbolic",
+        "Scroll through a page longer than the screen; it's put together as one picture.",
+    ),
 ];
 
 /// Nyx Capture's `flag` when it is installed, else Omarchy's `script`.
@@ -294,7 +299,8 @@ fn screenshots(page: &Page, pv_box: &gtk::Box) -> Vec<gtk::Widget> {
     let copy = gtk::CheckButton::new();
     let save = gtk::CheckButton::new();
     save.set_group(Some(&copy));
-    for (radio, title, value) in [(&copy, "Copy to the clipboard", "Paste it anywhere"), (&save, "Save to a file", "In Pictures")] {
+    for (radio, title, value) in [(&copy, "Copy to the clipboard", "Paste it anywhere"), (&save, "Save to a file", "In Pictures")]
+    {
         radio.set_valign(gtk::Align::Center);
         let r = widgets::row(title, "", Some(widgets::label(value, "row-value").upcast_ref()));
         r.prepend(radio);
@@ -614,10 +620,9 @@ fn recording(page: &Page, pv_box: &gtk::Box) -> Vec<gtk::Widget> {
     let whole = gtk::CheckButton::new();
     whole.set_group(Some(&part));
     part.set_active(true);
-    for (radio, title, desc, full) in [
-        (&part, "A region or a window", "You choose when you press Start.", false),
-        (&whole, "The whole screen", "", true),
-    ] {
+    for (radio, title, desc, full) in
+        [(&part, "A region or a window", "You choose when you press Start.", false), (&whole, "The whole screen", "", true)]
+    {
         radio.set_valign(gtk::Align::Center);
         let r = widgets::row(title, desc, None);
         r.prepend(radio);
@@ -639,7 +644,12 @@ fn recording(page: &Page, pv_box: &gtk::Box) -> Vec<gtk::Widget> {
     let g = page.group("Include");
     groups.push(g.wrapper.clone().upcast());
     for (title, desc, icon, set) in [
-        ("Sound from the computer", "Music, calls and videos.", "audio-speakers-symbolic", (|r: &mut Rec, v| r.desktop = v) as fn(&mut Rec, bool)),
+        (
+            "Sound from the computer",
+            "Music, calls and videos.",
+            "audio-speakers-symbolic",
+            (|r: &mut Rec, v| r.desktop = v) as fn(&mut Rec, bool),
+        ),
         ("Your microphone", "Your voice.", "audio-input-microphone-symbolic", |r, v| r.mic = v),
         ("The webcam", "A small picture of you in a corner.", "camera-web-symbolic", |r, v| r.webcam = v),
     ] {
@@ -737,7 +747,10 @@ fn reminders(content: &gtk::Box) -> usize {
         }
         None => window::toast("Enter the minutes from now, 1 to 10080"),
     });
-    card.append(&tiled(widgets::stacked_row("Remind me in", "A notification after that many minutes.", form.upcast_ref()), "alarm-symbolic"));
+    card.append(&tiled(
+        widgets::stacked_row("Remind me in", "A notification after that many minutes.", form.upcast_ref()),
+        "alarm-symbolic",
+    ));
     widgets::keywords("reminder timer alarm notify later");
     // `show` pops a notification; the JSON form only prints.
     let shown = reminder_labels(&cmd::output(&["omarchy-reminder", "show", "--json"]).unwrap_or_default());
@@ -883,7 +896,13 @@ fn voice_dictation(content: &gtk::Box) -> Option<String> {
         return None;
     }
     let card = more_card(content, "");
-    card.append(&widgets::info_row("Talk to type", "Hold F9 or Right Alt and speak, or press Super+Ctrl+X to start and stop. Runs on this computer.").0);
+    card.append(
+        &widgets::info_row(
+            "Talk to type",
+            "Hold F9 or Right Alt and speak, or press Super+Ctrl+X to start and stop. Runs on this computer.",
+        )
+        .0,
+    );
     let output = voice_dictation_value("output").and_then(|v| v.as_str().map(String::from)).unwrap_or_else(|| "type".into());
     let (r, _) = widgets::choice_row(
         "Put the words",
@@ -1021,13 +1040,20 @@ fn more_tools(page: &Page) {
             0 => String::new(),
             n => format!("{n} waiting"),
         };
-        let (r, _) = widgets::nav_row(Some("alarm-symbolic"), "Reminders", "A notification after a while", &value, move || open());
+        let (r, _) =
+            widgets::nav_row(Some("alarm-symbolic"), "Reminders", "A notification after a while", &value, move || open());
         g.add(&r);
         any = true;
     }
     let (content, open) = more_page("Dictation", 520);
     if let Some(value) = dictation(&content) {
-        let (r, _) = widgets::nav_row(Some("audio-input-microphone-symbolic"), "Dictation", "Type by talking, in any app", &value, move || open());
+        let (r, _) = widgets::nav_row(
+            Some("audio-input-microphone-symbolic"),
+            "Dictation",
+            "Type by talking, in any app",
+            &value,
+            move || open(),
+        );
         g.add(&r);
         any = true;
     }

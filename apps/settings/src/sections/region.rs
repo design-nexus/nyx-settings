@@ -52,7 +52,9 @@ fn locale_name(l: &str) -> String {
             .filter(|v| !v.is_empty())
     };
     match (field("language"), field("territory")) {
-        (Some(lang), Some(land)) => format!("{lang} · {land}{}", if modifier.is_empty() { String::new() } else { format!(" ({})", &modifier[1..]) }),
+        (Some(lang), Some(land)) => {
+            format!("{lang} · {land}{}", if modifier.is_empty() { String::new() } else { format!(" ({})", &modifier[1..]) })
+        }
         (Some(lang), None) => lang,
         _ => l.to_string(),
     }
@@ -221,18 +223,31 @@ fn samples(locale: &str, f: &HashMap<String, String>) -> Vec<(&'static str, Stri
         let mdot = f.get("mon_decimal_point").filter(|s| !s.is_empty()).cloned().unwrap_or(dot.clone());
         let msep = f.get("mon_thousands_sep").cloned().unwrap_or(sep.clone());
         let digits: usize = f.get("frac_digits").and_then(|v| v.parse().ok()).filter(|d: &usize| *d < 5).unwrap_or(2);
-        let amount = if digits == 0 { group_digits(1234, &msep) } else { format!("{}{mdot}{}", group_digits(1234, &msep), &"56789"[..digits]) };
+        let amount = if digits == 0 {
+            group_digits(1234, &msep)
+        } else {
+            format!("{}{mdot}{}", group_digits(1234, &msep), &"56789"[..digits])
+        };
         let space = if f.get("p_sep_by_space").is_some_and(|v| v != "0") { " " } else { "" };
-        let money = if f.get("p_cs_precedes").is_none_or(|v| v == "1") { format!("{sym}{space}{amount}") } else { format!("{amount}{space}{sym}") };
+        let money = if f.get("p_cs_precedes").is_none_or(|v| v == "1") {
+            format!("{sym}{space}{amount}")
+        } else {
+            format!("{amount}{space}{sym}")
+        };
         out.push(("Money", money));
     }
     // The week's first day: `week-1stday` is a date that fell on day 1, and `first_weekday` counts from it.
     if let (Some(base), Some(first)) = (f.get("week-1stday"), f.get("first_weekday").and_then(|v| v.parse::<i32>().ok())) {
         let day = (base.len() == 8)
-            .then(|| glib::DateTime::from_utc(base[..4].parse().ok()?, base[4..6].parse().ok()?, base[6..].parse().ok()?, 12, 0, 0.0).ok())
+            .then(|| {
+                glib::DateTime::from_utc(base[..4].parse().ok()?, base[4..6].parse().ok()?, base[6..].parse().ok()?, 12, 0, 0.0)
+                    .ok()
+            })
             .flatten()
             .and_then(|d| d.add_days(first - 1).ok())
-            .and_then(|d| cmd::output(&["env", &all, "date", "-d", &d.format("%Y-%m-%d").map(|s| s.to_string()).unwrap_or_default(), "+%A"]));
+            .and_then(|d| {
+                cmd::output(&["env", &all, "date", "-d", &d.format("%Y-%m-%d").map(|s| s.to_string()).unwrap_or_default(), "+%A"])
+            });
         if let Some(day) = day {
             out.push(("Week starts", day));
         }
@@ -263,7 +278,9 @@ fn layout_name(code: &str) -> String {
                 .skip_while(|l| l.trim() != "! layout")
                 .skip(1)
                 .take_while(|l| !l.starts_with('!'))
-                .find_map(|l| l.trim().split_once(char::is_whitespace).filter(|(k, _)| *k == c).map(|(_, n)| n.trim().to_string()))
+                .find_map(|l| {
+                    l.trim().split_once(char::is_whitespace).filter(|(k, _)| *k == c).map(|(_, n)| n.trim().to_string())
+                })
                 .unwrap_or_else(|| c.to_string())
         })
         .collect();
@@ -317,7 +334,11 @@ fn preview(page: &Page, zone: &str, locale: &str, formats: &HashMap<String, Stri
             if let Some(n) = now_in(&zone) {
                 let t = n.format(if twelve { "%l:%M" } else { "%H:%M" }).map(|s| s.trim().to_string()).unwrap_or_default();
                 time.set_text(&t);
-                ampm.set_text(&if twelve { if n.hour() < 12 { "AM".to_string() } else { "PM".to_string() } } else { String::new() });
+                ampm.set_text(&if twelve {
+                    if n.hour() < 12 { "AM".to_string() } else { "PM".to_string() }
+                } else {
+                    String::new()
+                });
             }
         }
     };
@@ -332,7 +353,9 @@ fn preview(page: &Page, zone: &str, locale: &str, formats: &HashMap<String, Stri
     card.add_css_class("rgn-map");
     let map = {
         let (city, zone) = (city.clone(), zone.to_string());
-        widgets::drawing(270, move |cr, p, section, w, h| draw_map(cr, p, section, w, h, &zone, &city, place, offset_hours, twelve))
+        widgets::drawing(270, move |cr, p, section, w, h| {
+            draw_map(cr, p, section, w, h, &zone, &city, place, offset_hours, twelve)
+        })
     };
     card.append(&map);
     content.append(&card);
@@ -372,15 +395,171 @@ fn preview(page: &Page, zone: &str, locale: &str, formats: &HashMap<String, Stri
 
 /// The land, roughly, as (longitude, latitude) outlines.
 const LAND: &[&[(f64, f64)]] = &[
-    &[(-168., 66.), (-162., 70.), (-140., 70.), (-125., 71.), (-95., 72.), (-80., 73.), (-62., 67.), (-55., 52.), (-66., 45.), (-75., 38.), (-81., 31.), (-80., 25.), (-90., 29.), (-97., 26.), (-97., 20.), (-90., 16.), (-83., 9.), (-79., 8.), (-85., 14.), (-105., 20.), (-110., 24.), (-117., 32.), (-124., 40.), (-124., 48.), (-135., 58.), (-150., 60.), (-165., 60.)],
+    &[
+        (-168., 66.),
+        (-162., 70.),
+        (-140., 70.),
+        (-125., 71.),
+        (-95., 72.),
+        (-80., 73.),
+        (-62., 67.),
+        (-55., 52.),
+        (-66., 45.),
+        (-75., 38.),
+        (-81., 31.),
+        (-80., 25.),
+        (-90., 29.),
+        (-97., 26.),
+        (-97., 20.),
+        (-90., 16.),
+        (-83., 9.),
+        (-79., 8.),
+        (-85., 14.),
+        (-105., 20.),
+        (-110., 24.),
+        (-117., 32.),
+        (-124., 40.),
+        (-124., 48.),
+        (-135., 58.),
+        (-150., 60.),
+        (-165., 60.),
+    ],
     &[(-55., 60.), (-45., 60.), (-20., 70.), (-20., 80.), (-60., 82.), (-72., 78.), (-60., 70.)],
-    &[(-80., 9.), (-72., 12.), (-60., 10.), (-50., 0.), (-35., -6.), (-38., -15.), (-48., -26.), (-58., -38.), (-65., -42.), (-68., -55.), (-74., -50.), (-72., -30.), (-71., -18.), (-81., -5.)],
-    &[(-10., 36.), (-9., 44.), (-2., 44.), (-5., 48.), (2., 51.), (8., 54.), (5., 58.), (10., 63.), (20., 70.), (30., 71.), (40., 68.), (45., 60.), (50., 50.), (40., 44.), (30., 45.), (28., 41.), (22., 37.), (15., 38.), (12., 44.), (8., 44.), (3., 42.), (-5., 36.)],
-    &[(-17., 21.), (-17., 14.), (-12., 7.), (-5., 5.), (8., 4.), (9., -1.), (13., -12.), (12., -18.), (18., -34.), (26., -34.), (33., -26.), (40., -15.), (40., -3.), (51., 12.), (43., 12.), (37., 20.), (33., 31.), (20., 32.), (10., 37.), (-5., 36.), (-10., 30.)],
-    &[(28., 41.), (36., 36.), (35., 30.), (44., 13.), (55., 17.), (58., 23.), (62., 25.), (67., 24.), (73., 20.), (77., 8.), (80., 14.), (88., 22.), (92., 21.), (98., 16.), (100., 7.), (104., 1.), (106., 10.), (110., 20.), (118., 24.), (122., 30.), (122., 40.), (128., 35.), (130., 43.), (140., 48.), (142., 55.), (135., 58.), (155., 60.), (160., 62.), (170., 65.), (180., 68.), (180., 72.), (140., 74.), (110., 78.), (80., 74.), (68., 72.), (60., 68.), (45., 68.), (40., 68.), (45., 60.), (50., 50.), (40., 44.)],
+    &[
+        (-80., 9.),
+        (-72., 12.),
+        (-60., 10.),
+        (-50., 0.),
+        (-35., -6.),
+        (-38., -15.),
+        (-48., -26.),
+        (-58., -38.),
+        (-65., -42.),
+        (-68., -55.),
+        (-74., -50.),
+        (-72., -30.),
+        (-71., -18.),
+        (-81., -5.),
+    ],
+    &[
+        (-10., 36.),
+        (-9., 44.),
+        (-2., 44.),
+        (-5., 48.),
+        (2., 51.),
+        (8., 54.),
+        (5., 58.),
+        (10., 63.),
+        (20., 70.),
+        (30., 71.),
+        (40., 68.),
+        (45., 60.),
+        (50., 50.),
+        (40., 44.),
+        (30., 45.),
+        (28., 41.),
+        (22., 37.),
+        (15., 38.),
+        (12., 44.),
+        (8., 44.),
+        (3., 42.),
+        (-5., 36.),
+    ],
+    &[
+        (-17., 21.),
+        (-17., 14.),
+        (-12., 7.),
+        (-5., 5.),
+        (8., 4.),
+        (9., -1.),
+        (13., -12.),
+        (12., -18.),
+        (18., -34.),
+        (26., -34.),
+        (33., -26.),
+        (40., -15.),
+        (40., -3.),
+        (51., 12.),
+        (43., 12.),
+        (37., 20.),
+        (33., 31.),
+        (20., 32.),
+        (10., 37.),
+        (-5., 36.),
+        (-10., 30.),
+    ],
+    &[
+        (28., 41.),
+        (36., 36.),
+        (35., 30.),
+        (44., 13.),
+        (55., 17.),
+        (58., 23.),
+        (62., 25.),
+        (67., 24.),
+        (73., 20.),
+        (77., 8.),
+        (80., 14.),
+        (88., 22.),
+        (92., 21.),
+        (98., 16.),
+        (100., 7.),
+        (104., 1.),
+        (106., 10.),
+        (110., 20.),
+        (118., 24.),
+        (122., 30.),
+        (122., 40.),
+        (128., 35.),
+        (130., 43.),
+        (140., 48.),
+        (142., 55.),
+        (135., 58.),
+        (155., 60.),
+        (160., 62.),
+        (170., 65.),
+        (180., 68.),
+        (180., 72.),
+        (140., 74.),
+        (110., 78.),
+        (80., 74.),
+        (68., 72.),
+        (60., 68.),
+        (45., 68.),
+        (40., 68.),
+        (45., 60.),
+        (50., 50.),
+        (40., 44.),
+    ],
     &[(130., 31.), (136., 34.), (140., 36.), (142., 41.), (141., 45.), (139., 40.), (133., 34.)],
-    &[(95., 5.), (105., -6.), (115., -8.), (125., -9.), (140., -8.), (141., -3.), (131., -1.), (120., 2.), (117., 7.), (110., 2.), (100., 3.)],
-    &[(114., -22.), (114., -34.), (122., -34.), (132., -31.), (138., -35.), (146., -39.), (150., -37.), (153., -28.), (146., -19.), (142., -11.), (136., -12.), (130., -12.), (122., -17.)],
+    &[
+        (95., 5.),
+        (105., -6.),
+        (115., -8.),
+        (125., -9.),
+        (140., -8.),
+        (141., -3.),
+        (131., -1.),
+        (120., 2.),
+        (117., 7.),
+        (110., 2.),
+        (100., 3.),
+    ],
+    &[
+        (114., -22.),
+        (114., -34.),
+        (122., -34.),
+        (132., -31.),
+        (138., -35.),
+        (146., -39.),
+        (150., -37.),
+        (153., -28.),
+        (146., -19.),
+        (142., -11.),
+        (136., -12.),
+        (130., -12.),
+        (122., -17.),
+    ],
     &[(-6., 50.), (2., 51.), (0., 53.), (-2., 56.), (-3., 58.), (-6., 58.), (-5., 54.), (-3., 52.)],
     &[(44., -25.), (47., -25.), (50., -15.), (49., -12.), (44., -17.)],
     &[(172., -34.), (178., -38.), (174., -41.), (167., -46.), (171., -44.)],
@@ -538,7 +717,9 @@ fn draw_map(
     cr.set_font_size(10.5);
     let mut x = 4.0;
     let y = h - 7.0;
-    for (c, a, text) in [(sketch::mix(p.dim, p.text, 0.45), 0.85, "Day"), (p.dim, 0.35, "Night"), (section, 1.0, "Your time zone")] {
+    for (c, a, text) in
+        [(sketch::mix(p.dim, p.text, 0.45), 0.85, "Day"), (p.dim, 0.35, "Night"), (section, 1.0, "Your time zone")]
+    {
         sketch::set(cr, c, a);
         cr.arc(x + 4.0, y - 3.5, 3.5, 0.0, std::f64::consts::TAU);
         let _ = cr.fill();
@@ -651,21 +832,22 @@ fn language_group(page: &Page, can_edit: bool, current: &str) {
             if let Some((l, _)) = opts.get(d.selected() as usize)
                 && *l != chosen
             {
-                run_admin(&["set-locale", &canonical_locale(l)], None, "Language changed. Sign out and back in to use it.", "region");
+                run_admin(
+                    &["set-locale", &canonical_locale(l)],
+                    None,
+                    "Language changed. Sign out and back in to use it.",
+                    "region",
+                );
             }
         });
-        let r = widgets::icon_row(
-            "preferences-desktop-locale-symbolic",
-            "Language",
-            "Menus and formats",
-            Some(dd.upcast_ref()),
-        );
+        let r = widgets::icon_row("preferences-desktop-locale-symbolic", "Language", "Menus and formats", Some(dd.upcast_ref()));
         r.set_tooltip_text(Some("Language and formats for the whole system. Applies after you sign in again."));
         widgets::keywords("locale lang english german french formats region system language");
         g.add(&r);
     }
     if can_edit {
-        let (r, _) = widgets::nav_row(Some("list-add-symbolic"), "Add a language", "Install another to choose it above", "", add_language);
+        let (r, _) =
+            widgets::nav_row(Some("list-add-symbolic"), "Add a language", "Install another to choose it above", "", add_language);
         widgets::keywords("locale-gen generate install add language");
         g.add(&r);
     }

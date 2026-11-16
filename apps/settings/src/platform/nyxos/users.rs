@@ -143,7 +143,8 @@ pub(super) fn avatar(full_name: &str, login: &str, size: i32) -> gtk::Widget {
         return p.upcast();
     }
     let text = initials(if full_name.is_empty() { login } else { full_name });
-    let colour = FACE_COLOURS[login.bytes().fold(7usize, |h, b| h.wrapping_mul(31).wrapping_add(b as usize)) % FACE_COLOURS.len()];
+    let colour =
+        FACE_COLOURS[login.bytes().fold(7usize, |h, b| h.wrapping_mul(31).wrapping_add(b as usize)) % FACE_COLOURS.len()];
     let area = gtk::DrawingArea::new();
     area.set_content_width(size);
     area.set_content_height(size);
@@ -320,7 +321,12 @@ impl Detail {
                 None,
             ));
         }
-        card.append(&widgets::icon_row("folder-symbolic", "Home folder", &format!("{} · stays if the account is removed", p.home), None));
+        card.append(&widgets::icon_row(
+            "folder-symbolic",
+            "Home folder",
+            &format!("{} · stays if the account is removed", p.home),
+            None,
+        ));
         widgets::mark_first_rows(card.upcast_ref());
         self.pane.append(&card);
 
@@ -342,12 +348,13 @@ impl Detail {
             t.append(&d);
             rm.append(&t);
             let login = p.login.clone();
-            let remove = widgets::confirm_button("Remove…", &format!("Remove {login}'s account? Their home folder stays."), move |b| {
-                b.set_sensitive(false);
-                nyxos::apply(vec![Change::RemovePerson { name: login.clone() }], "Account removed", |_| {
-                    window::rebuild("accounts")
+            let remove =
+                widgets::confirm_button("Remove…", &format!("Remove {login}'s account? Their home folder stays."), move |b| {
+                    b.set_sensitive(false);
+                    nyxos::apply(vec![Change::RemovePerson { name: login.clone() }], "Account removed", |_| {
+                        window::rebuild("accounts")
+                    });
                 });
-            });
             remove.add_css_class("destructive-action");
             remove.set_valign(gtk::Align::Center);
             rm.append(&remove);

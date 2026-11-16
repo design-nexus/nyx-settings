@@ -394,20 +394,15 @@ fn wifi(page: &Page) {
 
     let g = page.group("");
     let ui_slot: Rc<RefCell<Option<Rc<WifiUi>>>> = Rc::default();
-    let (saved_row, saved_value) = widgets::nav_row(
-        Some("document-open-recent-symbolic"),
-        "Saved networks",
-        "Forget the ones you don't use.",
-        "",
-        {
+    let (saved_row, saved_value) =
+        widgets::nav_row(Some("document-open-recent-symbolic"), "Saved networks", "Forget the ones you don't use.", "", {
             let ui_slot = ui_slot.clone();
             move || {
                 if let Some(ui) = ui_slot.borrow().as_ref() {
                     saved_page(ui);
                 }
             }
-        },
-    );
+        });
     widgets::keywords("saved remembered known forget networks");
     g.add(&saved_row);
 
@@ -544,7 +539,13 @@ fn show_networks(ui: &Rc<WifiUi>, data: &WifiData) {
     for (i, n) in data.networks.iter().enumerate() {
         let holder = if i < SHOWN_NETWORKS { list.clone() } else { more.clone() };
         let saved_as = data.saved.iter().find(|(_, ssid)| *ssid == n.ssid).map(|(name, _)| name.clone());
-        let security = if n.enterprise { "Enterprise" } else if n.secure { "Secured" } else { "Open" };
+        let security = if n.enterprise {
+            "Enterprise"
+        } else if n.secure {
+            "Secured"
+        } else {
+            "Open"
+        };
         let desc = if n.in_use {
             format!("Connected · {security}")
         } else if n.enterprise && saved_as.is_none() {
@@ -862,10 +863,7 @@ fn show_current(ui: &Rc<WifiUi>, data: &WifiData) {
         ("DNS", get_detail("DNS").unwrap_or_else(|| "From the network".into())),
         ("Security", if link.security.is_empty() || link.security == "--" { "None".into() } else { link.security.clone() }),
         ("Hardware address", mac.to_string()),
-        (
-            "Since it came up",
-            format!("{} down · {} up", sysinfo::bytes_text(today.0), sysinfo::bytes_text(today.1)),
-        ),
+        ("Since it came up", format!("{} down · {} up", sysinfo::bytes_text(today.0), sysinfo::bytes_text(today.1))),
     ]);
     pv.append(&total);
 
@@ -877,11 +875,14 @@ fn show_current(ui: &Rc<WifiUi>, data: &WifiData) {
     let n3 = name.clone();
     let (r, _) = widgets::switch_row("Join automatically", "When it's in range.", auto, move |on| {
         let n3 = n3.clone();
-        cmd::run_async(&["nmcli", "connection", "modify", "id", &n3, "connection.autoconnect", if on { "yes" } else { "no" }], |r| {
-            if let Err(e) = r {
-                window::toast(&format!("{e}"));
-            }
-        });
+        cmd::run_async(
+            &["nmcli", "connection", "modify", "id", &n3, "connection.autoconnect", if on { "yes" } else { "no" }],
+            |r| {
+                if let Err(e) = r {
+                    window::toast(&format!("{e}"));
+                }
+            },
+        );
     });
     widgets::keywords("autoconnect automatic join");
     opts.append(&r);
@@ -1346,9 +1347,13 @@ fn show_device(ui: &Rc<BtUi>, data: &BtData, shown: Option<(bt::Device, bt::Info
     ));
     widgets::keywords("trust trusted reconnect automatically");
     if is_audio(&info.icon) {
-        let (r, _) = widgets::nav_row(Some("audio-volume-high-symbolic"), "Sound", "Choose it for output and the microphone.", "Sound", || {
-            window::navigate("audio")
-        });
+        let (r, _) = widgets::nav_row(
+            Some("audio-volume-high-symbolic"),
+            "Sound",
+            "Choose it for output and the microphone.",
+            "Sound",
+            || window::navigate("audio"),
+        );
         opts.append(&r);
     }
     let entry = gtk::Entry::new();
@@ -1372,7 +1377,12 @@ fn show_device(ui: &Rc<BtUi>, data: &BtData, shown: Option<(bt::Device, bt::Info
         );
     };
     entry.connect_activate(rename);
-    opts.append(&widgets::icon_row("document-edit-symbolic", "Name", "What this computer calls it. Press Enter to keep it.", Some(entry.upcast_ref())));
+    opts.append(&widgets::icon_row(
+        "document-edit-symbolic",
+        "Name",
+        "What this computer calls it. Press Enter to keep it.",
+        Some(entry.upcast_ref()),
+    ));
     widgets::keywords("rename alias name");
     opts.set_sensitive(data.powered);
     pv.append(&opts);

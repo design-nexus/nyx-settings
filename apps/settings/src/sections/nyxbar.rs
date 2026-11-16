@@ -44,9 +44,7 @@ pub fn set_size(doc: &mut DocumentMut, size: &str) {
     doc.remove("height");
     let had = doc.contains_key("size");
     doc["size"] = toml_edit::value(size);
-    if !had
-        && let (Some(c), Some(mut k)) = (comment, doc.as_table_mut().key_mut("size"))
-    {
+    if !had && let (Some(c), Some(mut k)) = (comment, doc.as_table_mut().key_mut("size")) {
         k.leaf_decor_mut().set_prefix(c);
     }
 }
@@ -240,7 +238,9 @@ fn workspace_cards(current: &str, on_change: impl Fn(String) + 'static) -> gtk::
     row.add_css_class("nb-looks");
     let on_change = Rc::new(on_change);
     let mut first: Option<gtk::ToggleButton> = None;
-    for (id, name) in [("pills", "Pills"), ("numbers", "Numbers"), ("icons", "App icons"), ("dots", "Dots"), ("underline", "Underline")] {
+    for (id, name) in
+        [("pills", "Pills"), ("numbers", "Numbers"), ("icons", "App icons"), ("dots", "Dots"), ("underline", "Underline")]
+    {
         let b = gtk::ToggleButton::new();
         b.add_css_class("nb-look");
         let v = widgets::vbox(4);
@@ -254,7 +254,9 @@ fn workspace_cards(current: &str, on_change: impl Fn(String) + 'static) -> gtk::
             let (w, h) = (w as f64, h as f64);
             let end = {
                 let rec = gtk::cairo::RecordingSurface::create(gtk::cairo::Content::ColorAlpha, None).ok();
-                rec.and_then(|r| gtk::cairo::Context::new(&r).ok()).map(|c| draw_workspaces(&c, &p, id, 0.0, h / 2.0, h)).unwrap_or(w)
+                rec.and_then(|r| gtk::cairo::Context::new(&r).ok())
+                    .map(|c| draw_workspaces(&c, &p, id, 0.0, h / 2.0, h))
+                    .unwrap_or(w)
             };
             let k = ((w - 6.0) / end).min(1.0);
             cr.save().ok();
@@ -324,7 +326,9 @@ fn item_widget(id: &str, name: &str, look: &Look, grouped_status: bool) -> Optio
         }
         "system" => {
             let b = widgets::hbox(if grouped_status { 7 } else { 12 });
-            for icon in ["network-wireless-symbolic", "bluetooth-active-symbolic", "audio-volume-high-symbolic", "battery-good-symbolic"] {
+            for icon in
+                ["network-wireless-symbolic", "bluetooth-active-symbolic", "audio-volume-high-symbolic", "battery-good-symbolic"]
+            {
                 let i = gtk::Image::from_icon_name(icon);
                 i.set_pixel_size(14);
                 b.append(&i);
@@ -419,7 +423,9 @@ fn draw_calendar(cr: &gtk::cairo::Context, p: &sketch::Pal, w: f64, h: f64, wide
     let offset = first.map(|f| f.day_of_week() - 1).unwrap_or(0);
     let days = (28..=31)
         .rev()
-        .find(|d| gtk::glib::DateTime::from_local(today.year(), today.month(), *d, 0, 0, 0.0).is_ok_and(|t| t.month() == today.month()))
+        .find(|d| {
+            gtk::glib::DateTime::from_local(today.year(), today.month(), *d, 0, 0, 0.0).is_ok_and(|t| t.month() == today.month())
+        })
         .unwrap_or(30);
     cr.set_font_size(10.0);
     for d in 1..=days {
@@ -467,12 +473,21 @@ pub fn build(page: &Page) {
     };
     let opts = |o: &[(&str, &str)]| o.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect::<Vec<_>>();
     let height = merged.get("height").and_then(|v| v.as_integer());
-    let size = if height.is_some() { "custom".to_string() } else { merged.get("size").and_then(|v| v.as_str()).unwrap_or("default").to_string() };
+    let size = if height.is_some() {
+        "custom".to_string()
+    } else {
+        merged.get("size").and_then(|v| v.as_str()).unwrap_or("default").to_string()
+    };
     let look = Rc::new(RefCell::new(Look {
         size: size.clone(),
         date: plugin("nyx.clock", "date", "short"),
         hours: plugin("nyx.clock", "hours", "auto"),
-        seconds: merged.get("plugins").and_then(|p| p.get("nyx.clock")).and_then(|p| p.get("seconds")).and_then(|v| v.as_bool()).unwrap_or(false),
+        seconds: merged
+            .get("plugins")
+            .and_then(|p| p.get("nyx.clock"))
+            .and_then(|p| p.get("seconds"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
         calendar: plugin("nyx.clock", "layout", "wide"),
         workspaces: plugin("nyx.workspaces", "look", "pills"),
     }));
@@ -537,7 +552,9 @@ pub fn build(page: &Page) {
     calendar.set_halign(gtk::Align::Fill);
     {
         let look = look.clone();
-        calendar.set_draw_func(move |_, cr, w, h| draw_calendar(cr, &sketch::pal(), w as f64, h as f64, look.borrow().calendar == "wide"));
+        calendar.set_draw_func(move |_, cr, w, h| {
+            draw_calendar(cr, &sketch::pal(), w as f64, h as f64, look.borrow().calendar == "wide")
+        });
     }
     // A bar wider than the preview scrolls sideways, fading at the edge.
     let bar_scroll = gtk::ScrolledWindow::builder()
@@ -712,13 +729,17 @@ pub fn build(page: &Page) {
     g.add(&r);
     let seg = {
         let (look, redraw) = (look.clone(), redraw.clone());
-        widgets::segmented(&opts(&[("auto", "Automatic"), ("12", "12-hour"), ("24", "24-hour")]), &plugin("nyx.clock", "hours", "auto"), move |v| {
-            look.borrow_mut().hours = v.clone();
-            redraw();
-            let mut doc = read_user();
-            set_plugin(&mut doc, "nyx.clock", "hours", v.as_str());
-            write_user(&doc);
-        })
+        widgets::segmented(
+            &opts(&[("auto", "Automatic"), ("12", "12-hour"), ("24", "24-hour")]),
+            &plugin("nyx.clock", "hours", "auto"),
+            move |v| {
+                look.borrow_mut().hours = v.clone();
+                redraw();
+                let mut doc = read_user();
+                set_plugin(&mut doc, "nyx.clock", "hours", v.as_str());
+                write_user(&doc);
+            },
+        )
     };
     g.add(&widgets::row("Time", "", Some(seg.upcast_ref())));
     widgets::keywords("12-hour 24-hour military am pm automatic region");

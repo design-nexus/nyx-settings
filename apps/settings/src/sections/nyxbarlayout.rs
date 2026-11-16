@@ -88,7 +88,8 @@ impl Info {
     }
 
     fn description(&self, e: &Entry) -> String {
-        let all: Vec<&str> = e.items().iter().filter_map(|i| self.descriptions.get(i)).map(String::as_str).filter(|d| !d.is_empty()).collect();
+        let all: Vec<&str> =
+            e.items().iter().filter_map(|i| self.descriptions.get(i)).map(String::as_str).filter(|d| !d.is_empty()).collect();
         if all.len() == 1 { all[0].to_string() } else { String::new() }
     }
 
@@ -270,7 +271,11 @@ fn row(ed: &Ed, s: usize, i: usize, e: &Entry, len: usize, next_is_item: bool) -
             row.add_css_class("pill");
             title.append(&widgets::label(&info.entry_name(e), "bar-item-name"));
             let t = widgets::tag("Pill");
-            t.set_tooltip_text(Some(if g.len() > 1 { "These share one background in the bar." } else { "On a background of its own in the bar." }));
+            t.set_tooltip_text(Some(if g.len() > 1 {
+                "These share one background in the bar."
+            } else {
+                "On a background of its own in the bar."
+            }));
             title.append(&t);
         }
     }
@@ -323,37 +328,49 @@ fn row(ed: &Ed, s: usize, i: usize, e: &Entry, len: usize, next_is_item: bool) -
         action(&format!("Move to {}", section_title(to)), Box::new(move |l| move_entry(l, s, i, to, None)));
     }
     if e.is_item() && next_is_item {
-        action("Join with the next in one pill", Box::new(move |l| {
-            join_next(l, s, i);
-        }));
+        action(
+            "Join with the next in one pill",
+            Box::new(move |l| {
+                join_next(l, s, i);
+            }),
+        );
     }
     if let Entry::Group(g) = e {
         if g.len() > 1 {
-            action("Split the pill", Box::new(move |l| {
-                split(l, s, i);
-            }));
+            action(
+                "Split the pill",
+                Box::new(move |l| {
+                    split(l, s, i);
+                }),
+            );
             for item in g.clone() {
                 let name = info.name(&item);
-                action(&format!("Take {name} out of the pill"), Box::new(move |l| {
-                    take_out(l, s, i, &item);
-                }));
+                action(
+                    &format!("Take {name} out of the pill"),
+                    Box::new(move |l| {
+                        take_out(l, s, i, &item);
+                    }),
+                );
             }
         } else {
-            action("Without a pill", Box::new(move |l| {
-                split(l, s, i);
-            }));
+            action(
+                "Without a pill",
+                Box::new(move |l| {
+                    split(l, s, i);
+                }),
+            );
         }
     } else if e.is_item() {
-        action("On a pill of its own", Box::new(move |l| {
-            if let Some(Entry::One(x)) = l[s].get(i).cloned() {
-                l[s][i] = Entry::Group(vec![x]);
-            }
-        }));
+        action(
+            "On a pill of its own",
+            Box::new(move |l| {
+                if let Some(Entry::One(x)) = l[s].get(i).cloned() {
+                    l[s][i] = Entry::Group(vec![x]);
+                }
+            }),
+        );
     }
-    action(
-        if e.is_item() { "Remove from the bar" } else { "Remove" },
-        Box::new(move |l| remove(l, s, i)),
-    );
+    action(if e.is_item() { "Remove from the bar" } else { "Remove" }, Box::new(move |l| remove(l, s, i)));
     pop.set_child(Some(&items));
     menu.set_popover(Some(&pop));
     row.append(&menu);
@@ -404,7 +421,10 @@ fn section_card(ed: &Ed, s: usize, entries: &[Entry]) -> gtk::Box {
     card.add_css_class("bar-section");
     let top = widgets::hbox(8);
     let info = ed.info.borrow().clone();
-    let head = widgets::label(&format!("{} · {}", section_title(s).to_uppercase(), entries.iter().filter(|e| e.is_item() && info.is_on(e)).count()), "bar-section-title");
+    let head = widgets::label(
+        &format!("{} · {}", section_title(s).to_uppercase(), entries.iter().filter(|e| e.is_item() && info.is_on(e)).count()),
+        "bar-section-title",
+    );
     head.set_hexpand(true);
     top.append(&head);
     let divider = gtk::Button::with_label("+ Divider");

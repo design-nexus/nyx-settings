@@ -74,7 +74,10 @@ fn unavailable(page: &Page) {
         g.add(&widgets::row("Looking for Flux…", "", None));
         return;
     };
-    if capability::state("daemon:flux") == nyx_capability::State::Inactive && platform::connect_on_trusted_networks() && !paired_before() {
+    if capability::state("daemon:flux") == nyx_capability::State::Inactive
+        && platform::connect_on_trusted_networks()
+        && !paired_before()
+    {
         let (r, _) = widgets::button_row(
             "Pair a phone",
             "Nyx Connect starts once a phone is paired. Start pairing, open Flux on the phone, and compare the key on both screens.",
@@ -217,12 +220,9 @@ fn general(page: &Page, s: &Snapshot) {
         );
         g.add(&tiled(r, "edit-copy-symbolic"));
     }
-    let (r, _) = widgets::switch_row(
-        "Show their notifications",
-        "In the Notification Center.",
-        s.settings.notifications,
-        |on| act(move |c| c.set("notifications", on.into()), |_| {}),
-    );
+    let (r, _) = widgets::switch_row("Show their notifications", "In the Notification Center.", s.settings.notifications, |on| {
+        act(move |c| c.set("notifications", on.into()), |_| {})
+    });
     widgets::keywords("show notifications from devices");
     g.add(&tiled(r, "preferences-system-notifications-symbolic"));
     let (r, _) = widgets::switch_row(
@@ -453,7 +453,8 @@ fn pairing(d: &Device, name: &str, step: PairStep) -> gtk::Box {
             }
         }
     };
-    let r = widgets::icon_row(d.icon(), &esc(name), &format!("{desc} Pairing ends after 30 seconds."), Some(controls.upcast_ref()));
+    let r =
+        widgets::icon_row(d.icon(), &esc(name), &format!("{desc} Pairing ends after 30 seconds."), Some(controls.upcast_ref()));
     r.add_css_class("cn-picked");
     r
 }

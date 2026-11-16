@@ -13,8 +13,10 @@ use std::rc::Rc;
 /// Colours that show a theme at a glance: background, panel, text, accent, then swatches.
 fn sample(registry: &Registry, id: &str) -> Vec<String> {
     let Some(r) = engine::resolver::resolve_id(registry, id, None, &engine::A11y::default()) else { return vec![] };
-    let mut out: Vec<String> =
-        ["surface.primary", "surface.secondary", "text.primary", "accent.primary"].iter().map(|t| r.tokens.color(t).to_string()).collect();
+    let mut out: Vec<String> = ["surface.primary", "surface.secondary", "text.primary", "accent.primary"]
+        .iter()
+        .map(|t| r.tokens.color(t).to_string())
+        .collect();
     out.extend(r.theme.look.swatches.iter().take(5).map(|(_, c)| c.clone()));
     out
 }
@@ -76,7 +78,12 @@ pub fn added_count() -> usize {
 }
 
 /// Run `work` off the main thread with the button showing `label`, then `done`.
-fn busy<T: Send + 'static>(b: &gtk::Button, label: &str, work: impl FnOnce() -> Result<T, String> + Send + 'static, done: impl FnOnce(T) + 'static) {
+fn busy<T: Send + 'static>(
+    b: &gtk::Button,
+    label: &str,
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+    done: impl FnOnce(T) + 'static,
+) {
     let old = b.label().map(|l| l.to_string()).unwrap_or_default();
     b.set_sensitive(false);
     b.set_label(label);
@@ -124,7 +131,11 @@ fn details_button(meta: &engine::Meta, issues: &[engine::Issue]) -> gtk::MenuBut
     lines.push(facts.join(" · "));
     if let Some(s) = &meta.source {
         lines.push(format!("From {} at <tt>{}</tt>", esc(&s.url), esc(s.commit.get(..10).unwrap_or(&s.commit))));
-        lines.push(format!("Installed {}{}", esc(&s.installed), s.updated.as_deref().map(|u| format!(", updated {}", esc(u))).unwrap_or_default()));
+        lines.push(format!(
+            "Installed {}{}",
+            esc(&s.installed),
+            s.updated.as_deref().map(|u| format!(", updated {}", esc(u))).unwrap_or_default()
+        ));
     }
     if let Some(c) = &meta.conversion {
         lines.push(format!("Converted from an {} theme.", esc(&c.format)));
@@ -203,14 +214,19 @@ pub fn library_group(page: &Page) {
                 let id2 = id.clone();
                 update.connect_clicked(move |b| {
                     let id = id2.clone();
-                    busy(b, "Updating…", move || installer::update(&id), move |r| match r {
-                        installer::Updated::UpToDate => window::toast("Already up to date"),
-                        installer::Updated::Updated { .. } => {
-                            nyx_theme::themes_changed("theme-updated");
-                            window::toast("Theme updated");
-                            window::rebuild("theme");
-                        }
-                    });
+                    busy(
+                        b,
+                        "Updating…",
+                        move || installer::update(&id),
+                        move |r| match r {
+                            installer::Updated::UpToDate => window::toast("Already up to date"),
+                            installer::Updated::Updated { .. } => {
+                                nyx_theme::themes_changed("theme-updated");
+                                window::toast("Theme updated");
+                                window::rebuild("theme");
+                            }
+                        },
+                    );
                 });
                 control.append(&update);
             }
@@ -227,11 +243,16 @@ pub fn library_group(page: &Page) {
         if e.meta.removable() {
             let remove = widgets::confirm_button("Remove", "Click again to remove", move |b| {
                 let id = id.clone();
-                busy(b, "Removing…", move || installer::remove(&id), |()| {
-                    nyx_theme::themes_changed("theme-removed");
-                    window::toast("Theme removed");
-                    window::rebuild("theme");
-                });
+                busy(
+                    b,
+                    "Removing…",
+                    move || installer::remove(&id),
+                    |()| {
+                        nyx_theme::themes_changed("theme-removed");
+                        window::toast("Theme removed");
+                        window::rebuild("theme");
+                    },
+                );
             });
             remove.add_css_class("destructive-action");
             control.append(&remove);
@@ -244,19 +265,30 @@ pub fn library_group(page: &Page) {
     if !any {
         g.add(&widgets::row("No themes added yet", "Install one from GitHub below.", None));
     }
-    let (r, _) = widgets::button_row("Check for updates", "Ask each theme's repository whether it has a newer version.", "Check", |b| {
-        busy(
-            b,
-            "Checking…",
-            || {
-                let ids: Vec<String> = engine::list_themes().into_iter().filter(|m| m.origin == Origin::Installed).map(|m| m.id).collect();
-                Ok(ids.iter().filter_map(|id| installer::check_update(id).ok()).filter(|c| c.available()).map(|c| c.id).collect::<Vec<_>>())
-            },
-            |ids: Vec<String>| {
-                window::toast(&if ids.is_empty() { "Every theme is up to date".to_string() } else { format!("Updates for {}", ids.join(", ")) })
-            },
-        )
-    });
+    let (r, _) =
+        widgets::button_row("Check for updates", "Ask each theme's repository whether it has a newer version.", "Check", |b| {
+            busy(
+                b,
+                "Checking…",
+                || {
+                    let ids: Vec<String> =
+                        engine::list_themes().into_iter().filter(|m| m.origin == Origin::Installed).map(|m| m.id).collect();
+                    Ok(ids
+                        .iter()
+                        .filter_map(|id| installer::check_update(id).ok())
+                        .filter(|c| c.available())
+                        .map(|c| c.id)
+                        .collect::<Vec<_>>())
+                },
+                |ids: Vec<String>| {
+                    window::toast(&if ids.is_empty() {
+                        "Every theme is up to date".to_string()
+                    } else {
+                        format!("Updates for {}", ids.join(", "))
+                    })
+                },
+            )
+        });
     g.add(&r);
 }
 
@@ -299,7 +331,8 @@ pub fn install_group(page: &Page) {
     }
     let omarchy = engine::omarchy::installed_themes();
     if !omarchy.is_empty() {
-        let options: Vec<(String, String)> = omarchy.iter().map(|(n, p)| (p.display().to_string(), engine::omarchy::pretty_name(n))).collect();
+        let options: Vec<(String, String)> =
+            omarchy.iter().map(|(n, p)| (p.display().to_string(), engine::omarchy::pretty_name(n))).collect();
         let first = options[0].0.clone();
         let chosen = Rc::new(RefCell::new(first.clone()));
         let dd = nyx_ui::widgets::dropdown(&options, &first);
@@ -314,11 +347,16 @@ pub fn install_group(page: &Page) {
         let import = gtk::Button::with_label("Import");
         import.connect_clicked(move |b| {
             let path = std::path::PathBuf::from(chosen.borrow().clone());
-            busy(b, "Importing…", move || installer::import_omarchy(&path), |id| {
-                nyx_theme::themes_changed("theme-imported");
-                window::toast(&format!("Imported as {id}"));
-                window::rebuild("theme");
-            });
+            busy(
+                b,
+                "Importing…",
+                move || installer::import_omarchy(&path),
+                |id| {
+                    nyx_theme::themes_changed("theme-imported");
+                    window::toast(&format!("Imported as {id}"));
+                    window::rebuild("theme");
+                },
+            );
         });
         let line = widgets::hbox(8);
         line.append(&dd);
@@ -337,7 +375,11 @@ fn show_candidates(results: &gtk::Box, ins: installer::Inspection, fetched: &Rc<
     }
     results.set_visible(true);
     let short = ins.commit.get(..10).unwrap_or(&ins.commit).to_string();
-    results.append(&widgets::row(&format!("{} theme(s) found", ins.candidates.len()), &format!("{} at <tt>{short}</tt>", esc(&ins.repo.url)), None));
+    results.append(&widgets::row(
+        &format!("{} theme(s) found", ins.candidates.len()),
+        &format!("{} at <tt>{short}</tt>", esc(&ins.repo.url)),
+        None,
+    ));
     for (i, c) in ins.candidates.iter().enumerate() {
         let mut desc = format!("{} theme", if c.format == installer::Format::Omarchy { "Omarchy (converted)" } else { "Nyx" });
         if let Some(a) = &c.meta.author {
@@ -367,11 +409,16 @@ fn show_candidates(results: &gtk::Box, ins: installer::Inspection, fetched: &Rc<
                     window::toast("Check the repository again");
                     return;
                 };
-                busy(b, "Installing…", move || installer::install(&ins, &[i]), |ids| {
-                    nyx_theme::themes_changed("theme-installed");
-                    window::toast(&format!("Installed {}", ids.join(", ")));
-                    window::rebuild("theme");
-                });
+                busy(
+                    b,
+                    "Installing…",
+                    move || installer::install(&ins, &[i]),
+                    |ids| {
+                        nyx_theme::themes_changed("theme-installed");
+                        window::toast(&format!("Installed {}", ids.join(", ")));
+                        window::rebuild("theme");
+                    },
+                );
             });
             control.append(&b);
         } else {
@@ -453,10 +500,9 @@ pub fn logo_group(page: &Page) {
     let desc = match current.source {
         engine::logo::Source::BuiltIn => "The Nyx mark.".to_string(),
         engine::logo::Source::System => "This computer's logo.".to_string(),
-        engine::logo::Source::User => format!(
-            "Your own, {}.",
-            if current.recolorable() { "in each theme's colour" } else { "shown as it is" }
-        ),
+        engine::logo::Source::User => {
+            format!("Your own, {}.", if current.recolorable() { "in each theme's colour" } else { "shown as it is" })
+        }
     };
     let controls = widgets::hbox(8);
     controls.append(&nyx_ui::widgets::logo(40));
@@ -489,7 +535,10 @@ pub fn logo_group(page: &Page) {
 
 /// The system logo row of NyxOS's Boot & Sign-in page: a system setting, sent with
 /// the page's other changes through `stage` (`None` takes the change back).
-pub fn system_logo_row(current: Option<&nyx_system_proto::Logo>, stage: Rc<dyn Fn(Option<nyx_system_proto::Change>)>) -> gtk::Box {
+pub fn system_logo_row(
+    current: Option<&nyx_system_proto::Logo>,
+    stage: Rc<dyn Fn(Option<nyx_system_proto::Change>)>,
+) -> gtk::Box {
     use nyx_system_proto::{Change, Logo, LogoFormat};
     let preview = gtk::Image::new();
     preview.set_pixel_size(40);
@@ -543,7 +592,14 @@ pub fn reset_group(g: &Group) {
     b.add_css_class("destructive-action");
     g.add(&widgets::row(
         "Reset appearance",
-        "The default theme (Omarchy's on Omarchy, else Catppuccin Mocha), every app following it, and no colour changes of your own. Installed themes stay.",
+        match crate::platform::PLATFORM {
+            crate::platform::Platform::NyxOS => {
+                "This computer's default theme, every app following it, and no colour changes of your own. Installed themes stay."
+            }
+            crate::platform::Platform::Omarchy => {
+                "The default theme (Omarchy's, else Catppuccin Mocha), every app following it, and no colour changes of your own. Installed themes stay."
+            }
+        },
         Some(b.upcast_ref()),
     ));
     widgets::keywords("reset default appearance theme catppuccin restore");

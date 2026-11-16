@@ -88,11 +88,14 @@ fn omarchy_colours(dir: &Path) -> Option<Colours> {
 }
 
 fn is_image(p: &Path) -> bool {
-    p.extension().and_then(|e| e.to_str()).is_some_and(|e| ["png", "jpg", "jpeg", "webp", "bmp", "gif"].contains(&e.to_lowercase().as_str()))
+    p.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| ["png", "jpg", "jpeg", "webp", "bmp", "gif"].contains(&e.to_lowercase().as_str()))
 }
 
 fn images_in(dir: &Path) -> Vec<PathBuf> {
-    let mut v: Vec<PathBuf> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| is_image(p)).collect();
+    let mut v: Vec<PathBuf> =
+        std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| is_image(p)).collect();
     v.sort();
     v
 }
@@ -326,7 +329,15 @@ fn draw_desktop(cr: &gtk::cairo::Context, c: &Colours, wall: Option<&gdk_pixbuf:
     let _ = cr.fill();
     for i in 0..4 {
         let y = inside.y + 6.0 + i as f64 * lh * 2.2;
-        bar_line(cr, if i == 0 { c.accent } else { c.text }, if i == 0 { 0.9 } else { 0.25 }, inside.x + 2.0, y, side_w - 10.0, lh);
+        bar_line(
+            cr,
+            if i == 0 { c.accent } else { c.text },
+            if i == 0 { 0.9 } else { 0.25 },
+            inside.x + 2.0,
+            y,
+            side_w - 10.0,
+            lh,
+        );
     }
     let main_x = inside.x + side_w + 6.0;
     let main_w = inside.w - side_w - 6.0;
@@ -586,7 +597,11 @@ fn preview(page: &Page, st: &Rc<State>) {
         if let Some(t) = &title {
             t.set_text(&if st.trying() { format!("Previewing {name}") } else { name });
         }
-        line.set_text(if st.trying() { "Nothing changes until you apply it." } else { "In use. Pick a theme to try it here first." });
+        line.set_text(if st.trying() {
+            "Nothing changes until you apply it."
+        } else {
+            "In use. Pick a theme to try it here first."
+        });
     });
 
     let stage = pv.drawing(300, |_, _, _, _, _| {});
@@ -682,7 +697,11 @@ fn sample_card(page: &Page, pv: &widgets::Preview, st: &Rc<State>) {
     card.append(&icons);
     SAMPLE.with(|s| *s.borrow_mut() = Some((ui, code)));
     set_sample_font(false, &appearance::interface_font());
-    let mono = if st.omarchy { cmd::output(&["omarchy-font-current"]).map(|s| s.trim().to_string()).unwrap_or_default() } else { String::new() };
+    let mono = if st.omarchy {
+        cmd::output(&["omarchy-font-current"]).map(|s| s.trim().to_string()).unwrap_or_default()
+    } else {
+        String::new()
+    };
     set_sample_font(true, if mono.is_empty() { "monospace" } else { &mono });
 
     let provider = gtk::CssProvider::new();
@@ -925,7 +944,10 @@ fn themes_group(page: &Page, st: &Rc<State>) {
     }
     let row = widgets::stacked_row("", "", flow.upcast_ref());
     row.add_css_class("bare");
-    widgets::keywords(&format!("theme colours colors try preview apply keep {}", st.choices.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(" ")));
+    widgets::keywords(&format!(
+        "theme colours colors try preview apply keep {}",
+        st.choices.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(" ")
+    ));
     g.add(&row);
 }
 
@@ -1064,7 +1086,9 @@ fn more_group(page: &Page) {
         },
         || open(widgets::subpage("Apps follow the theme", 600, apps_group)),
     );
-    widgets::keywords("gtk qt kde libadwaita apps windows dialogs popups consistent dark reader hyprchroma omarchroma sync automatic restore stock");
+    widgets::keywords(
+        "gtk qt kde libadwaita apps windows dialogs popups consistent dark reader hyprchroma omarchroma sync automatic restore stock",
+    );
     g.add(&r);
 
     let added = super::themes::added_count();

@@ -38,7 +38,10 @@ pub fn build(page: &Page) {
     watch_once();
     let accounts = page.group("Storage only");
     let ends = widgets::hbox(2);
-    let find = widgets::icon_button("system-search-symbolic", "Find rclone accounts already on this computer, to show them in Files too");
+    let find = widgets::icon_button(
+        "system-search-symbolic",
+        "Find rclone accounts already on this computer, to show them in Files too",
+    );
     find.connect_clicked(|_| discover());
     ends.append(&find);
     let again = widgets::icon_button("view-refresh-symbolic", "Check again: current connections and mount status");
@@ -74,7 +77,9 @@ pub fn build(page: &Page) {
                 }
             }
             holder.append(&add_row("Add cloud storage", || onboarding(None, None)));
-            widgets::keywords("add storage-only account google drive dropbox onedrive nextcloud webdav sftp rclone discover existing remotes refresh status");
+            widgets::keywords(
+                "add storage-only account google drive dropbox onedrive nextcloud webdav sftp rclone discover existing remotes refresh status",
+            );
         },
     );
 }
@@ -108,7 +113,14 @@ fn append_account(holder: &gtk::Box, remote: Remote) {
         desc.push(remote.error.clone());
     } else if remote.mount_status == "mounted" {
         desc.push(if remote.storage_enabled { "in Files".into() } else { "connected".into() });
-        desc.push(format!("{} kept here", if remote.preferences.cache_mib >= 1024 && remote.preferences.cache_mib % 1024 == 0 { format!("{} GB", remote.preferences.cache_mib / 1024) } else { format!("{} MB", remote.preferences.cache_mib) }));
+        desc.push(format!(
+            "{} kept here",
+            if remote.preferences.cache_mib >= 1024 && remote.preferences.cache_mib % 1024 == 0 {
+                format!("{} GB", remote.preferences.cache_mib / 1024)
+            } else {
+                format!("{} MB", remote.preferences.cache_mib)
+            }
+        ));
     } else if remote.preferences.mount_on_login {
         desc.push("connects when you sign in".into());
     } else {
@@ -120,7 +132,13 @@ fn append_account(holder: &gtk::Box, remote: Remote) {
     let ok = remote.error.is_empty() && remote.connection == "connected";
     let status = widgets::hbox(6);
     status.add_css_class("oac-status");
-    status.add_css_class(if ok { "ok" } else if remote.error.is_empty() { "idle" } else { "warn" });
+    status.add_css_class(if ok {
+        "ok"
+    } else if remote.error.is_empty() {
+        "idle"
+    } else {
+        "warn"
+    });
     status.set_valign(gtk::Align::Center);
     let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     dot.add_css_class("oac-dot");

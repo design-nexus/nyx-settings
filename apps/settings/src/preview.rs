@@ -213,7 +213,8 @@ pub fn window_style_stage() -> gtk::DrawingArea {
         let (gin_v, gout_v) = (raw("general.gaps_in", 5.0), raw("general.gaps_out", 10.0));
         let (border_v, radius_v) = (raw("general.border_size", 2.0), raw("decoration.rounding", 0.0));
         let range_v = raw("decoration.shadow.range", 4.0);
-        let (gin, gout, radius, range) = (gin_v * STAGE_SCALE, gout_v * STAGE_SCALE, radius_v * STAGE_SCALE, range_v * STAGE_SCALE);
+        let (gin, gout, radius, range) =
+            (gin_v * STAGE_SCALE, gout_v * STAGE_SCALE, radius_v * STAGE_SCALE, range_v * STAGE_SCALE);
         let on = get(&vals, "decoration.active_opacity", 1.0);
         let off = get(&vals, "decoration.inactive_opacity", 1.0);
         let dim = if get(&vals, "decoration.dim_inactive", 0.0) > 0.5 { get(&vals, "decoration.dim_strength", 0.5) } else { 0.0 };

@@ -397,7 +397,11 @@ impl Preview {
     /// A drawing in the theme's colours, `height` tall and as wide as the preview,
     /// redrawn when the theme changes. `draw` gets the context, the palette, the
     /// section's colour and the size.
-    pub fn drawing(&self, height: i32, draw: impl Fn(&gtk::cairo::Context, &sketch::Pal, sketch::Rgb, f64, f64) + 'static) -> gtk::DrawingArea {
+    pub fn drawing(
+        &self,
+        height: i32,
+        draw: impl Fn(&gtk::cairo::Context, &sketch::Pal, sketch::Rgb, f64, f64) + 'static,
+    ) -> gtk::DrawingArea {
         let area = drawing(height, draw);
         self.add(&area);
         area
@@ -424,7 +428,10 @@ impl Preview {
 }
 
 /// A drawing in the theme's colours (see [`Preview::drawing`]), for previews and cards.
-pub fn drawing(height: i32, draw: impl Fn(&gtk::cairo::Context, &sketch::Pal, sketch::Rgb, f64, f64) + 'static) -> gtk::DrawingArea {
+pub fn drawing(
+    height: i32,
+    draw: impl Fn(&gtk::cairo::Context, &sketch::Pal, sketch::Rgb, f64, f64) + 'static,
+) -> gtk::DrawingArea {
     let area = gtk::DrawingArea::new();
     area.set_content_height(height);
     area.set_hexpand(true);
@@ -496,7 +503,8 @@ fn narrow_split_in(body: &gtk::Widget, narrow: bool, depth: u32) {
             && let (Some(first), Some(last)) = (split.first_child(), split.last_child())
         {
             let (left, right) = if first.has_css_class("split-column-scroll") { (first, last) } else { (last, first) };
-            let (Some(left), Some(right)) = (left.downcast_ref::<gtk::ScrolledWindow>(), right.downcast_ref::<gtk::ScrolledWindow>())
+            let (Some(left), Some(right)) =
+                (left.downcast_ref::<gtk::ScrolledWindow>(), right.downcast_ref::<gtk::ScrolledWindow>())
             else {
                 return;
             };
@@ -1019,7 +1027,9 @@ fn string_factory(short: bool) -> gtk::SignalListItemFactory {
         let Some(item) = item.downcast_ref::<gtk::ListItem>() else { return };
         let Some(s) = item.item().and_downcast::<gtk::StringObject>() else { return };
         let child = item.child();
-        let label = child.as_ref().and_then(|c| c.downcast_ref::<gtk::Label>().cloned().or_else(|| c.first_child().and_downcast::<gtk::Label>()));
+        let label = child
+            .as_ref()
+            .and_then(|c| c.downcast_ref::<gtk::Label>().cloned().or_else(|| c.first_child().and_downcast::<gtk::Label>()));
         if let Some(l) = label {
             l.set_text(&s.string());
         }

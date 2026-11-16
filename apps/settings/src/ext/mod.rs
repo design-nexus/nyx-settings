@@ -66,6 +66,12 @@ pub struct Extension {
 }
 
 impl Extension {
+    /// Installed by a package (the system or a Nix profile), not in the user's folder:
+    /// it can be turned off but not removed.
+    pub fn packaged(&self) -> bool {
+        !self.root.starts_with(paths::ext_dir())
+    }
+
     pub fn id(&self) -> &str {
         &self.manifest.id
     }
@@ -203,21 +209,32 @@ pub fn load(root: &Path) -> Result<Extension> {
     Ok(Extension { manifest, root: root.to_path_buf(), dir })
 }
 
-/// Every installed extension, sorted by name. Broken ones are skipped.
+/// Every installed extension, sorted by name: the user's own, then packaged ones
+/// (`$XDG_DATA_DIRS`) whose id the user hasn't installed. Broken ones are skipped.
 pub fn installed() -> Vec<Extension> {
-    let Ok(rd) = std::fs::read_dir(paths::ext_dir()) else { return vec![] };
-    let mut out: Vec<Extension> = rd
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.is_dir() && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')))
-        .filter_map(|p| match load(&p) {
-            Ok(e) => Some(e),
-            Err(err) => {
-                eprintln!("nyx-settings: extension skipped: {err:#}");
-                None
+    let mut dirs = vec![paths::ext_dir()];
+    dirs.extend(paths::system_ext_dirs());
+    installed_in(&dirs)
+}
+
+fn installed_in(dirs: &[PathBuf]) -> Vec<Extension> {
+    let mut out: Vec<Extension> = Vec::new();
+    for dir in dirs {
+        let Ok(rd) = std::fs::read_dir(dir) else { continue };
+        let mut found: Vec<PathBuf> = rd
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_dir() && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')))
+            .collect();
+        found.sort();
+        for p in found {
+            match load(&p) {
+                Ok(e) if out.iter().any(|o| o.id() == e.id()) => {}
+                Ok(e) => out.push(e),
+                Err(err) => eprintln!("nyx-settings: extension skipped: {err:#}"),
             }
-        })
-        .collect();
+        }
+    }
     out.sort_by_key(|e| e.manifest.name.to_lowercase());
     out
 }
@@ -352,6 +369,21 @@ pub(crate) mod tests {
         std::fs::write(&exe, script).unwrap();
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[test]
+    fn user_extensions_shadow_packaged_ones() {
+        let root = scratch("packaged");
+        let (user, sys) = (root.join("user"), root.join("sys"));
+        write_ext(&user.join("fake"), "", "#!/bin/sh\n");
+        write_ext(&sys.join("fake"), "", "#!/bin/sh\n");
+        std::fs::create_dir_all(sys.join("other")).unwrap();
+        std::fs::write(sys.join("other").join(MANIFEST), "id = \"other\"\nname = \"Other\"\nexec = \"nyx-other\"\n").unwrap();
+        let found = installed_in(&[user.clone(), sys.clone()]);
+        assert_eq!(found.iter().map(|e| e.id()).collect::<Vec<_>>(), ["fake", "other"]);
+        assert_eq!(found[0].root, user.join("fake"));
+        assert_eq!(found[1].root, sys.join("other"));
+        assert_eq!(found[1].exec(), PathBuf::from("nyx-other"));
     }
 
     #[test]

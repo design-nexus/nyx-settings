@@ -99,8 +99,9 @@ fn collect(window_rules: &[Rule]) -> Vec<AppEntry> {
         out.push(e);
     }
     // The night light schedule manages its own entry.
-    let commands: Vec<(String, String)> =
-        store::read(|s| s.autostart.iter().filter(|(k, _)| k.as_str() != "hyprsunset").map(|(k, v)| (k.clone(), v.clone())).collect());
+    let commands: Vec<(String, String)> = store::read(|s| {
+        s.autostart.iter().filter(|(k, _)| k.as_str() != "hyprsunset").map(|(k, v)| (k.clone(), v.clone())).collect()
+    });
     for (process, command) in commands {
         let lower = process.to_lowercase();
         if let Some(e) = out.iter_mut().find(|e| e.start.is_none() && e.words.contains(&lower)) {
@@ -222,7 +223,9 @@ fn tags(e: &AppEntry, window_rules: &[Rule]) -> Vec<String> {
 fn app_icon(e: &AppEntry, size: i32) -> gtk::Image {
     let img = match &e.icon {
         Some(i) => gtk::Image::from_gicon(i),
-        None if e.icon_name.starts_with('/') && std::path::Path::new(&e.icon_name).exists() => gtk::Image::from_file(&e.icon_name),
+        None if e.icon_name.starts_with('/') && std::path::Path::new(&e.icon_name).exists() => {
+            gtk::Image::from_file(&e.icon_name)
+        }
         None if !e.icon_name.is_empty()
             && gtk::gdk::Display::default().is_some_and(|d| gtk::IconTheme::for_display(&d).has_icon(&e.icon_name)) =>
         {
@@ -312,9 +315,27 @@ pub fn build(page: &Page) {
                     detail.append(&head);
                     let card = preview_card(&detail, "");
                     for (icon, title, desc, label, act) in [
-                        ("system-run-symbolic", "Start an app when you sign in", "Unless it's already running.", "Pick an app", add_startup_app as fn()),
-                        ("utilities-terminal-symbolic", "Start a command", "Like nm-applet or discord --start-minimized.", "Add", add_command as fn()),
-                        ("window-restore-symbolic", "A rule for a window", "Pick an open window, then what it does.", "Add", (|| rule_sheet("", "")) as fn()),
+                        (
+                            "system-run-symbolic",
+                            "Start an app when you sign in",
+                            "Unless it's already running.",
+                            "Pick an app",
+                            add_startup_app as fn(),
+                        ),
+                        (
+                            "utilities-terminal-symbolic",
+                            "Start a command",
+                            "Like nm-applet or discord --start-minimized.",
+                            "Add",
+                            add_command as fn(),
+                        ),
+                        (
+                            "window-restore-symbolic",
+                            "A rule for a window",
+                            "Pick an open window, then what it does.",
+                            "Add",
+                            (|| rule_sheet("", "")) as fn(),
+                        ),
                     ] {
                         let b = gtk::Button::with_label(label);
                         b.connect_clicked(move |_| act());
@@ -604,12 +625,15 @@ fn fill_detail(detail: &gtk::Box, foot: &gtk::Label, e: &AppEntry, window_rules:
         (true, true) => String::new(),
     };
     let line = gtk::Label::new(None);
-    widgets::set_markup_or_text(&line, &match &e.start {
-        Some(Start::Command { command, .. }) if e.rules.is_empty() => {
-            format!("Runs <tt>{}</tt>", glib::markup_escape_text(command))
-        }
-        _ => matches,
-    });
+    widgets::set_markup_or_text(
+        &line,
+        &match &e.start {
+            Some(Start::Command { command, .. }) if e.rules.is_empty() => {
+                format!("Runs <tt>{}</tt>", glib::markup_escape_text(command))
+            }
+            _ => matches,
+        },
+    );
     line.add_css_class("rl-empty-line");
     line.set_xalign(0.0);
     line.set_wrap(true);
@@ -641,7 +665,11 @@ fn fill_detail(detail: &gtk::Box, foot: &gtk::Label, e: &AppEntry, window_rules:
             });
             controls.append(&remove);
             controls.append(&enabled_switch(item));
-            let desc = if item.comment.is_empty() { "Unless it's already running.".to_string() } else { glib::markup_escape_text(&item.comment).to_string() };
+            let desc = if item.comment.is_empty() {
+                "Unless it's already running.".to_string()
+            } else {
+                glib::markup_escape_text(&item.comment).to_string()
+            };
             card.append(&widgets::icon_row("system-run-symbolic", &start_title, &desc, Some(controls.upcast_ref())));
         }
         Some(Start::Command { process, command }) => {
@@ -673,10 +701,20 @@ fn fill_detail(detail: &gtk::Box, foot: &gtk::Label, e: &AppEntry, window_rules:
                 let add = gtk::Button::with_label("Start it");
                 let id = id.to_string();
                 add.connect_clicked(move |_| start_app(&id));
-                card.append(&widgets::icon_row("system-run-symbolic", &start_title, "It doesn't start when you sign in.", Some(add.upcast_ref())));
+                card.append(&widgets::icon_row(
+                    "system-run-symbolic",
+                    &start_title,
+                    "It doesn't start when you sign in.",
+                    Some(add.upcast_ref()),
+                ));
             }
             None => {
-                card.append(&widgets::icon_row("system-run-symbolic", &start_title, "Only apps and commands can start when you sign in.", None));
+                card.append(&widgets::icon_row(
+                    "system-run-symbolic",
+                    &start_title,
+                    "Only apps and commands can start when you sign in.",
+                    None,
+                ));
             }
         },
     }
@@ -705,10 +743,8 @@ fn fill_detail(detail: &gtk::Box, foot: &gtk::Label, e: &AppEntry, window_rules:
 
     // Where it opens.
     let rules_here: Vec<&Rule> = e.rules.iter().filter_map(|i| window_rules.get(*i)).collect();
-    let workspace = rules_here
-        .iter()
-        .find(|r| r.effect == "workspace")
-        .and_then(|r| r.value.split_whitespace().next()?.parse::<u32>().ok());
+    let workspace =
+        rules_here.iter().find(|r| r.effect == "workspace").and_then(|r| r.value.split_whitespace().next()?.parse::<u32>().ok());
     let pinned = rules_here.iter().any(|r| r.effect == "pin");
     let silent = rules_here.iter().any(|r| r.effect == "workspace" && r.value.contains("silent"));
     let no_focus = rules_here.iter().any(|r| r.effect == "no_focus");
@@ -720,7 +756,8 @@ fn fill_detail(detail: &gtk::Box, foot: &gtk::Label, e: &AppEntry, window_rules:
         strip_card.append(&widgets::label("Where it opens", "rl-h-small"));
         let count = workspace.unwrap_or(1).max(here.unwrap_or(1)).max(5).min(10);
         let name = e.name.clone();
-        let strip = widgets::drawing(64, move |cr, p, sec, w, h| draw_strip(cr, p, sec, w, h, count, workspace, pinned, here, &name));
+        let strip =
+            widgets::drawing(64, move |cr, p, sec, w, h| draw_strip(cr, p, sec, w, h, count, workspace, pinned, here, &name));
         strip_card.append(&strip);
         detail.append(&strip_card);
     }
@@ -747,7 +784,18 @@ fn fill_detail(detail: &gtk::Box, foot: &gtk::Label, e: &AppEntry, window_rules:
 /// The workspaces in a row, the app on the one its rule names (or on every one), and
 /// the one you're on marked.
 #[allow(clippy::too_many_arguments)]
-fn draw_strip(cr: &gtk::cairo::Context, p: &sketch::Pal, sec: sketch::Rgb, w: f64, h: f64, count: u32, target: Option<u32>, pinned: bool, here: Option<u32>, name: &str) {
+fn draw_strip(
+    cr: &gtk::cairo::Context,
+    p: &sketch::Pal,
+    sec: sketch::Rgb,
+    w: f64,
+    h: f64,
+    count: u32,
+    target: Option<u32>,
+    pinned: bool,
+    here: Option<u32>,
+    name: &str,
+) {
     let gap = 8.0;
     let tw = (w - gap * (count as f64 - 1.0)) / count as f64;
     for n in 1..=count {
@@ -910,7 +958,8 @@ fn rule_row(i: usize, r: &Rule) -> gtk::Box {
     remove.set_tooltip_text(Some("Remove the rule"));
     remove.connect_clicked(move |_| remove_rule(i));
     controls.append(&remove);
-    let desc = if desc.is_empty() && r.effect == "workspace" && r.value.contains("silent") { "Without taking you there." } else { desc };
+    let desc =
+        if desc.is_empty() && r.effect == "workspace" && r.value.contains("silent") { "Without taking you there." } else { desc };
     tiled(widgets::row(&label, desc, Some(controls.upcast_ref())), icon)
 }
 
@@ -1130,7 +1179,11 @@ fn rule_sheet(class: &str, title: &str) {
         let values = widgets::vbox(6);
         let mut toggles: Vec<(&'static rules::Effect, gtk::ToggleButton, Option<gtk::Entry>)> = Vec::new();
         for eff in rules::WINDOW {
-            let b = gtk::ToggleButton::with_label(&if eff.value == Value::Flag { eff.label.to_string() } else { format!("{}…", eff.label) });
+            let b = gtk::ToggleButton::with_label(&if eff.value == Value::Flag {
+                eff.label.to_string()
+            } else {
+                format!("{}…", eff.label)
+            });
             b.add_css_class("rl-chip");
             let entry = (eff.value != Value::Flag).then(|| {
                 let e = gtk::Entry::new();
@@ -1195,7 +1248,11 @@ fn rule_sheet(class: &str, title: &str) {
                 new.push(r);
             }
             if new.is_empty() {
-                window::toast(if class.is_empty() && title.is_empty() { "Pick a window, or match an app or a title" } else { "Pick what the rule does" });
+                window::toast(if class.is_empty() && title.is_empty() {
+                    "Pick a window, or match an app or a title"
+                } else {
+                    "Pick what the rule does"
+                });
                 return;
             }
             PICK.with(|p| *p.borrow_mut() = Some(format!("rule:{class}|{title}")));

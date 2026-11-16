@@ -222,7 +222,9 @@ fn style_cards(look: &Rc<Look>, redraw: Rc<dyn Fn()>, on_style: Rc<dyn Fn(bool)>
     let mut first: Option<gtk::ToggleButton> = None;
     let mut first_radio: Option<gtk::CheckButton> = None;
     let mut minis = Vec::new();
-    for (edge, id, name, desc) in [(false, "full", "Full Aura", "A soft glow all round"), (true, "edge-flow", "Edge Flow", "A light that travels")] {
+    for (edge, id, name, desc) in
+        [(false, "full", "Full Aura", "A soft glow all round"), (true, "edge-flow", "Edge Flow", "A light that travels")]
+    {
         let b = gtk::ToggleButton::new();
         b.add_css_class("asst-style");
         let col = widgets::vbox(8);
@@ -495,7 +497,11 @@ pub fn build(page: &Page) {
     pv.add(&legend);
     let foot = pv.foot(
         "preferences-color-symbolic",
-        if look.persona.get() { "Colours come from your theme, tinted with Echo's own." } else { "Colours come from your theme." },
+        if look.persona.get() {
+            "Colours come from your theme, tinted with Echo's own."
+        } else {
+            "Colours come from your theme."
+        },
     );
     let minis: Rc<RefCell<Vec<gtk::DrawingArea>>> = Rc::default();
     let redraw: Rc<dyn Fn()> = {
@@ -586,12 +592,22 @@ pub fn build(page: &Page) {
     widgets::keywords("glow intensity brightness subtle");
     let r = {
         let (look, redraw) = (look.clone(), redraw.clone());
-        icon_slider(&cfg, "ui.aura_speed", "view-refresh-symbolic", "Breathing speed", "", (0.25, 3.0, 0.05), 2, "×", move |v, l| {
-            l.set_text(speed_word(v));
-            l.set_tooltip_text(Some(&format!("{v:.2}×")));
-            look.speed.set(v);
-            redraw();
-        })
+        icon_slider(
+            &cfg,
+            "ui.aura_speed",
+            "view-refresh-symbolic",
+            "Breathing speed",
+            "",
+            (0.25, 3.0, 0.05),
+            2,
+            "×",
+            move |v, l| {
+                l.set_text(speed_word(v));
+                l.set_tooltip_text(Some(&format!("{v:.2}×")));
+                look.speed.set(v);
+                redraw();
+            },
+        )
     };
     *speed_title.borrow_mut() = super::row_title(&r);
     g.add(&r);

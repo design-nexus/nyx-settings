@@ -201,7 +201,11 @@ fn vram_card(gpu: &Value) -> Option<gtk::Box> {
     if let Some(m) = mine {
         legend.append(&kit::legend_item(kit::Swatch::Section, "The assistant", &size(mib(m))));
     }
-    legend.append(&kit::legend_item(kit::Swatch::Of(kit::GRAPHITE), if mine.is_some() { "Other apps" } else { "In use" }, &size(mib(used - mine.unwrap_or(0)))));
+    legend.append(&kit::legend_item(
+        kit::Swatch::Of(kit::GRAPHITE),
+        if mine.is_some() { "Other apps" } else { "In use" },
+        &size(mib(used - mine.unwrap_or(0))),
+    ));
     legend.append(&kit::legend_item(kit::Swatch::Free, "Free", &size(mib(total.saturating_sub(used)))));
     card.append(&legend);
     Some(card)
@@ -268,7 +272,9 @@ fn presets(page: &Page) {
             }
             match x["idle_seconds"].as_u64() {
                 Some(0) => facts.push("the models stay loaded.".into()),
-                Some(s) if s % 60 == 0 => facts.push(format!("the models leave memory after {} minute{}.", s / 60, if s == 60 { "" } else { "s" })),
+                Some(s) if s % 60 == 0 => {
+                    facts.push(format!("the models leave memory after {} minute{}.", s / 60, if s == 60 { "" } else { "s" }))
+                }
                 Some(s) => facts.push(format!("the models leave memory after {s} seconds.")),
                 None => {}
             }
@@ -290,7 +296,11 @@ fn presets(page: &Page) {
         })
         .collect();
     if current == "custom" {
-        options.push(("custom".into(), "You've changed a setting yourself, so none of the presets matches. Pick one to go back to it.".into(), String::new()));
+        options.push((
+            "custom".into(),
+            "You've changed a setting yourself, so none of the presets matches. Pick one to go back to it.".into(),
+            String::new(),
+        ));
     }
     let mut first: Option<gtk::CheckButton> = None;
     for (id, desc, about) in options {
@@ -369,7 +379,12 @@ fn loaded(page: &Page, perf: &Value) {
         desc.push_str(&format!(" · {} tokens of conversation", kit::thousands(ctx)));
     }
     let state = if yes(&llm["loaded"]) { kit::pill("In memory", "ok") } else { kit::pill("Loads when you speak", "wait") };
-    let r = widgets::icon_row("settings-sparkle-symbolic", "Language model", &glib::markup_escape_text(&desc), Some(state.upcast_ref()));
+    let r = widgets::icon_row(
+        "settings-sparkle-symbolic",
+        "Language model",
+        &glib::markup_escape_text(&desc),
+        Some(state.upcast_ref()),
+    );
     r.set_tooltip_text(Some(path));
     g.add(&r);
     widgets::keywords("context tokens llm");
@@ -391,7 +406,9 @@ fn loaded(page: &Page, perf: &Value) {
 
     let stt = &perf["stt"];
     let (desc, state) = match (yes(&stt["streaming"]), stt["load_ms"].as_u64()) {
-        (true, Some(ms)) if ms > 0 => (format!("Listens as you talk · loaded in {:.1} s", ms as f64 / 1000.0), kit::pill("Ready", "ok")),
+        (true, Some(ms)) if ms > 0 => {
+            (format!("Listens as you talk · loaded in {:.1} s", ms as f64 / 1000.0), kit::pill("Ready", "ok"))
+        }
         (true, _) => ("Listens as you talk".to_string(), kit::pill("Loading", "wait")),
         _ => ("Not available: there's no speech model".to_string(), kit::pill("Off", "off")),
     };
@@ -452,10 +469,30 @@ fn more(page: &Page, failure: Option<Value>) {
                 let g = page.group("");
                 g.note("For repeatable numbers, run one in a terminal. Each loads the models and uses the graphics card while it runs.");
                 for (icon, title, desc, command) in [
-                    ("document-save-download-symbolic", "Loading", "How long the models take to get ready.", "nyx-assistant bench load"),
-                    ("audio-input-microphone-symbolic", "Talking", "Listening and answering at the same time.", "nyx-assistant bench duplex"),
-                    ("view-reveal-symbolic", "Seeing the screen", "How long a look at the screen takes.", "nyx-assistant bench vision"),
-                    ("input-mouse-symbolic", "Using the computer", "Steps of a task on the desktop.", "nyx-assistant bench computer"),
+                    (
+                        "document-save-download-symbolic",
+                        "Loading",
+                        "How long the models take to get ready.",
+                        "nyx-assistant bench load",
+                    ),
+                    (
+                        "audio-input-microphone-symbolic",
+                        "Talking",
+                        "Listening and answering at the same time.",
+                        "nyx-assistant bench duplex",
+                    ),
+                    (
+                        "view-reveal-symbolic",
+                        "Seeing the screen",
+                        "How long a look at the screen takes.",
+                        "nyx-assistant bench vision",
+                    ),
+                    (
+                        "input-mouse-symbolic",
+                        "Using the computer",
+                        "Steps of a task on the desktop.",
+                        "nyx-assistant bench computer",
+                    ),
                 ] {
                     let copy = widgets::icon_button("edit-copy-symbolic", "Copy the command");
                     copy.connect_clicked(move |b| {

@@ -124,7 +124,8 @@ fn fit_strip(strip: &gtk::Box, width: i32) {
         p.set_spacing(GAP);
     }
     let (_, natural, _, _) = strip.measure(gtk::Orientation::Horizontal, -1);
-    let gaps: i32 = parts.iter().map(|p| (std::iter::successors(p.first_child(), |c| c.next_sibling()).count() as i32 - 1).max(0)).sum();
+    let gaps: i32 =
+        parts.iter().map(|p| (std::iter::successors(p.first_child(), |c| c.next_sibling()).count() as i32 - 1).max(0)).sum();
     if natural > width && gaps > 0 {
         let gap = (GAP - (natural - width + gaps - 1) / gaps).max(2);
         for p in &parts {
@@ -182,7 +183,11 @@ pub fn build(page: &Page) {
     restore.set_tooltip_text(Some(
         "Restore Omarchy's bar: puts Omarchy's own widgets back in their places and takes every other plugin widget off the bar. The bar's position and transparency reset too.",
     ));
-    let head = pv.head("Your bar", "Drag a widget to reorder it or move it to another section; click one for more.", &[restore.upcast_ref()]);
+    let head = pv.head(
+        "Your bar",
+        "Drag a widget to reorder it or move it to another section; click one for more.",
+        &[restore.upcast_ref()],
+    );
     if let Some(title) = head.first_child().and_then(|t| t.first_child()).and_downcast::<gtk::Label>() {
         title.set_ellipsize(gtk::pango::EllipsizeMode::End);
     }
@@ -217,7 +222,9 @@ pub fn build(page: &Page) {
     pv.add(&stage);
     pv.add(&view.zones);
     pv.add(&view.add);
-    widgets::keywords("widgets reorder order move arrange layout left center right section plugins drag add remove spacer restore default bar");
+    widgets::keywords(
+        "widgets reorder order move arrange layout left center right section plugins drag add remove spacer restore default bar",
+    );
     {
         let (screen, strip) = (screen.clone(), view.strip.clone());
         view.on_change(move || {
@@ -330,7 +337,12 @@ fn notifications(page: &Page) {
     });
 
     let dismiss = widgets::command_button("Dismiss all", &["omarchy-shell", "notifications", "dismissAll"]);
-    g.add(&widgets::icon_row("preferences-system-notifications-symbolic", "Showing now", "Clear the ones on screen", Some(dismiss.upcast_ref())));
+    g.add(&widgets::icon_row(
+        "preferences-system-notifications-symbolic",
+        "Showing now",
+        "Clear the ones on screen",
+        Some(dismiss.upcast_ref()),
+    ));
 
     let count = notify::history().len();
     // The list opens one level down; clearing it there updates the count here.

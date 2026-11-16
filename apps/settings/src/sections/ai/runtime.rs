@@ -27,7 +27,8 @@ fn service(action: &'static str) {
 
 fn choice(title: &str, desc: &str, options: &[(&str, &str)], current: &str, key: &'static str) -> gtk::Box {
     let options: Vec<(String, String)> = options.iter().map(|(id, l)| (id.to_string(), l.to_string())).collect();
-    widgets::choice_row(title, desc, options, current, move |id| change(vec!["service".into(), format!("{key}={id}")], PAGE, "")).0
+    widgets::choice_row(title, desc, options, current, move |id| change(vec!["service".into(), format!("{key}={id}")], PAGE, ""))
+        .0
 }
 
 /// The apps that use local models by default: icon, name, the role they use.
@@ -53,7 +54,17 @@ enum Edge {
 
 /// The lines between a row of `n` nodes and the core, in a box `w`×`h`. `tall`: the
 /// nodes are above (`into_core`) or below the core; otherwise left or right of it.
-fn draw_edges(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: Rgb, w: f64, h: f64, edges: &[Edge], tall: bool, into_core: bool, core: f64) {
+fn draw_edges(
+    cr: &gtk::cairo::Context,
+    p: &sketch::Pal,
+    accent: Rgb,
+    w: f64,
+    h: f64,
+    edges: &[Edge],
+    tall: bool,
+    into_core: bool,
+    core: f64,
+) {
     let n = edges.len();
     if n == 0 {
         return;
@@ -321,7 +332,8 @@ pub fn build(page: &Page) {
     text.append(&line);
     top.append(&text);
     core.append(&top);
-    let backends: Vec<String> = res["gpu_backends"].as_array().into_iter().flatten().filter_map(|b| b.as_str().map(str::to_string)).collect();
+    let backends: Vec<String> =
+        res["gpu_backends"].as_array().into_iter().flatten().filter_map(|b| b.as_str().map(str::to_string)).collect();
     let cpu_only = settings["cpu_only"].as_bool().unwrap_or(false);
     let mut runs_on = Vec::new();
     if backends.iter().any(|b| b != "cpu") {
@@ -369,12 +381,15 @@ pub fn build(page: &Page) {
         mods.append(&widgets::label("No model is loaded, and no app has one chosen.", "lai-node-line"));
     }
 
-    for w in [apps.upcast_ref::<gtk::Widget>(), in_edges.upcast_ref(), core.upcast_ref(), out_edges.upcast_ref(), mods.upcast_ref()] {
+    for w in
+        [apps.upcast_ref::<gtk::Widget>(), in_edges.upcast_ref(), core.upcast_ref(), out_edges.upcast_ref(), mods.upcast_ref()]
+    {
         dia.append(w);
     }
     // Above and below the core in a wide preview; left to right in a narrow window.
     {
-        let (dia, apps, mods, core, ie, oe, cw) = (dia.clone(), apps.clone(), mods.clone(), core.clone(), in_edges.clone(), out_edges.clone(), core_w.clone());
+        let (dia, apps, mods, core, ie, oe, cw) =
+            (dia.clone(), apps.clone(), mods.clone(), core.clone(), in_edges.clone(), out_edges.clone(), core_w.clone());
         super::on_narrow(&page.body, move |narrow| {
             use gtk::Orientation::{Horizontal, Vertical};
             dia.set_orientation(if narrow { Horizontal } else { Vertical });
@@ -408,12 +423,18 @@ pub fn build(page: &Page) {
     let held: u64 = loaded.iter().map(|m| m["estimate"].as_u64().unwrap_or(0)).sum();
     if vram_total > 0 {
         let col = widgets::vbox(8);
-        let figure = if held > 0 { format!("About {} of {}", size(held), size(vram_total)) } else { format!("{} · nothing loaded", size(vram_total)) };
+        let figure = if held > 0 {
+            format!("About {} of {}", size(held), size(vram_total))
+        } else {
+            format!("{} · nothing loaded", size(vram_total))
+        };
         col.append(&super::bar_head("Graphics memory", &figure));
         let parts: Vec<(f64, Option<Rgb>)> = loaded
             .iter()
             .enumerate()
-            .map(|(i, m)| (m["estimate"].as_u64().unwrap_or(0) as f64, if i == 0 { None } else { Some(super::SWATCHES[(i - 1) % 4]) }))
+            .map(|(i, m)| {
+                (m["estimate"].as_u64().unwrap_or(0) as f64, if i == 0 { None } else { Some(super::SWATCHES[(i - 1) % 4]) })
+            })
             .collect();
         col.append(&super::stacked_bar(parts, vram_total as f64, 8));
         col.set_tooltip_text(Some("What the loaded models hold, as Nyx AI Core estimates it."));
@@ -423,7 +444,10 @@ pub fn build(page: &Page) {
     if ram_total > 0 {
         let col = widgets::vbox(8);
         let used = ram_total.saturating_sub(ram_free);
-        col.append(&super::bar_head("System memory", &format!("{} of {} · {} free", size(used), size(ram_total), size(ram_free))));
+        col.append(&super::bar_head(
+            "System memory",
+            &format!("{} of {} · {} free", size(used), size(ram_total), size(ram_free)),
+        ));
         col.append(&super::stacked_bar(vec![(used as f64, Some(super::GRAPHITE))], ram_total as f64, 8));
         row.append(&col);
     }
@@ -466,7 +490,8 @@ pub fn build(page: &Page) {
     if let Some(e) = worker["last_error"].as_str() {
         core_line.push_str(&format!(" · {e}"));
     }
-    let r = widgets::icon_row("applications-science-symbolic", "Nyx AI Core", &glib_escape(&core_line), Some(restart.upcast_ref()));
+    let r =
+        widgets::icon_row("applications-science-symbolic", "Nyx AI Core", &glib_escape(&core_line), Some(restart.upcast_ref()));
     r.add_css_class("lai-corerow");
     g.add(&r);
     widgets::keywords("status acceleration cuda vulkan cpu memory vram");
@@ -503,7 +528,11 @@ pub fn build(page: &Page) {
         counts.push((max.clone(), max.clone()));
     }
     let seg = widgets::segmented(&counts, &max, |id| change(vec!["service".into(), format!("max_loaded={id}")], PAGE, ""));
-    g.add(&widgets::row("Models kept loaded", "More switch faster, use more memory. Every Nyx app shares them.", Some(seg.upcast_ref())));
+    g.add(&widgets::row(
+        "Models kept loaded",
+        "More switch faster, use more memory. Every Nyx app shares them.",
+        Some(seg.upcast_ref()),
+    ));
     g.add(&choice(
         "Unload an unused model after",
         "Unless an app keeps it loaded.",
@@ -518,20 +547,24 @@ pub fn build(page: &Page) {
         } else {
             "On battery, run on the processor: slower, but the battery lasts."
         };
-        g.add(&widgets::switch_row("Battery saver", desc, on, |on| {
-            change(vec!["service".into(), format!("battery_saver={}", if on { "on" } else { "off" })], PAGE, "")
-        })
-        .0);
+        g.add(
+            &widgets::switch_row("Battery saver", desc, on, |on| {
+                change(vec!["service".into(), format!("battery_saver={}", if on { "on" } else { "off" })], PAGE, "")
+            })
+            .0,
+        );
     }
 
     let g = page.group("Coding tools");
-    g.add(&widgets::switch_row(
-        "Let coding tools use these models",
-        "Tools on this computer that speak the OpenAI API.",
-        endpoint.is_some(),
-        |on| change(vec!["service".into(), format!("openai={}", if on { "on" } else { "off" })], PAGE, ""),
-    )
-    .0);
+    g.add(
+        &widgets::switch_row(
+            "Let coding tools use these models",
+            "Tools on this computer that speak the OpenAI API.",
+            endpoint.is_some(),
+            |on| change(vec!["service".into(), format!("openai={}", if on { "on" } else { "off" })], PAGE, ""),
+        )
+        .0,
+    );
     widgets::keywords("openai compatible api endpoint");
     if let Some(addr) = endpoint {
         let url = format!("http://{addr}/v1");
@@ -543,7 +576,8 @@ pub fn build(page: &Page) {
         });
         let r = widgets::row("Address", &format!("<tt>{}</tt>", glib_escape(&url)), Some(copy.upcast_ref()));
         g.add(&r);
-        let key = settings["openai_key_file"].as_str().and_then(|f| std::fs::read_to_string(f).ok()).map(|k| k.trim().to_string());
+        let key =
+            settings["openai_key_file"].as_str().and_then(|f| std::fs::read_to_string(f).ok()).map(|k| k.trim().to_string());
         let copy = gtk::Button::new();
         copy.set_child(Some(&{
             let b = widgets::hbox(6);
@@ -559,7 +593,11 @@ pub fn build(page: &Page) {
                 window::toast("Copied the API key");
             }
         });
-        g.add(&widgets::row("API key", "Paste it into the tool as its API key. Only tools that have it can connect.", Some(copy.upcast_ref())));
+        g.add(&widgets::row(
+            "API key",
+            "Paste it into the tool as its API key. Only tools that have it can connect.",
+            Some(copy.upcast_ref()),
+        ));
     }
 
     let g = page.group("");
@@ -571,33 +609,34 @@ pub fn build(page: &Page) {
     ];
     let set = roles.iter().filter(|(role, ..)| defaults[*role].as_str().is_some_and(|m| !m.is_empty())).count();
     let defaults_now = defaults.clone();
-    let (r, _) = widgets::nav_row(Some("view-list-symbolic"), "Which model each app uses", "", &format!("{set} set"), move || {
-        let (list, defaults) = (list.clone(), defaults_now.clone());
-        widgets::subpage("Which model each app uses", 560, move |page| {
-            let g = page.group("Default models");
-            g.note("Apps use these when they have no choice of their own.");
-            for (role, title, desc, capability) in roles {
-                let mut options = vec![(String::new(), "None".to_string())];
-                options.extend(
-                    list.iter()
-                        .filter(|m| has(m, capability) && m["state"].as_str() != Some("missing"))
-                        .filter_map(|m| m["id"].as_str().map(|id| (id.to_string(), super::distinct_name(m, &list)))),
-                );
-                let current = defaults[role].as_str().unwrap_or("");
-                let (row, dd) = widgets::choice_row(title, desc, options.clone(), current, move |id| {
-                    change(vec!["default".into(), role.into(), id], PAGE, "")
-                });
-                // The full name of the picked model, as the list shortens it.
-                let tip = move |dd: &gtk::DropDown| {
-                    let id = options.get(dd.selected() as usize).map(|(id, _)| id.as_str()).unwrap_or("");
-                    dd.set_tooltip_text((!id.is_empty()).then_some(id));
-                };
-                tip(&dd);
-                dd.connect_selected_notify(tip);
-                g.add(&row);
-            }
+    let (r, _) =
+        widgets::nav_row(Some("view-list-symbolic"), "Which model each app uses", "", &format!("{set} set"), move || {
+            let (list, defaults) = (list.clone(), defaults_now.clone());
+            widgets::subpage("Which model each app uses", 560, move |page| {
+                let g = page.group("Default models");
+                g.note("Apps use these when they have no choice of their own.");
+                for (role, title, desc, capability) in roles {
+                    let mut options = vec![(String::new(), "None".to_string())];
+                    options.extend(
+                        list.iter()
+                            .filter(|m| has(m, capability) && m["state"].as_str() != Some("missing"))
+                            .filter_map(|m| m["id"].as_str().map(|id| (id.to_string(), super::distinct_name(m, &list)))),
+                    );
+                    let current = defaults[role].as_str().unwrap_or("");
+                    let (row, dd) = widgets::choice_row(title, desc, options.clone(), current, move |id| {
+                        change(vec!["default".into(), role.into(), id], PAGE, "")
+                    });
+                    // The full name of the picked model, as the list shortens it.
+                    let tip = move |dd: &gtk::DropDown| {
+                        let id = options.get(dd.selected() as usize).map(|(id, _)| id.as_str()).unwrap_or("");
+                        dd.set_tooltip_text((!id.is_empty()).then_some(id));
+                    };
+                    tip(&dd);
+                    dd.connect_selected_notify(tip);
+                    g.add(&row);
+                }
+            });
         });
-    });
     g.add(&r);
     widgets::keywords("default models chat assistant search knowledge embedding coding tools");
     let updates = settings["model_updates"].as_str().unwrap_or("auto").to_string();
@@ -621,7 +660,9 @@ pub fn build(page: &Page) {
     });
     g.add(&r);
     widgets::keywords("hugging face newer versions automatic");
-    widgets::keywords("ai llm llama local model nyx ai core gpu memory vram cuda vulkan unload update default openai api coding tools");
+    widgets::keywords(
+        "ai llm llama local model nyx ai core gpu memory vram cuda vulkan unload update default openai api coding tools",
+    );
 }
 
 fn has_battery() -> bool {

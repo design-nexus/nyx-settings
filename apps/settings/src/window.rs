@@ -705,11 +705,7 @@ fn fill_tabs(u: &Ui) {
         let (scroll, tabs) = (head.tabs_scroll.clone(), head.tabs.clone());
         // On the first frame the tab has a place in the strip.
         b.add_tick_callback(move |_, _| {
-            if show_active_tab(&tabs, &scroll.hadjustment()) {
-                glib::ControlFlow::Break
-            } else {
-                glib::ControlFlow::Continue
-            }
+            if show_active_tab(&tabs, &scroll.hadjustment()) { glib::ControlFlow::Break } else { glib::ControlFlow::Continue }
         });
     }
 }
@@ -1680,7 +1676,12 @@ fn check_fit() -> String {
     for s in current_scrollers() {
         let a = s.vadjustment();
         let over = (a.upper() - a.page_size()).max(0.0) as i32;
-        out.push(format!("SCROLLER {} overflow {over}px (content {}, window {})", name(s.upcast_ref()), a.upper(), a.page_size()));
+        out.push(format!(
+            "SCROLLER {} overflow {over}px (content {}, window {})",
+            name(s.upcast_ref()),
+            a.upper(),
+            a.page_size()
+        ));
     }
     // Anything running past its parent's right edge, anywhere in the window.
     fn wide(w: &gtk::Widget, out: &mut Vec<String>) {
@@ -1704,8 +1705,17 @@ fn check_fit() -> String {
     }
     // Cards (and loose text) with less than 6px between them, side by side or stacked.
     const CARDS: &[&str] = &[
-        "settings-card", "settings-option", "card", "preview-card", "theme-card", "stat-tile", "chart-card", "home-hero",
-        "update-list", "group-toggle", "banner",
+        "settings-card",
+        "settings-option",
+        "card",
+        "preview-card",
+        "theme-card",
+        "stat-tile",
+        "chart-card",
+        "home-hero",
+        "update-list",
+        "group-toggle",
+        "banner",
     ];
     fn boxes(w: &gtk::Widget, page: &gtk::Widget, in_card: bool, out: &mut Vec<(gtk::graphene::Rect, String, bool)>) {
         let mut c = w.first_child();
@@ -1750,7 +1760,13 @@ fn check_fit() -> String {
                 let above = a.y() - (b.y() + b.height());
                 let right = b.x() - (a.x() + a.width());
                 let left = a.x() - (b.x() + b.width());
-                let gap = if x_overlap { below.max(above) } else if y_overlap { right.max(left) } else { continue };
+                let gap = if x_overlap {
+                    below.max(above)
+                } else if y_overlap {
+                    right.max(left)
+                } else {
+                    continue;
+                };
                 if (-0.5..6.0).contains(&gap) {
                     out.push(format!("TOUCH {gap:.0}px at y {:.0}: {an} / {bn}", a.y().min(b.y())));
                 }

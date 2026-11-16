@@ -385,7 +385,12 @@ fn show(holder: &gtk::Box, e: &Extension, catalog: &[manage::Entry], sections: &
     });
     remove.add_css_class("flat");
     remove.set_tooltip_text(Some("Delete it and its pages; turning it off keeps it"));
-    end.push(remove.upcast());
+    // A packaged extension comes and goes with its app.
+    if e.packaged() {
+        line.push("installed with its app".into());
+    } else {
+        end.push(remove.upcast());
+    }
     if has_update {
         let update = gtk::Button::with_label("Update");
         update.add_css_class("suggested-action");
@@ -755,25 +760,32 @@ pub fn build(page: &Page) {
     let g = page.group("");
     let available = Rc::new(available);
     let count = if available.is_empty() { String::new() } else { available.len().to_string() };
-    let (r, _) = widgets::nav_row(Some("application-x-addon-symbolic"), "Get more extensions", "Devices and apps from the catalog", &count, {
-        let available = available.clone();
-        move || {
+    let (r, _) = widgets::nav_row(
+        Some("application-x-addon-symbolic"),
+        "Get more extensions",
+        "Devices and apps from the catalog",
+        &count,
+        {
             let available = available.clone();
-            widgets::subpage("Get more extensions", 600, move |p| {
-                available_page(p, &available);
-                widgets::forget_rows(&p.body);
-            });
-        }
-    });
+            move || {
+                let available = available.clone();
+                widgets::subpage("Get more extensions", 600, move |p| {
+                    available_page(p, &available);
+                    widgets::forget_rows(&p.body);
+                });
+            }
+        },
+    );
     let words: Vec<String> = catalog.iter().map(|c| format!("{} {} {}", c.id, c.name, c.devices)).collect();
     widgets::keywords(&format!("install catalog available {}", words.join(" ")));
     g.add(&r);
-    let (r, _) = widgets::nav_row(Some("text-editor-symbolic"), "Add from GitHub", "Any repository with an extension.toml", "", || {
-        widgets::subpage("Add from GitHub", 560, |p| {
-            github_page(p);
-            widgets::forget_rows(&p.body);
+    let (r, _) =
+        widgets::nav_row(Some("text-editor-symbolic"), "Add from GitHub", "Any repository with an extension.toml", "", || {
+            widgets::subpage("Add from GitHub", 560, |p| {
+                github_page(p);
+                widgets::forget_rows(&p.body);
+            });
         });
-    });
     widgets::keywords("url link git clone custom third party repository");
     g.add(&r);
 }

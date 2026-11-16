@@ -727,10 +727,13 @@ fn quick_actions(page: &Page) {
         });
         row.insert(&snap, -1);
     }
-    let restart = widgets::confirm_button("Restart", "Click again to restart", |_| cmd::spawn(crate::platform::session_command("reboot")));
+    let restart =
+        widgets::confirm_button("Restart", "Click again to restart", |_| cmd::spawn(crate::platform::session_command("reboot")));
     restart.add_css_class("cn-hm-danger");
     row.insert(&restart, -1);
-    let off = widgets::confirm_button("Shut down", "Click again to shut down", |_| cmd::spawn(crate::platform::session_command("shutdown")));
+    let off = widgets::confirm_button("Shut down", "Click again to shut down", |_| {
+        cmd::spawn(crate::platform::session_command("shutdown"))
+    });
     off.add_css_class("cn-hm-danger");
     row.insert(&off, -1);
     let mut c = row.first_child();
@@ -789,12 +792,7 @@ fn quick_settings(page: &Page) {
                 }
             });
         });
-        g.add(&widgets::icon_row(
-            "power-profile-balanced-symbolic",
-            "Power",
-            "Speed or battery life",
-            Some(seg.upcast_ref()),
-        ));
+        g.add(&widgets::icon_row("power-profile-balanced-symbolic", "Power", "Speed or battery life", Some(seg.upcast_ref())));
         widgets::keywords("power profile performance balanced power saver battery power source");
     }
 }

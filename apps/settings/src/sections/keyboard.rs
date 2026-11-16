@@ -190,7 +190,13 @@ pub fn draw_board(cr: &Context, p: &Pal, w: f64, h: f64, look: impl Fn(&Key) -> 
         sketch::set(cr, edge, if l.fill.is_some() && !l.picked && l.ring.is_none() { 0.7 } else { 1.0 });
         cr.set_line_width(width);
         let _ = cr.stroke();
-        let ink = if l.lit { p.bg } else if l.fill.is_some() || l.picked { p.text } else { p.dim };
+        let ink = if l.lit {
+            p.bg
+        } else if l.fill.is_some() || l.picked {
+            p.text
+        } else {
+            p.dim
+        };
         let label = if l.label.is_empty() { key.us.to_string() } else { l.label.clone() };
         let size = (rh * 0.3).clamp(8.0, 12.0);
         if l.action.is_empty() {
@@ -250,7 +256,10 @@ fn xkb_root() -> Option<PathBuf> {
 /// Every layout and variant xkb knows, with its name: (layout, variant, name).
 fn catalogue() -> Vec<(String, String, String)> {
     let Some(root) = xkb_root() else { return Vec::new() };
-    let text = ["evdev.lst", "base.lst"].iter().find_map(|f| std::fs::read_to_string(root.join("rules").join(f)).ok()).unwrap_or_default();
+    let text = ["evdev.lst", "base.lst"]
+        .iter()
+        .find_map(|f| std::fs::read_to_string(root.join("rules").join(f)).ok())
+        .unwrap_or_default();
     let mut out = Vec::new();
     let mut part = "";
     for line in text.lines() {
@@ -335,7 +344,8 @@ fn section_body(text: &str, section: Option<&str>) -> Option<String> {
     while let Some(i) = clean[at..].find("xkb_symbols") {
         let start = at + i;
         let before = &clean[at..start];
-        let is_default = before.split_whitespace().rev().take_while(|w| !w.ends_with(';') && !w.ends_with('}')).any(|w| w == "default");
+        let is_default =
+            before.split_whitespace().rev().take_while(|w| !w.ends_with(';') && !w.ends_with('}')).any(|w| w == "default");
         let rest = &clean[start..];
         let name = rest.split('"').nth(1).unwrap_or("").to_string();
         first.get_or_insert(start);
@@ -883,8 +893,16 @@ pub fn build(page: &Page) {
     board_card.append(&legend);
 
     let refresh: Rc<dyn Fn()> = {
-        let (list, shown, options, labels, title, line, board, legend) =
-            (list.clone(), shown.clone(), options.clone(), labels.clone(), title.clone(), line.clone(), board.clone(), legend.clone());
+        let (list, shown, options, labels, title, line, board, legend) = (
+            list.clone(),
+            shown.clone(),
+            options.clone(),
+            labels.clone(),
+            title.clone(),
+            line.clone(),
+            board.clone(),
+            legend.clone(),
+        );
         Rc::new(move || {
             let l = list.borrow();
             let i = shown.get().min(l.len().saturating_sub(1));
@@ -968,7 +986,8 @@ pub fn build(page: &Page) {
     g.add(&rows);
     let fill_rows: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::default();
     let fill: Rc<dyn Fn()> = {
-        let (list, rows, fill_rows, rebuild_chooser, refresh) = (list.clone(), rows.clone(), fill_rows.clone(), rebuild_chooser.clone(), refresh.clone());
+        let (list, rows, fill_rows, rebuild_chooser, refresh) =
+            (list.clone(), rows.clone(), fill_rows.clone(), rebuild_chooser.clone(), refresh.clone());
         Rc::new(move || {
             widgets::forget_rows(&rows);
             while let Some(c) = rows.first_child() {
@@ -1115,17 +1134,18 @@ pub fn build(page: &Page) {
         if !kbdidle::CHOICES.iter().any(|(s, _)| *s == cur) {
             options.push((cur.to_string(), format!("{cur} seconds")));
         }
-        let (r, _) = widgets::choice_row("Keyboard light off after", "Without typing or touching", options, &cur.to_string(), |v| {
-            let secs = v.parse::<u32>().unwrap_or(0);
-            cmd::background(
-                move || kbdidle::apply(&kbdidle::Config { timeout_secs: secs }).map_err(|e| format!("{e:#}")),
-                move |r| match r {
-                    Ok(()) if secs == 0 => window::toast("Keyboard light stays on"),
-                    Ok(()) => window::toast("Keyboard light timeout set"),
-                    Err(e) => window::toast(&format!("Couldn't set the timeout: {e}")),
-                },
-            );
-        });
+        let (r, _) =
+            widgets::choice_row("Keyboard light off after", "Without typing or touching", options, &cur.to_string(), |v| {
+                let secs = v.parse::<u32>().unwrap_or(0);
+                cmd::background(
+                    move || kbdidle::apply(&kbdidle::Config { timeout_secs: secs }).map_err(|e| format!("{e:#}")),
+                    move |r| match r {
+                        Ok(()) if secs == 0 => window::toast("Keyboard light stays on"),
+                        Ok(()) => window::toast("Keyboard light timeout set"),
+                        Err(e) => window::toast(&format!("Couldn't set the timeout: {e}")),
+                    },
+                );
+            });
         g.add(&tiled(r, "display-brightness-symbolic"));
         widgets::keywords("keyboard backlight light timeout idle off");
     }
@@ -1214,7 +1234,8 @@ fn add_layout_dialog(on_pick: impl Fn(String, String) + 'static) {
         let lb = listbox.clone();
         search.connect_search_changed(move |_| lb.invalidate_filter());
     }
-    let scroll = gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).min_content_height(320).child(&listbox).build();
+    let scroll =
+        gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).min_content_height(320).child(&listbox).build();
     card.append(&scroll);
     let buttons = widgets::hbox(8);
     buttons.set_halign(gtk::Align::End);

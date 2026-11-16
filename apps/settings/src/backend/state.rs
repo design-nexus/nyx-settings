@@ -299,6 +299,11 @@ mod schema_tests {
         let s = State::load(&path);
         assert!(s.options.is_empty());
         assert!(!path.exists());
-        assert!(std::fs::read_dir(d.path()).unwrap().flatten().any(|e| e.file_name().to_string_lossy().starts_with("state.json.broken-")));
+        assert!(
+            std::fs::read_dir(d.path())
+                .unwrap()
+                .flatten()
+                .any(|e| e.file_name().to_string_lossy().starts_with("state.json.broken-"))
+        );
     }
 }

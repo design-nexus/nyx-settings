@@ -30,7 +30,15 @@ fn track_x(min: f64, w: f64, end: f64) -> f64 {
 
 /// The track: a dot where you stop, one for the screensaver and one for the lock, and
 /// the minutes under it.
-fn draw_track(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w: f64, (saver, lock): (i64, i64), saver_shown: bool, held: Option<bool>) {
+fn draw_track(
+    cr: &gtk::cairo::Context,
+    p: &sketch::Pal,
+    accent: sketch::Rgb,
+    w: f64,
+    (saver, lock): (i64, i64),
+    saver_shown: bool,
+    held: Option<bool>,
+) {
     let end = span(saver, lock);
     let x1 = w - TRACK_PAD_R;
     sketch::set(cr, p.dim, 0.25);
@@ -46,7 +54,11 @@ fn draw_track(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w:
         let _ = cr.fill();
     }
     let text = |cr: &gtk::cairo::Context, s: &str, x: f64, y: f64, c: sketch::Rgb, bold: bool, size: f64| {
-        cr.select_font_face("sans-serif", gtk::cairo::FontSlant::Normal, if bold { gtk::cairo::FontWeight::Bold } else { gtk::cairo::FontWeight::Normal });
+        cr.select_font_face(
+            "sans-serif",
+            gtk::cairo::FontSlant::Normal,
+            if bold { gtk::cairo::FontWeight::Bold } else { gtk::cairo::FontWeight::Normal },
+        );
         cr.set_font_size(size);
         if let Ok(e) = cr.text_extents(s) {
             let x = (x - e.x_advance() / 2.0).min(w - e.x_advance() - 2.0).max(2.0);
@@ -61,7 +73,8 @@ fn draw_track(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w:
     let _ = cr.fill();
     text(cr, "You stop", TRACK_X0 + 14.0, TRACK_Y + 26.0, p.text, true, 11.5);
     // The two that happen, the later one's label lower when they're close.
-    let mut marks: Vec<(bool, i64)> = vec![(false, saver), (true, lock)].into_iter().filter(|(l, s)| *s > 0 && (*l || saver_shown)).collect();
+    let mut marks: Vec<(bool, i64)> =
+        vec![(false, saver), (true, lock)].into_iter().filter(|(l, s)| *s > 0 && (*l || saver_shown)).collect();
     marks.sort_by_key(|(_, s)| *s);
     let mut prev_x = f64::NEG_INFINITY;
     for (is_lock, secs) in marks {
@@ -80,7 +93,13 @@ fn draw_track(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w:
         prev_x = x;
     }
     // Minutes along the foot.
-    let step = if end <= 20.0 { 2.0 } else if end <= 40.0 { 5.0 } else { 15.0 };
+    let step = if end <= 20.0 {
+        2.0
+    } else if end <= 40.0 {
+        5.0
+    } else {
+        15.0
+    };
     let mut m = 0.0;
     while m <= end + 0.01 {
         text(cr, &format!("{}", m as i64), track_x(m, w, end), TRACK_Y + 76.0, p.dim, false, 10.0);
@@ -90,7 +109,15 @@ fn draw_track(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w:
 
 /// The three moments: your desktop, the screensaver, the lock screen, drawn small with
 /// what happens when under each.
-fn draw_stages(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w: f64, h: f64, (saver, lock): (i64, i64), saver_shown: bool) {
+fn draw_stages(
+    cr: &gtk::cairo::Context,
+    p: &sketch::Pal,
+    accent: sketch::Rgb,
+    w: f64,
+    h: f64,
+    (saver, lock): (i64, i64),
+    saver_shown: bool,
+) {
     let gap = 22.0;
     let pw = ((w - 2.0 * gap) / 3.0).max(40.0);
     let ph = (pw * 0.62).min(h - 44.0);
@@ -99,10 +126,26 @@ fn draw_stages(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w
     // Which happens last is outlined.
     let stages: [(&str, String, &str, bool); 3] = [
         ("desk", "You stop".into(), "Your desktop, as you left it", true),
-        ("saver", if saver_on { minutes_label(saver).replace("min", "minutes") } else { "Off".into() }, "The screensaver starts", saver_on),
-        ("lock", if lock > 0 { minutes_label(lock).replace("min", "minutes") } else { "Never".into() }, "The screen locks", lock > 0),
+        (
+            "saver",
+            if saver_on { minutes_label(saver).replace("min", "minutes") } else { "Off".into() },
+            "The screensaver starts",
+            saver_on,
+        ),
+        (
+            "lock",
+            if lock > 0 { minutes_label(lock).replace("min", "minutes") } else { "Never".into() },
+            "The screen locks",
+            lock > 0,
+        ),
     ];
-    let last = if lock > 0 { 2 } else if saver_on { 1 } else { 0 };
+    let last = if lock > 0 {
+        2
+    } else if saver_on {
+        1
+    } else {
+        0
+    };
     for (i, (kind, when, what, on)) in stages.iter().enumerate() {
         let x = i as f64 * (pw + gap);
         let r = sketch::R::new(x + 1.5, y + 1.5, pw - 3.0, ph - 3.0);
@@ -162,7 +205,11 @@ fn draw_stages(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w
                 }
                 // You, by your initial, over the password field.
                 let who = gtk::glib::real_name().to_string_lossy().to_string();
-                let who = if who.trim().is_empty() || who == "Unknown" { gtk::glib::user_name().to_string_lossy().to_string() } else { who };
+                let who = if who.trim().is_empty() || who == "Unknown" {
+                    gtk::glib::user_name().to_string_lossy().to_string()
+                } else {
+                    who
+                };
                 let rad = r.h * 0.09;
                 cr.new_path();
                 cr.arc(r.cx(), r.y + r.h * 0.66, rad, 0.0, std::f64::consts::TAU);
@@ -265,9 +312,17 @@ pub fn build(page: &Page) {
             track.queue_draw();
         }
     };
-    let (saver_row, saver_scale) = idle_slider("screensaver", "Screensaver after", "preferences-desktop-screensaver-symbolic", saver, times.clone(), redraw.clone());
+    let (saver_row, saver_scale) = idle_slider(
+        "screensaver",
+        "Screensaver after",
+        "preferences-desktop-screensaver-symbolic",
+        saver,
+        times.clone(),
+        redraw.clone(),
+    );
     g.add(&saver_row);
-    let (lock_row, lock_scale) = idle_slider("lock", "Lock after", "system-lock-screen-symbolic", lock, times.clone(), redraw.clone());
+    let (lock_row, lock_scale) =
+        idle_slider("lock", "Lock after", "system-lock-screen-symbolic", lock, times.clone(), redraw.clone());
     g.add(&lock_row);
     widgets::keywords("timeout minutes idle lock screen never");
     let sw = gtk::Switch::new();
@@ -280,7 +335,12 @@ pub fn build(page: &Page) {
             cmd::spawn(&["omarchy-toggle-screensaver"]);
         });
     }
-    g.add(&widgets::icon_row("view-reveal-symbolic", "Show the screensaver", "Off goes straight to the lock screen.", Some(sw.upcast_ref())));
+    g.add(&widgets::icon_row(
+        "view-reveal-symbolic",
+        "Show the screensaver",
+        "Off goes straight to the lock screen.",
+        Some(sw.upcast_ref()),
+    ));
     widgets::keywords("screensaver omarchy show before locking");
 
     // Drag the dots on the track: it moves the sliders, which save.
@@ -371,15 +431,23 @@ pub fn build(page: &Page) {
         Some(sw.upcast_ref()),
     ));
     widgets::keywords("suspend in the system menu sleep");
-    let (r, _) = widgets::nav_row(Some("battery-level-80-symbolic"), "Lid, power button and sleep", "On Power & Battery", "", || {
-        window::navigate("power")
-    });
+    let (r, _) =
+        widgets::nav_row(Some("battery-level-80-symbolic"), "Lid, power button and sleep", "On Power & Battery", "", || {
+            window::navigate("power")
+        });
     widgets::keywords("lid power button hibernate");
     g.add(&r);
 }
 
 /// A slider in minutes for the screensaver or the lock, "Never" at zero.
-fn idle_slider(key: &'static str, title: &str, icon: &str, secs: i64, times: Times, redraw: impl Fn() + 'static) -> (gtk::Box, gtk::Scale) {
+fn idle_slider(
+    key: &'static str,
+    title: &str,
+    icon: &str,
+    secs: i64,
+    times: Times,
+    redraw: impl Fn() + 'static,
+) -> (gtk::Box, gtk::Scale) {
     let lock = key == "lock";
     let (r, s) = widgets::slider_row(title, "", (0.0, 60.0, 1.0), (secs / 60) as f64, 0, " min", move |v| {
         let secs = (v.round() as i64) * 60;

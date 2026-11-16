@@ -389,7 +389,8 @@ pub(crate) fn swatch_for(key: &str) -> sketch::Rgb {
 }
 
 fn initials(name: &str) -> String {
-    let words: Vec<&str> = name.split(|c: char| c.is_whitespace() || matches!(c, '-' | '_' | '.')).filter(|w| !w.is_empty()).collect();
+    let words: Vec<&str> =
+        name.split(|c: char| c.is_whitespace() || matches!(c, '-' | '_' | '.')).filter(|w| !w.is_empty()).collect();
     let first = |w: &str| w.chars().next().map(|c| c.to_uppercase().collect::<String>()).unwrap_or_default();
     match words.as_slice() {
         [] => "?".into(),
@@ -769,7 +770,8 @@ pub fn build(page: &Page) {
     let users = acc::people();
     let groups = passwd::groups();
     let locked = users.iter().map(|u| (u.name.clone(), acc::is_locked(&u.name))).collect();
-    let people = Rc::new(People { me: me.clone(), users, groups, can_edit, signed_in: signed_in_now(), last: last_sign_ins(), locked });
+    let people =
+        Rc::new(People { me: me.clone(), users, groups, can_edit, signed_in: signed_in_now(), last: last_sign_ins(), locked });
 
     let mut chosen = SELECTED.with(|s| s.borrow().clone());
     if !people.users.iter().any(|u| u.name == chosen) {
@@ -921,7 +923,11 @@ fn person_card(card: &gtk::Box, foot_actions: &gtk::Box, people: &People, u: &Us
         line.append(&edit);
         let pw = widgets::labeled_button("dialog-password-symbolic", if is_me { "Change password" } else { "Set a password" });
         pw.add_css_class("acc-small");
-        pw.set_tooltip_text(Some(if is_me { "The password you sign in and use sudo with" } else { "Set a new password for them" }));
+        pw.set_tooltip_text(Some(if is_me {
+            "The password you sign in and use sudo with"
+        } else {
+            "Set a new password for them"
+        }));
         let n = u.name.clone();
         pw.connect_clicked(move |_| change_password(&n));
         line.append(&pw);
@@ -934,7 +940,10 @@ fn person_card(card: &gtk::Box, foot_actions: &gtk::Box, people: &People, u: &Us
     ];
     let when = people.when(u);
     if !when.is_empty() {
-        items.push((if when == "Signed in now" { "Signed in" } else { "Last signed in" }, if when == "Signed in now" { "Now".into() } else { when }));
+        items.push((
+            if when == "Signed in now" { "Signed in" } else { "Last signed in" },
+            if when == "Signed in now" { "Now".into() } else { when },
+        ));
     }
     text.append(&facts(&items).0);
     top.append(&text);
@@ -942,11 +951,16 @@ fn person_card(card: &gtk::Box, foot_actions: &gtk::Box, people: &People, u: &Us
 
     // What they can do, as the groups behind each ability.
     let first = name.split_whitespace().next().unwrap_or(&name).to_string();
-    let abilities: Vec<_> = ABILITIES.iter().filter_map(|a| people.groups.iter().find(|g| g.name == a.0).map(|g| (a, g))).collect();
+    let abilities: Vec<_> =
+        ABILITIES.iter().filter_map(|a| people.groups.iter().find(|g| g.name == a.0).map(|g| (a, g))).collect();
     if !abilities.is_empty() {
         card.append(&subhead(
             &if is_me { "What you can do".to_string() } else { format!("What {first} can do") },
-            &if is_me { "Each switch adds you to the group behind it.".to_string() } else { format!("Each switch adds {first} to the group behind it.") },
+            &if is_me {
+                "Each switch adds you to the group behind it.".to_string()
+            } else {
+                format!("Each switch adds {first} to the group behind it.")
+            },
         ));
         let grid = gtk::Grid::new();
         grid.set_column_spacing(10);
@@ -983,7 +997,11 @@ fn person_card(card: &gtk::Box, foot_actions: &gtk::Box, people: &People, u: &Us
     }
     let member: Vec<String> = acc::groups_of(u, &people.groups).into_iter().filter(|g| *g != u.name).collect();
     if !member.is_empty() {
-        let shown = if member.len() > 4 { format!("{} and {} more", member[..3].join(", "), member.len() - 3) } else { member.join(", ") };
+        let shown = if member.len() > 4 {
+            format!("{} and {} more", member[..3].join(", "), member.len() - 3)
+        } else {
+            member.join(", ")
+        };
         let l = widgets::label(&shown, "acc-fact-value");
         l.set_tooltip_text(Some(&member.join(", ")));
         l.set_ellipsize(gtk::pango::EllipsizeMode::End);

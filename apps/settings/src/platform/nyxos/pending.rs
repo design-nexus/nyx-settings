@@ -462,10 +462,9 @@ fn after_text(c: &Change) -> String {
         None => "Default",
     };
     match c {
-        Change::Hostname { value }
-        | Change::TimeZone { value }
-        | Change::Locale { value }
-        | Change::KeyboardLayout { value } => value.clone().unwrap_or_else(|| "Default".into()),
+        Change::Hostname { value } | Change::TimeZone { value } | Change::Locale { value } | Change::KeyboardLayout { value } => {
+            value.clone().unwrap_or_else(|| "Default".into())
+        }
         Change::BootTheme { value } | Change::LoginTheme { value } => {
             value.clone().unwrap_or_else(|| "Same as the system theme".into())
         }

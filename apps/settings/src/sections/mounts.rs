@@ -684,7 +684,11 @@ fn route(m: &Mount, part: Option<&udisks::Part>) -> Route {
                 icon: "computer-symbolic",
                 from: host.to_string(),
                 what: if path.is_empty() { "Their home folder".into() } else { format!("Folder: {path}") },
-                how: if user.is_empty() { "SSH, with your key".into() } else { format!("SSH · signed in as {user} with your key") },
+                how: if user.is_empty() {
+                    "SSH, with your key".into()
+                } else {
+                    format!("SSH · signed in as {user} with your key")
+                },
             }
         }
         Kind::Drive => match part {
@@ -1086,7 +1090,12 @@ fn show(ui: &Rc<Ui>, part: Option<udisks::Part>) {
         opts.append(&fact_row("system-users-symbolic", "Signed in as", "With your SSH key (Users → SSH keys)", who));
     } else {
         opts.append(&fact_row("alarm-symbolic", "Mount when first opened", missing, on_off(m.on_demand())));
-        opts.append(&fact_row("view-reveal-symbolic", "Read-only", "Files open but can't be changed", on_off(has_option(m, "ro"))));
+        opts.append(&fact_row(
+            "view-reveal-symbolic",
+            "Read-only",
+            "Files open but can't be changed",
+            on_off(has_option(m, "ro")),
+        ));
     }
     if m.kind == Kind::Smb {
         let (who, desc) = if has_option(m, "guest") {

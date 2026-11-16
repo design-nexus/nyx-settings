@@ -2,7 +2,10 @@
 //! picture of its overlay and of how long it listens. Tasks, privacy and history, the
 //! personal dictionary and its helpers each open a page of their own.
 
-use super::{Again, chip, chip_flow, choice, client, flow_add, icon_slider, icon_switch, more, orb, row_text, row_title, run_then, save, slider, switch};
+use super::{
+    Again, chip, chip_flow, choice, client, flow_add, icon_slider, icon_switch, more, orb, row_text, row_title, run_then, save,
+    slider, switch,
+};
 use crate::sketch::{self, R};
 use crate::widgets::{self, Page};
 use crate::{cmd, paths, window};
@@ -149,7 +152,8 @@ fn key_caps(keys: &[String]) -> gtk::Box {
     b
 }
 
-const MODES: &[(&str, &str)] = &[("autonomous", "Everything allowed"), ("assisted", "Small changes only"), ("manual", "Asks before any change")];
+const MODES: &[(&str, &str)] =
+    &[("autonomous", "Everything allowed"), ("assisted", "Small changes only"), ("manual", "Asks before any change")];
 const AGENTS: &[(&str, &str)] = &[("agy", "Antigravity"), ("claude", "Claude Code"), ("codex", "Codex"), ("cursor", "Cursor")];
 
 /// "8 s", "2 min", "1 min 30 s".
@@ -391,7 +395,8 @@ fn draw_timeline(cr: &gtk::cairo::Context, p: &sketch::Pal, c: sketch::Rgb, w: f
     }
     sketch::set(cr, p.dim, 1.0);
     let ty = bar_y + bar_h + 12.0;
-    let end = if look.conversation.get() { format!("Ends after {} of quiet", span(idle)) } else { "Ends after its answer".to_string() };
+    let end =
+        if look.conversation.get() { format!("Ends after {} of quiet", span(idle)) } else { "Ends after its answer".to_string() };
     let end_w = text_at(cr, &end, w, ty, 11.0, false, true);
     if let Some(mid) = reply_mid {
         let t = format!("{} for a reply", span(follow));
@@ -526,8 +531,13 @@ fn privacy_page(page: &Page, again: &Again) {
         0,
         " MiB",
     ));
-    let (row, search) =
-        widgets::entry_row("Search saved conversations", "Only conversations saved while history is on.", "", "Search history", |_| {});
+    let (row, search) = widgets::entry_row(
+        "Search saved conversations",
+        "Only conversations saved while history is on.",
+        "",
+        "Search history",
+        |_| {},
+    );
     let results = gtk::Label::new(None);
     results.set_wrap(true);
     results.set_xalign(0.0);
@@ -561,7 +571,11 @@ fn privacy_page(page: &Page, again: &Again) {
 
     let g = page.group("Clearing up");
     let buttons = widgets::hbox(8);
-    for (label, args) in [("Clear expired", vec!["privacy", "prune"]), ("Record for 10 minutes", vec!["privacy", "diagnostics", "on"]), ("Stop recording", vec!["privacy", "diagnostics", "off"])] {
+    for (label, args) in [
+        ("Clear expired", vec!["privacy", "prune"]),
+        ("Record for 10 minutes", vec!["privacy", "diagnostics", "on"]),
+        ("Stop recording", vec!["privacy", "diagnostics", "off"]),
+    ] {
         let b = gtk::Button::with_label(label);
         let args: Vec<String> = args.into_iter().map(String::from).collect();
         let again = again.clone();
@@ -639,7 +653,9 @@ fn dictionary_page(page: &Page, again: &Again) {
     for ((_, scope), (word, aliases)) in &words {
         let delete = widgets::icon_button("user-trash-symbolic", "Delete the word and how it's misheard");
         let (w, s, a) = (word.clone(), scope.clone(), again.clone());
-        delete.connect_clicked(move |_| run_then_both(vec!["dictionary".into(), "remove".into(), w.clone(), s.clone()], "Couldn't delete word", &a));
+        delete.connect_clicked(move |_| {
+            run_then_both(vec!["dictionary".into(), "remove".into(), w.clone(), s.clone()], "Couldn't delete word", &a)
+        });
         let detail = if aliases.is_empty() {
             if scope == "place" { "Place name".to_string() } else { "Everyday word".to_string() }
         } else {
@@ -652,7 +668,11 @@ fn dictionary_page(page: &Page, again: &Again) {
             let forget = widgets::icon_button("edit-clear-symbolic", "Forget this way it's misheard");
             let (al, s, a) = (alias.clone(), scope.clone(), again.clone());
             forget.connect_clicked(move |_| {
-                run_then_both(vec!["corrections".into(), "delete".into(), al.clone(), s.clone()], "Couldn't forget hearing variant", &a)
+                run_then_both(
+                    vec!["corrections".into(), "delete".into(), al.clone(), s.clone()],
+                    "Couldn't forget hearing variant",
+                    &a,
+                )
             });
             let row = widgets::row(&format!("{alias} → {word}"), "Learned", Some(forget.upcast_ref()));
             row.add_css_class("asst-sub-row");
@@ -834,14 +854,24 @@ pub fn build(page: &Page) {
         sw.connect_active_notify(|sw| {
             run_then_redraw(vec![if sw.is_active() { "unmute" } else { "mute" }.into()], "Couldn't change the microphone");
         });
-        g.add(&widgets::icon_row("audio-input-microphone-symbolic", "Microphone", "Off: it doesn't listen, even for its name.", Some(sw.upcast_ref())));
+        g.add(&widgets::icon_row(
+            "audio-input-microphone-symbolic",
+            "Microphone",
+            "Off: it doesn't listen, even for its name.",
+            Some(sw.upcast_ref()),
+        ));
         widgets::keywords("mute unmute");
     }
     let check = gtk::Button::with_label("Check");
     check.connect_clicked(|_| {
         cmd::spawn(&["xdg-terminal-exec", "bash", "-c", "nyx-assistant doctor; echo; read -rp 'Press Enter to close'"]);
     });
-    g.add(&widgets::icon_row("emblem-ok-symbolic", "Run a check-up", "Models, sound, browser and search, in a terminal.", Some(check.upcast_ref())));
+    g.add(&widgets::icon_row(
+        "emblem-ok-symbolic",
+        "Run a check-up",
+        "Models, sound, browser and search, in a terminal.",
+        Some(check.upcast_ref()),
+    ));
     widgets::keywords("check everything doctor diagnostics");
 
     // How you call it.
@@ -878,7 +908,8 @@ pub fn build(page: &Page) {
     ));
     g.add(&r);
     widgets::keywords("wake word hey listening privacy microphone");
-    let (r, _) = widgets::nav_row(Some("avatar-default-symbolic"), "Name and persona", "", &name, || more("Name and persona", who_it_is));
+    let (r, _) =
+        widgets::nav_row(Some("avatar-default-symbolic"), "Name and persona", "", &name, || more("Name and persona", who_it_is));
     widgets::keywords("persona name wake phrases aliases answers to");
     g.add(&r);
     let keys = binds();
@@ -900,7 +931,8 @@ pub fn build(page: &Page) {
         let chevron = gtk::Image::from_icon_name("go-next-symbolic");
         chevron.add_css_class("chevron");
         end.append(&chevron);
-        let desc = if keys.len() > 1 { format!("Hold to talk. {} more keys.", keys.len() - 1) } else { "Hold to talk.".to_string() };
+        let desc =
+            if keys.len() > 1 { format!("Hold to talk. {} more keys.", keys.len() - 1) } else { "Hold to talk.".to_string() };
         let r = widgets::icon_row("input-keyboard-symbolic", &format!("Talk to {name}"), &desc, Some(end.upcast_ref()));
         r.add_css_class("nav-row");
         r.set_cursor_from_name(Some("pointer"));
@@ -968,10 +1000,17 @@ pub fn build(page: &Page) {
     widgets::keywords("idle quiet ends timeout");
     let (r, _) = {
         let (look, redraw) = (look.clone(), redraw.clone());
-        icon_switch(&cfg, "ui.enabled", "focus-windows-symbolic", "Show the overlay", "What it hears, says and asks.", move |on| {
-            look.overlay.set(on);
-            redraw();
-        })
+        icon_switch(
+            &cfg,
+            "ui.enabled",
+            "focus-windows-symbolic",
+            "Show the overlay",
+            "What it hears, says and asks.",
+            move |on| {
+                look.overlay.set(on);
+                redraw();
+            },
+        )
     };
     g.add(&r);
     widgets::keywords("hud overlay on screen");
@@ -994,9 +1033,13 @@ pub fn build(page: &Page) {
     let agent = client::get_str(&cfg, "agent.default_agent");
     let agent = AGENTS.iter().find(|(id, _)| *id == agent).map(|(_, l)| l.to_string()).unwrap_or(agent);
     let tiles = [
-        more_tile("emblem-ok-symbolic", "Tasks", mode, "autonomy autonomous assisted manual agent budget steps time per task works on its own", || {
-            more("Tasks", tasks_page)
-        }),
+        more_tile(
+            "emblem-ok-symbolic",
+            "Tasks",
+            mode,
+            "autonomy autonomous assisted manual agent budget steps time per task works on its own",
+            || more("Tasks", tasks_page),
+        ),
         more_tile(
             "security-high-symbolic",
             "Privacy and history",
@@ -1011,9 +1054,13 @@ pub fn build(page: &Page) {
             "dictionary vocabulary speech understanding spelling learned corrections forget memory did you mean best guess",
             || more("Personal dictionary", dictionary_page),
         ),
-        more_tile("starred-symbolic", "Helpers", &agent, "coding agent claude codex cursor antigravity search duckduckgo location city weather", || {
-            more("Helpers", helpers_page)
-        }),
+        more_tile(
+            "starred-symbolic",
+            "Helpers",
+            &agent,
+            "coding agent claude codex cursor antigravity search duckduckgo location city weather",
+            || more("Helpers", helpers_page),
+        ),
     ];
     // Rows of two boxes rather than a grid: a grid measures its height at its narrowest,
     // where every word of a tile wraps.

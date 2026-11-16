@@ -84,7 +84,9 @@ fn outcome(t: &Value) -> String {
 fn day_of(ms: u64) -> String {
     let Ok(t) = glib::DateTime::from_unix_local((ms / 1000) as i64) else { return String::new() };
     let Ok(now) = glib::DateTime::now_local() else { return String::new() };
-    let midnight = |d: &glib::DateTime| glib::DateTime::from_local(d.year(), d.month(), d.day_of_month(), 0, 0, 0.0).map(|x| x.to_unix()).unwrap_or(0);
+    let midnight = |d: &glib::DateTime| {
+        glib::DateTime::from_local(d.year(), d.month(), d.day_of_month(), 0, 0, 0.0).map(|x| x.to_unix()).unwrap_or(0)
+    };
     // Rounded, so a day with a clock change still counts as one.
     let ago = ((midnight(&now) - midnight(&t)) as f64 / 86400.0).round() as i64;
     match ago {
@@ -96,7 +98,11 @@ fn day_of(ms: u64) -> String {
 }
 
 fn clock(ms: u64) -> String {
-    glib::DateTime::from_unix_local((ms / 1000) as i64).ok().and_then(|t| t.format("%H:%M").ok()).map(|s| s.to_string()).unwrap_or_default()
+    glib::DateTime::from_unix_local((ms / 1000) as i64)
+        .ok()
+        .and_then(|t| t.format("%H:%M").ok())
+        .map(|s| s.to_string())
+        .unwrap_or_default()
 }
 
 /// A tool's step, in words.
@@ -215,7 +221,11 @@ fn approval_row(id: &str, a: &Value) -> gtk::Box {
         add("Allow for this task", true, true);
     }
     add("Allow", true, false);
-    widgets::stacked_row(&title, &glib::markup_escape_text(&format!("{} · {}", tool_words(tool), brief(&a["arguments"]))), buttons.upcast_ref())
+    widgets::stacked_row(
+        &title,
+        &glib::markup_escape_text(&format!("{} · {}", tool_words(tool), brief(&a["arguments"]))),
+        buttons.upcast_ref(),
+    )
 }
 
 fn audit_row(r: &Value) -> gtk::Box {
@@ -241,7 +251,11 @@ fn audit_row(r: &Value) -> gtk::Box {
         desc.push_str(&format!("\n{d}"));
     }
     let row = widgets::row(&tool_words(tool), &glib::markup_escape_text(&desc), None);
-    row.set_tooltip_text(Some(&format!("{tool} · {} ({})", r["decision"].as_str().unwrap_or(""), r["rule"].as_str().unwrap_or(""))));
+    row.set_tooltip_text(Some(&format!(
+        "{tool} · {} ({})",
+        r["decision"].as_str().unwrap_or(""),
+        r["rule"].as_str().unwrap_or("")
+    )));
     row
 }
 
@@ -259,7 +273,8 @@ fn actions_page(page: &Page, _: &super::Again) {
     // Newest first.
     for r in rows.iter().rev() {
         let row = audit_row(r);
-        let text = format!("{} {} {} {}", r["tool"], tool_words(r["tool"].as_str().unwrap_or("")), r["outcome"], r["decision"]).to_lowercase();
+        let text = format!("{} {} {} {}", r["tool"], tool_words(r["tool"].as_str().unwrap_or("")), r["outcome"], r["decision"])
+            .to_lowercase();
         g.add(&row);
         shown.push((row, text));
     }
@@ -404,7 +419,9 @@ fn show_task(detail: &gtk::Box, t: &Value) {
     {
         let (list, id) = (list.clone(), id.clone());
         cmd::background(
-            move || client::json(&["tasks", "show", &id, "--json"]).and_then(|v| v["steps"].as_array().cloned()).unwrap_or_default(),
+            move || {
+                client::json(&["tasks", "show", &id, "--json"]).and_then(|v| v["steps"].as_array().cloned()).unwrap_or_default()
+            },
             move |shown| fill_steps(&list, shown),
         );
     }
@@ -525,7 +542,8 @@ pub fn build(page: &Page) {
             let title = widgets::label("Nothing to show yet", "preview-title");
             title.set_halign(gtk::Align::Center);
             empty.append(&title);
-            let l = widgets::label("When you ask for something that takes several steps, what it did shows here.", "preview-line");
+            let l =
+                widgets::label("When you ask for something that takes several steps, what it did shows here.", "preview-line");
             l.set_wrap(true);
             l.set_justify(gtk::Justification::Center);
             l.set_halign(gtk::Align::Center);
@@ -555,7 +573,8 @@ pub fn build(page: &Page) {
     search.set_placeholder_text(Some("Search what you asked"));
     search.set_hexpand(true);
     tools.append(&search);
-    let filters = widgets::opts(&[("all", "Everything"), ("done", "Done"), ("unfinished", "Didn't finish"), ("now", "In progress")]);
+    let filters =
+        widgets::opts(&[("all", "Everything"), ("done", "Done"), ("unfinished", "Didn't finish"), ("now", "In progress")]);
     let filter = widgets::dropdown(&filters, "all");
     tools.append(&filter);
     g.add(&tools);
@@ -599,7 +618,11 @@ pub fn build(page: &Page) {
         if let Some((_, list)) = days.borrow_mut().last_mut() {
             list.push(b.clone());
         }
-        items.borrow_mut().push((b, t["request"].as_str().unwrap_or("").to_lowercase(), t["state"].as_str().unwrap_or("").to_string()));
+        items.borrow_mut().push((
+            b,
+            t["request"].as_str().unwrap_or("").to_lowercase(),
+            t["state"].as_str().unwrap_or("").to_string(),
+        ));
     }
     let apply = {
         let (items, days, search, filter) = (items.clone(), days.clone(), search.clone(), filter.clone());

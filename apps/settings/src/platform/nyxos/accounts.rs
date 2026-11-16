@@ -37,7 +37,8 @@ fn you(page: &Page) -> gtk::Box {
     edit.set_tooltip_text(Some("Your name and password, in Users"));
     edit.connect_clicked(|_| window::navigate("accounts"));
     let role = if admin { "Administrator" } else { "Standard account" };
-    let r = widgets::row(if full.is_empty() { &me } else { &full }, &format!("Signed in as {me} · {role}"), Some(edit.upcast_ref()));
+    let r =
+        widgets::row(if full.is_empty() { &me } else { &full }, &format!("Signed in as {me} · {role}"), Some(edit.upcast_ref()));
     r.prepend(&avatar(&full, &me, 44));
     r.add_css_class("nxu-you");
     widgets::keywords("you profile name picture password me");

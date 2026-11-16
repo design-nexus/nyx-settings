@@ -236,7 +236,9 @@ impl Model {
         let path = m["path"].as_str().unwrap_or("").to_string();
         let file = m["name"].as_str().unwrap_or("");
         match curated {
-            Some(c) => Model { key: path.clone(), path: Some(path), size: size(m["bytes"].as_u64().unwrap_or(0)), ..Model::curated(c) },
+            Some(c) => {
+                Model { key: path.clone(), path: Some(path), size: size(m["bytes"].as_u64().unwrap_or(0)), ..Model::curated(c) }
+            }
             None => Model {
                 key: path.clone(),
                 name: kit::plain_name(file),
@@ -451,7 +453,9 @@ fn render(into: &gtk::Box, m: &Model, in_use: Option<&Model>, current: &str, car
     }
     match (m.vision, now.vision) {
         (true, false) => vs.append(&kit::icon_line("go-up-symbolic", "Can look at the screen, so “what's this?” works", "up")),
-        (false, true) => vs.append(&kit::icon_line("go-down-symbolic", "Can't look at the screen, so “what's this?” won't work", "down")),
+        (false, true) => {
+            vs.append(&kit::icon_line("go-down-symbolic", "Can't look at the screen, so “what's this?” won't work", "down"))
+        }
         _ => {}
     }
     if m.path.is_none() {
@@ -472,7 +476,8 @@ pub fn build(page: &Page) {
     let card_gb = list["vram_gb"].as_f64().filter(|g| *g > 0.0);
     let host = glib::host_name().to_string();
 
-    let recommended: Vec<Model> = list["recommended"].as_array().into_iter().flatten().map(|m| Model { fits: true, ..Model::curated(m) }).collect();
+    let recommended: Vec<Model> =
+        list["recommended"].as_array().into_iter().flatten().map(|m| Model { fits: true, ..Model::curated(m) }).collect();
     let curated: Vec<Value> = list["curated"].as_array().cloned().unwrap_or_default();
     // Every language model file on the computer that isn't in the recommended list.
     let mut others: Vec<Model> = list["installed"]
@@ -511,7 +516,8 @@ pub fn build(page: &Page) {
     let rows: Rows = Rc::default();
     let narrow = Rc::new(std::cell::Cell::new(false));
     let pick: Rc<dyn Fn(&str)> = {
-        let (holder, rows, all, in_use, current, narrow) = (holder.clone(), rows.clone(), all.clone(), in_use.clone(), current.clone(), narrow.clone());
+        let (holder, rows, all, in_use, current, narrow) =
+            (holder.clone(), rows.clone(), all.clone(), in_use.clone(), current.clone(), narrow.clone());
         Rc::new(move |key: &str| {
             SELECTED.with(|s| *s.borrow_mut() = Some(key.to_string()));
             for (k, r) in rows.borrow().iter() {
@@ -525,7 +531,11 @@ pub fn build(page: &Page) {
                 Some(m) => render(&holder, m, in_use.as_ref(), &current, card_gb, narrow.get()),
                 None => {
                     kit::clear(&holder);
-                    holder.append(&kit::empty_card("package-x-generic-symbolic", "No language models here yet", "Download one of the recommended models to start."));
+                    holder.append(&kit::empty_card(
+                        "package-x-generic-symbolic",
+                        "No language models here yet",
+                        "Download one of the recommended models to start.",
+                    ));
                 }
             }
         })
@@ -556,40 +566,42 @@ pub fn build(page: &Page) {
             let names: Vec<&str> = rest.iter().take(2).map(|m| m.name.as_str()).collect();
             let more = if rest.len() > 2 { format!("{} and others", names.join(", ")) } else { names.join(" and ") };
             let (pick, current, models_dir) = (pick.clone(), current.clone(), models_dir.clone());
-            let (r, _) = widgets::nav_row(None, &format!("{} more", rest.len()), &glib::markup_escape_text(&more), "", move || {
-                let window: Rc<RefCell<Option<gtk::Window>>> = Rc::default();
-                let (pick, rest, current, models_dir, w) = (pick.clone(), rest.clone(), current.clone(), models_dir.clone(), window.clone());
-                let sub = widgets::subpage("Also on this computer", 560, move |page| {
-                    let g = page.group("");
-                    g.note("Pick one to see it beside the recommended models.");
-                    for m in &rest {
-                        let desc = format!(
-                            "{} · {} · {}",
-                            m.size,
-                            m.path.as_deref().map(|p| folder_words(p, &models_dir)).unwrap_or(""),
-                            if m.vision { "can see the screen" } else { "can't see the screen" }
-                        );
-                        let control: gtk::Widget = match &m.path {
-                            Some(p) if *p == current => kit::pill("In use", "use").upcast(),
-                            Some(p) => use_button(p).upcast(),
-                            None => gtk::Box::new(gtk::Orientation::Horizontal, 0).upcast(),
-                        };
-                        let r = widgets::row(&m.name, &glib::markup_escape_text(&desc), Some(&control));
-                        r.prepend(&kit::art(&m.name, 30));
-                        r.add_css_class("with-tile");
-                        r.set_tooltip_text(m.path.as_deref());
-                        let (key, pick, w) = (m.key.clone(), pick.clone(), w.clone());
-                        kit::on_click(&r, move || {
-                            pick(&key);
-                            if let Some(w) = w.borrow().as_ref() {
-                                w.close();
-                            }
-                        });
-                        g.add(&r);
-                    }
+            let (r, _) =
+                widgets::nav_row(None, &format!("{} more", rest.len()), &glib::markup_escape_text(&more), "", move || {
+                    let window: Rc<RefCell<Option<gtk::Window>>> = Rc::default();
+                    let (pick, rest, current, models_dir, w) =
+                        (pick.clone(), rest.clone(), current.clone(), models_dir.clone(), window.clone());
+                    let sub = widgets::subpage("Also on this computer", 560, move |page| {
+                        let g = page.group("");
+                        g.note("Pick one to see it beside the recommended models.");
+                        for m in &rest {
+                            let desc = format!(
+                                "{} · {} · {}",
+                                m.size,
+                                m.path.as_deref().map(|p| folder_words(p, &models_dir)).unwrap_or(""),
+                                if m.vision { "can see the screen" } else { "can't see the screen" }
+                            );
+                            let control: gtk::Widget = match &m.path {
+                                Some(p) if *p == current => kit::pill("In use", "use").upcast(),
+                                Some(p) => use_button(p).upcast(),
+                                None => gtk::Box::new(gtk::Orientation::Horizontal, 0).upcast(),
+                            };
+                            let r = widgets::row(&m.name, &glib::markup_escape_text(&desc), Some(&control));
+                            r.prepend(&kit::art(&m.name, 30));
+                            r.add_css_class("with-tile");
+                            r.set_tooltip_text(m.path.as_deref());
+                            let (key, pick, w) = (m.key.clone(), pick.clone(), w.clone());
+                            kit::on_click(&r, move || {
+                                pick(&key);
+                                if let Some(w) = w.borrow().as_ref() {
+                                    w.close();
+                                }
+                            });
+                            g.add(&r);
+                        }
+                    });
+                    *window.borrow_mut() = Some(sub);
                 });
-                *window.borrow_mut() = Some(sub);
-            });
             g.add(&r);
         }
     }
@@ -604,9 +616,13 @@ pub fn build(page: &Page) {
             || window::navigate("local-ai-models"),
         );
         g.add(&r);
-        let (r, _) = widgets::nav_row(Some("download-symbolic"), "Get one from Hugging Face", "By its name, like org/model-GGUF", "", || {
-            window::navigate("local-ai-models")
-        });
+        let (r, _) = widgets::nav_row(
+            Some("download-symbolic"),
+            "Get one from Hugging Face",
+            "By its name, like org/model-GGUF",
+            "",
+            || window::navigate("local-ai-models"),
+        );
         g.add(&r);
     }
     widgets::keywords("model llm gguf download installed available gemma nemotron bolt qwen vision");

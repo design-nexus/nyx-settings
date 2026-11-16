@@ -245,7 +245,9 @@ pub fn build(page: &Page) {
     }
     let describe = {
         let line = line.clone();
-        move |k: f64| line.set_text(&format!("Drag the line to compare. The right side is your screen at {} K.", k.round() as i64))
+        move |k: f64| {
+            line.set_text(&format!("Drag the line to compare. The right side is your screen at {} K.", k.round() as i64))
+        }
     };
     describe(kelvin.get());
     let compare = {
@@ -287,7 +289,12 @@ pub fn build(page: &Page) {
     let sw = gtk::Switch::new();
     sw.set_active(on_now());
     sw.connect_active_notify(move |s| set_now(s.is_active(), warmth));
-    g.add(&widgets::icon_row("weather-clear-night-symbolic", "Night Light", "Warm the screen colours right away.", Some(sw.upcast_ref())));
+    g.add(&widgets::icon_row(
+        "weather-clear-night-symbolic",
+        "Night Light",
+        "Warm the screen colours right away.",
+        Some(sw.upcast_ref()),
+    ));
 
     let temp = sched.borrow().temperature as f64;
     let s2 = sched.clone();
@@ -304,7 +311,8 @@ pub fn build(page: &Page) {
         }
     };
     {
-        let (kelvin, compare, scale, describe, mark_preset) = (kelvin.clone(), compare.clone(), scale.clone(), describe.clone(), mark_preset.clone());
+        let (kelvin, compare, scale, describe, mark_preset) =
+            (kelvin.clone(), compare.clone(), scale.clone(), describe.clone(), mark_preset.clone());
         slider.scale.connect_value_changed(move |sc| {
             let v = sc.value();
             let k = v.round() as i64;

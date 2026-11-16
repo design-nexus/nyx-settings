@@ -109,7 +109,11 @@ fn draw_pad(cr: &Context, p: &Pal, w: f64, h: f64, fingers: u8, set: &FingerSet)
     let pout = on("pinchout");
     arrow(cr, (82.0, -50.0), (120.0, -80.0), true, pout);
     arrow(cr, (-82.0, 50.0), (-120.0, 80.0), true, pout);
-    let (xs, ys): (&[f64], &[f64]) = if fingers == 3 { (&[-34.0, 0.0, 34.0], &[6.0, -6.0, 4.0]) } else { (&[-51.0, -17.0, 17.0, 51.0], &[10.0, -4.0, -8.0, 6.0]) };
+    let (xs, ys): (&[f64], &[f64]) = if fingers == 3 {
+        (&[-34.0, 0.0, 34.0], &[6.0, -6.0, 4.0])
+    } else {
+        (&[-51.0, -17.0, 17.0, 51.0], &[10.0, -4.0, -8.0, 6.0])
+    };
     for (x, y) in xs.iter().zip(ys) {
         cr.arc(cx + x * u, cy + y * u, 14.0 * u, 0.0, 2.0 * PI);
         sketch::set(cr, sketch::mix(p.bg, colour, 0.35), 1.0);
@@ -159,7 +163,10 @@ fn fill_stage(st: &Rc<Stage>) {
             continue;
         }
         cell.set_valign(gtk::Align::Fill);
-        let caption = widgets::label(if together && place == "left" { "Swipe left or right" } else { gestures::direction_label(place) }, "tp-caption");
+        let caption = widgets::label(
+            if together && place == "left" { "Swipe left or right" } else { gestures::direction_label(place) },
+            "tp-caption",
+        );
         cell.append(&caption);
         let options = action_options(&dir, st.glimpse);
         let dd = widgets::dropdown(&options, set.action(&dir));
@@ -252,7 +259,10 @@ fn short_label(chars: i32) -> gtk::SignalListItemFactory {
     });
     f.connect_bind(|_, item| {
         let Some(item) = item.downcast_ref::<gtk::ListItem>() else { return };
-        let (Some(s), Some(l)) = (item.item().and_downcast::<gtk::StringObject>(), item.child().and_downcast::<gtk::Label>()) else { return };
+        let (Some(s), Some(l)) = (item.item().and_downcast::<gtk::StringObject>(), item.child().and_downcast::<gtk::Label>())
+        else {
+            return;
+        };
         let text = s.string();
         l.set_text(text.trim_end_matches(" (follows fingers)"));
         l.set_tooltip_text(Some(&text));
@@ -372,7 +382,12 @@ pub fn build(page: &Page) {
 
     let st = Rc::new(Stage {
         fingers: Cell::new(3),
-        glimpse: cmd::present("nyx-glimpse") || store::read(|s| gestures::DIRECTIONS.iter().any(|d| s.gestures.three.action(d) == "glimpse" || s.gestures.four.action(d) == "glimpse")),
+        glimpse: cmd::present("nyx-glimpse")
+            || store::read(|s| {
+                gestures::DIRECTIONS
+                    .iter()
+                    .any(|d| s.gestures.three.action(d) == "glimpse" || s.gestures.four.action(d) == "glimpse")
+            }),
         installed: installed_apps(),
         dropdowns: RefCell::default(),
         pad: pad.clone(),
@@ -473,7 +488,10 @@ pub fn build(page: &Page) {
 
     // ----- Tapping and clicking -----
     let g = page.group("Tapping and clicking");
-    g.add(&tiled(hypr_switch("input.touchpad.tap_to_click", "Tap to click", "A light tap with one finger."), "input-touchpad-symbolic"));
+    g.add(&tiled(
+        hypr_switch("input.touchpad.tap_to_click", "Tap to click", "A light tap with one finger."),
+        "input-touchpad-symbolic",
+    ));
     g.add(&tiled(
         hypr_choice(
             "input.touchpad.tap_button_map",
@@ -484,7 +502,10 @@ pub fn build(page: &Page) {
         "input-touchpad-symbolic",
     ));
     widgets::keywords("tap right click middle click two finger three finger 3 fingers middle-click");
-    g.add(&tiled(hypr_switch("input.touchpad.tap_and_drag", "Tap and drag", "Tap, then touch again and move."), "view-fullscreen-symbolic"));
+    g.add(&tiled(
+        hypr_switch("input.touchpad.tap_and_drag", "Tap and drag", "Tap, then touch again and move."),
+        "view-fullscreen-symbolic",
+    ));
     g.add(&tiled(
         hypr_choice_typed(
             "input.touchpad.clickfinger_behavior",
@@ -511,7 +532,11 @@ pub fn build(page: &Page) {
         "view-fullscreen-symbolic",
     ));
     card.append(&tiled(
-        hypr_switch("input.touchpad.middle_button_emulation", "Middle-click with both buttons", "Pressing left and right together is a middle click."),
+        hypr_switch(
+            "input.touchpad.middle_button_emulation",
+            "Middle-click with both buttons",
+            "Pressing left and right together is a middle click.",
+        ),
         "input-mouse-symbolic",
     ));
     card.append(&tiled(
@@ -531,7 +556,10 @@ pub fn build(page: &Page) {
     note.set_wrap(true);
     note.add_css_class("tp-more-note");
     more_box.append(&note);
-    let (r, _) = widgets::nav_row(Some("view-more-symbolic"), "More", "Drag lock, middle-click, three-finger drag", "", move || open_more());
+    let (r, _) =
+        widgets::nav_row(Some("view-more-symbolic"), "More", "Drag lock, middle-click, three-finger drag", "", move || {
+            open_more()
+        });
     g.add(&r);
     widgets::keywords("drag lock middle click both buttons three finger drag tap four fingers 4");
 
@@ -564,8 +592,10 @@ fn devices(page: &Page) {
     if !cmd::present("omarchy-toggle-touchpad") && !cmd::present("omarchy-toggle-touchscreen") {
         return;
     }
-    let pad_here = cmd::present("omarchy-toggle-touchpad") && cmd::output(&["omarchy-hw-touchpad"]).is_some_and(|d| !d.is_empty());
-    let screen_here = cmd::present("omarchy-toggle-touchscreen") && cmd::output(&["omarchy-hw-touchscreen"]).is_some_and(|d| !d.is_empty());
+    let pad_here =
+        cmd::present("omarchy-toggle-touchpad") && cmd::output(&["omarchy-hw-touchpad"]).is_some_and(|d| !d.is_empty());
+    let screen_here =
+        cmd::present("omarchy-toggle-touchscreen") && cmd::output(&["omarchy-hw-touchscreen"]).is_some_and(|d| !d.is_empty());
     if !pad_here && !screen_here {
         return;
     }
@@ -657,7 +687,8 @@ fn swipe_feel(content: &gtk::Box) {
     );
     past_last.append(&tiled(r, "list-add-symbolic"));
     card.append(&past_last);
-    let note = widgets::label("These apply to swipes that follow your fingers; Next workspace jumps one at a time.", "group-note");
+    let note =
+        widgets::label("These apply to swipes that follow your fingers; Next workspace jumps one at a time.", "group-note");
     note.set_wrap(true);
     note.add_css_class("tp-more-note");
     content.append(&note);

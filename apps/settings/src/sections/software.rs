@@ -47,7 +47,10 @@ pub fn build(page: &Page) {
         ));
     }
     more(page);
-    pv.foot("emblem-ok-symbolic", "Changes save when you press Enter or leave a field. Removing a launcher can be undone for a few seconds.");
+    pv.foot(
+        "emblem-ok-symbolic",
+        "Changes save when you press Enter or leave a field. Removing a launcher can be undone for a few seconds.",
+    );
 }
 
 // ----- Launchers made by Omarchy -----
@@ -223,7 +226,8 @@ fn your_launchers(
     g.top(&head);
 
     if all.is_empty() {
-        let r = widgets::row("No launchers yet", "Add a website or a terminal program, and it shows up in the app launcher.", None);
+        let r =
+            widgets::row("No launchers yet", "Add a website or a terminal program, and it shows up in the app launcher.", None);
         g.add(&r);
     }
     let rows: Rc<RefCell<Vec<gtk::Box>>> = Rc::default();
@@ -548,11 +552,20 @@ fn details(l: &Launcher) -> gtk::Box {
             let (n, v, float) = state.borrow().clone();
             let (n, v) = (n.trim().to_string(), v.trim().to_string());
             if n.is_empty() || v.is_empty() || n.contains('/') {
-                window::toast(if web { "Enter a name (without /) and a web address" } else { "Enter a name (without /) and a command" });
+                window::toast(if web {
+                    "Enter a name (without /) and a web address"
+                } else {
+                    "Enter a name (without /) and a command"
+                });
                 return;
             }
             if web {
-                replace_launcher("omarchy-webapp-remove", id.clone(), vec!["omarchy-webapp-install".into(), n, v, String::new()], "Web app updated");
+                replace_launcher(
+                    "omarchy-webapp-remove",
+                    id.clone(),
+                    vec!["omarchy-webapp-install".into(), n, v, String::new()],
+                    "Web app updated",
+                );
             } else {
                 let style = if float { "float" } else { "tile" };
                 replace_launcher(
@@ -601,7 +614,11 @@ fn details(l: &Launcher) -> gtk::Box {
                 }
             },
         );
-        card.append(&widgets::row("Window", "Floating sits over your other windows; tiled takes a tile beside them.", Some(seg.upcast_ref())));
+        card.append(&widgets::row(
+            "Window",
+            "Floating sits over your other windows; tiled takes a tile beside them.",
+            Some(seg.upcast_ref()),
+        ));
     }
     let icon_end = widgets::hbox(8);
     icon_end.append(&launcher_icon(&l.icon, fallback_icon(&l.kind), 28));
@@ -691,7 +708,13 @@ fn draw_window(cr: &gtk::cairo::Context, p: &Pal, w: f64, h: f64, name: &str, ki
             sketch::set(cr, p.accent, 0.9);
             let _ = cr.stroke();
             sketch::set(cr, sketch::mix(p.accent, p.danger, 0.7), 0.9);
-            cr.arc(canvas.x + canvas.w * 0.72, canvas.y + canvas.h * 0.28, (canvas.w.min(canvas.h) * 0.1).max(4.0), 0.0, std::f64::consts::TAU);
+            cr.arc(
+                canvas.x + canvas.w * 0.72,
+                canvas.y + canvas.h * 0.28,
+                (canvas.w.min(canvas.h) * 0.1).max(4.0),
+                0.0,
+                std::f64::consts::TAU,
+            );
             let _ = cr.fill();
             sketch::set(cr, sketch::mix(p.accent, p.text, 0.35), 0.6);
             sketch::rounded(cr, canvas.x + canvas.w * 0.3, canvas.y + canvas.h * 0.75, canvas.w * 0.42, 9.0, 3.0);
@@ -744,7 +767,8 @@ fn more(page: &Page) {
     let g = page.group("");
     let installed = Rc::new(Installed::read());
 
-    let available: usize = GROUPS.iter().map(|(_, _, items)| items.iter().filter(|i| item_button_kind(i, &installed).is_some()).count()).sum();
+    let available: usize =
+        GROUPS.iter().map(|(_, _, items)| items.iter().filter(|i| item_button_kind(i, &installed).is_some()).count()).sum();
     let preinstalls = ["omarchy-install-preinstalls", "omarchy-remove-preinstalls"].iter().any(|s| cmd::present(s));
     if available > 0 || preinstalls {
         let on: usize = GROUPS.iter().map(|(_, _, items)| items.iter().filter(|i| installed.has(i.1)).count()).sum();
@@ -762,7 +786,8 @@ fn more(page: &Page) {
                 });
             },
         );
-        let names: Vec<&str> = GROUPS.iter().flat_map(|(t, w, items)| [*t, *w].into_iter().chain(items.iter().map(|i| i.0))).collect();
+        let names: Vec<&str> =
+            GROUPS.iter().flat_map(|(t, w, items)| [*t, *w].into_iter().chain(items.iter().map(|i| i.0))).collect();
         widgets::keywords(&format!("installers omarchy starter apps preinstalls default bundled bloat {}", names.join(" ")));
         g.add(&r);
     }
@@ -785,7 +810,8 @@ fn more(page: &Page) {
         g.add(&r);
     }
 
-    let channel = cmd::present("omarchy-channel-set").then(|| cmd::output(&["omarchy-channel-current"]).unwrap_or_else(|| "unknown".into()));
+    let channel = cmd::present("omarchy-channel-set")
+        .then(|| cmd::output(&["omarchy-channel-current"]).unwrap_or_else(|| "unknown".into()));
     let tools: Vec<&Tool> = TOOLS.iter().filter(|t| cmd::present(t.0)).collect();
     if channel.is_some() || !tools.is_empty() {
         let value = channel.as_deref().map(channel_title).unwrap_or_default();
@@ -878,7 +904,12 @@ fn search(results: &gtk::Box, query: &str) {
                     let q = cmd::shell_quote(&name);
                     terminal(&if on { format!("sudo pacman -Rns -- {q}") } else { format!("{} -S --needed -- {q}", helper) });
                 });
-                card.append(&widgets::icon_row("package-x-generic-symbolic", n, if on { "Installed" } else { "" }, Some(b.upcast_ref())));
+                card.append(&widgets::icon_row(
+                    "package-x-generic-symbolic",
+                    n,
+                    if on { "Installed" } else { "" },
+                    Some(b.upcast_ref()),
+                ));
             }
             if !names.is_empty() {
                 widgets::mark_first_rows(card.upcast_ref());
@@ -1169,7 +1200,12 @@ type Tool = (&'static str, &'static str, &'static str, &'static str);
 const TOOLS: &[Tool] = &[
     ("omarchy-update-firmware", "Firmware updates", "Update the firmware of your hardware.", "fwupd bios device"),
     ("omarchy-update-aur-pkgs", "AUR package updates", "Update the packages built from the AUR.", "yay aur"),
-    ("omarchy-update-keyring", "Refresh package keys", "Fix 'invalid signature' errors when installing packages.", "pacman keyring gpg signature"),
+    (
+        "omarchy-update-keyring",
+        "Refresh package keys",
+        "Fix 'invalid signature' errors when installing packages.",
+        "pacman keyring gpg signature",
+    ),
     ("omarchy-update-orphan-pkgs", "Remove unused packages", "Packages nothing needs any more.", "orphans cleanup clean"),
     ("omarchy-update-analyze-logs", "Check the last update", "Look through the update log for problems.", "log errors"),
 ];

@@ -137,9 +137,9 @@ fn plugins() -> (HashMap<String, String>, Vec<(String, String)>) {
 // ----- Chips that wrap at their own widths -----
 
 mod flow {
+    use gtk::glib;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
-    use gtk::glib;
     use std::cell::Cell;
 
     #[derive(Default)]
@@ -192,7 +192,8 @@ mod flow {
     fn widths(w: &gtk::Widget, gap: i32) -> (i32, i32) {
         let kids = children(w);
         let min = kids.iter().map(|c| c.measure(gtk::Orientation::Horizontal, -1).0).max().unwrap_or(0);
-        let nat: i32 = kids.iter().map(|c| c.measure(gtk::Orientation::Horizontal, -1).1).sum::<i32>() + gap * (kids.len() as i32 - 1).max(0);
+        let nat: i32 = kids.iter().map(|c| c.measure(gtk::Orientation::Horizontal, -1).1).sum::<i32>()
+            + gap * (kids.len() as i32 - 1).max(0);
         (min, nat.min(320).max(min))
     }
 
@@ -635,7 +636,15 @@ fn chip(ed: &Ed, slot: Slot, name: &str, len: usize, anchor: bool, size: i64, cl
     b
 }
 
-fn zone(ed: &Ed, section: &str, ids: &[String], entries: &[Value], names: &HashMap<String, String>, anchor: &str, clock: &str) -> gtk::Box {
+fn zone(
+    ed: &Ed,
+    section: &str,
+    ids: &[String],
+    entries: &[Value],
+    names: &HashMap<String, String>,
+    anchor: &str,
+    clock: &str,
+) -> gtk::Box {
     let row = widgets::vbox(0);
     row.add_css_class("ob-zone");
     let flow = wrap_box(4);

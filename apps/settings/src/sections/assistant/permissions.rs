@@ -226,7 +226,10 @@ fn hit(area: &gtk::DrawingArea, x: f64, y: f64) -> Option<usize> {
     let (w, h) = (area.width() as f64, area.height() as f64);
     let surface = gtk::cairo::ImageSurface::create(gtk::cairo::Format::ARgb32, 1, 1).ok()?;
     let cr = gtk::cairo::Context::new(&surface).ok()?;
-    node_rects(&cr, w, h).iter().position(|r| x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h).map(|i| i.min(CAPS.len() - 1))
+    node_rects(&cr, w, h)
+        .iter()
+        .position(|r| x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
+        .map(|i| i.min(CAPS.len() - 1))
 }
 
 /// The newest audit record for each capability: (when, tool, how it was decided).
@@ -252,7 +255,13 @@ fn last_uses() -> Vec<(String, u64, String, String)> {
 }
 
 /// A popover at a node: its three choices, and when it was last used.
-fn node_popover(area: &gtk::DrawingArea, i: usize, map: &Rc<Map>, segs: &Rc<RefCell<Vec<gtk::Box>>>, uses: &Rc<Vec<(String, u64, String, String)>>) {
+fn node_popover(
+    area: &gtk::DrawingArea,
+    i: usize,
+    map: &Rc<Map>,
+    segs: &Rc<RefCell<Vec<gtk::Box>>>,
+    uses: &Rc<Vec<(String, u64, String, String)>>,
+) {
     let cap = &CAPS[i];
     let (w, h) = (area.width() as f64, area.height() as f64);
     let Ok(surface) = gtk::cairo::ImageSurface::create(gtk::cairo::Format::ARgb32, 1, 1) else { return };
@@ -263,7 +272,10 @@ fn node_popover(area: &gtk::DrawingArea, i: usize, map: &Rc<Map>, segs: &Rc<RefC
     pop.set_pointing_to(Some(&gtk::gdk::Rectangle::new(r.x as i32, r.y as i32, r.w as i32, r.h as i32)));
     let col = widgets::vbox(8);
     col.add_css_class("asst-pop");
-    col.append(&widgets::label(&format!("{} · {}", cap.title, decision_word(&map.states.borrow()[i]).to_lowercase()), "asst-card-title"));
+    col.append(&widgets::label(
+        &format!("{} · {}", cap.title, decision_word(&map.states.borrow()[i]).to_lowercase()),
+        "asst-card-title",
+    ));
     let used = uses.iter().find(|(c, ..)| c == cap.capability);
     let line = match used {
         Some((_, at, tool, how)) => format!("Last used {} ({tool}), {how}.", when(*at)),
@@ -273,8 +285,11 @@ fn node_popover(area: &gtk::DrawingArea, i: usize, map: &Rc<Map>, segs: &Rc<RefC
     l.set_wrap(true);
     l.set_max_width_chars(34);
     col.append(&l);
-    let opts: Vec<(&str, &str)> =
-        if cap.ask_only { vec![("confirm", "Ask"), ("deny", "Never")] } else { vec![("allow", "Allow"), ("confirm", "Ask"), ("deny", "Never")] };
+    let opts: Vec<(&str, &str)> = if cap.ask_only {
+        vec![("confirm", "Ask"), ("deny", "Never")]
+    } else {
+        vec![("allow", "Allow"), ("confirm", "Ask"), ("deny", "Never")]
+    };
     let current = map.states.borrow()[i].clone();
     let segs = segs.clone();
     let pop2 = pop.clone();
@@ -612,8 +627,11 @@ pub fn build(page: &Page) {
     // The controls: each thing it can do, as a three-way switch.
     let g = page.group("What it may do");
     for (i, cap) in CAPS.iter().enumerate() {
-        let opts: Vec<(&str, &str)> =
-            if cap.ask_only { vec![("confirm", "Ask"), ("deny", "Never")] } else { vec![("allow", "Allow"), ("confirm", "Ask"), ("deny", "Never")] };
+        let opts: Vec<(&str, &str)> = if cap.ask_only {
+            vec![("confirm", "Ask"), ("deny", "Never")]
+        } else {
+            vec![("allow", "Allow"), ("confirm", "Ask"), ("deny", "Never")]
+        };
         let current = map.states.borrow()[i].clone();
         let (map2, area2, summary2) = (map.clone(), area.clone(), summary.clone());
         let (r, seg) = seg_row(cap.icon, cap.title, cap.desc, &opts, &current, move |id| {
@@ -634,20 +652,27 @@ pub fn build(page: &Page) {
     let g = page.group("Using apps for you");
     let r = widgets::icon_row("view-conceal-symbolic", "Never touch", "", None);
     if let Some(text) = row_text(&r) {
-        text.append(&word_chips(&cfg, "computer.deny_classes", "App", (
-            "Never touch an app",
-            "Its window class, like keepassxc. Password managers, terminals and lock screens are never touched anyway.",
-        )));
+        text.append(&word_chips(
+            &cfg,
+            "computer.deny_classes",
+            "App",
+            (
+                "Never touch an app",
+                "Its window class, like keepassxc. Password managers, terminals and lock screens are never touched anyway.",
+            ),
+        ));
     }
     r.set_tooltip_text(Some("Password managers, terminals and lock screens are never touched anyway."));
     g.add(&r);
     widgets::keywords("never touch these apps window classes computer use deny");
     let r = widgets::icon_row("input-mouse-symbolic", "Always ask before clicking", "", None);
     if let Some(text) = row_text(&r) {
-        text.append(&word_chips(&cfg, "computer.confirm_words", "Word", (
-            "Always ask before clicking",
-            "Buttons with this word ask first, even during an approved task.",
-        )));
+        text.append(&word_chips(
+            &cfg,
+            "computer.confirm_words",
+            "Word",
+            ("Always ask before clicking", "Buttons with this word ask first, even during an approved task."),
+        ));
     }
     g.add(&r);
     widgets::keywords("always ask before clicking confirm words send buy delete computer use click type");

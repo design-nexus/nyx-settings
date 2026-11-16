@@ -452,11 +452,8 @@ fn with_tile(r: gtk::Box, icon: &str) -> gtk::Box {
 
 pub fn build(page: &Page) {
     let suite = nyx_theme::read_suite().unwrap_or_default();
-    let look = Rc::new(RefCell::new(Look {
-        compact: suite.density == "compact",
-        scale: suite.text_scale,
-        sample: Sample::Contacts,
-    }));
+    let look =
+        Rc::new(RefCell::new(Look { compact: suite.density == "compact", scale: suite.text_scale, sample: Sample::Contacts }));
 
     // The picture: a Nyx app drawn with these settings.
     let pv = page.split();
@@ -578,14 +575,15 @@ pub fn build(page: &Page) {
     if nyx_theme::omarchy_available() {
         let dd = theme_dd.clone();
         let refresh = refresh.clone();
-        let (r, _) = widgets::switch_row("Follow the Omarchy theme", "Its colours, and change when it does.", follow, move |on| {
-            dd.set_sensitive(!on);
-            let id = if on { "omarchy".to_string() } else { nyx_theme::engine::suite().theme };
-            if let Err(e) = nyx_theme::choose_system_theme(&id) {
-                crate::window::toast(&e);
-            }
-            refresh();
-        });
+        let (r, _) =
+            widgets::switch_row("Follow the Omarchy theme", "Its colours, and change when it does.", follow, move |on| {
+                dd.set_sensitive(!on);
+                let id = if on { "omarchy".to_string() } else { nyx_theme::engine::suite().theme };
+                if let Err(e) = nyx_theme::choose_system_theme(&id) {
+                    crate::window::toast(&e);
+                }
+                refresh();
+            });
         g.add(&with_tile(r, "applications-graphics-symbolic"));
     }
     g.add(&with_tile(theme_row, "weather-clear-night-symbolic"));
@@ -621,14 +619,8 @@ pub fn build(page: &Page) {
         });
     }
 
-    let (r, text_slider) = widgets::slider_row(
-        "Text size",
-        "",
-        (90.0, 125.0, 5.0),
-        (suite.text_scale * 100.0).round(),
-        0,
-        "%",
-        {
+    let (r, text_slider) =
+        widgets::slider_row("Text size", "", (90.0, 125.0, 5.0), (suite.text_scale * 100.0).round(), 0, "%", {
             let (look, refresh) = (look.clone(), refresh.clone());
             move |v| {
                 let scale = (v / 5.0).round() * 5.0 / 100.0;
@@ -636,8 +628,7 @@ pub fn build(page: &Page) {
                 refresh();
                 nyx_theme::update_suite(|s| s.text_scale = scale);
             }
-        },
-    );
+        });
     text_slider.scale.set_width_request(110);
     g.add(&with_tile(r, "font-x-generic-symbolic"));
     widgets::keywords("larger smaller text in every nyx app theme density compact text size font scale suite");
@@ -668,7 +659,9 @@ pub fn build(page: &Page) {
     g.add(&r);
     let own: Vec<&str> = APPS
         .iter()
-        .filter(|(_, _, program, _)| suite.applications.get(*program).is_some_and(|c| c.mode == nyx_theme::engine::AppMode::Override))
+        .filter(|(_, _, program, _)| {
+            suite.applications.get(*program).is_some_and(|c| c.mode == nyx_theme::engine::AppMode::Override)
+        })
         .map(|(_, name, _, _)| *name)
         .collect();
     let value = match own.len() {
