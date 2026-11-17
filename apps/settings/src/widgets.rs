@@ -1166,7 +1166,10 @@ fn reset_button(key: &str, on_reset: impl Fn() + 'static) -> gtk::Button {
     let b = gtk::Button::from_icon_name("edit-undo-symbolic");
     b.add_css_class("reset-button");
     b.add_css_class("flat");
-    b.set_tooltip_text(Some("Reset — use the value from your own config or Omarchy's default"));
+    b.set_tooltip_text(Some(match crate::platform::PLATFORM {
+        crate::platform::Platform::NyxOS => "Reset — use the value from your own config or NyxOS's default",
+        crate::platform::Platform::Omarchy => "Reset — use the value from your own config or Omarchy's default",
+    }));
     show_reset(&b, store::is_managed(key));
     b.set_valign(gtk::Align::Center);
     let k = key.to_string();
