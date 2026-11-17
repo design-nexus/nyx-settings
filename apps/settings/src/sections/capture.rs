@@ -1121,7 +1121,20 @@ pub fn build(page: &Page) {
     let shots = cmd::present("omarchy-capture-screenshot");
     let recs = cmd::present("omarchy-capture-screenrecording");
     if !shots && !recs {
-        page.banner("Screenshots and screen recording use Omarchy's capture tools, which aren't installed.", true);
+        // NyxOS: Nyx Capture does both, with settings of its own.
+        if cmd::present("nyx-capture") {
+            let g = page.group("Screenshots and recording");
+            let (r, _) = widgets::button_row(
+                "Nyx Capture",
+                "Screenshots, recordings, text and QR codes from the screen. Its own settings choose where they go and how they look.",
+                "Open its settings",
+                |_| cmd::spawn(&["nyx-capture", "--section", "settings"]),
+            );
+            g.add(&r);
+            widgets::keywords("screenshot screen recording capture nyx capture");
+        } else {
+            page.banner("Screenshots and screen recording use Omarchy's capture tools, which aren't installed.", true);
+        }
         more_tools(page);
         return;
     }
