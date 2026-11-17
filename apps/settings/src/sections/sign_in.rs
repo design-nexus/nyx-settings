@@ -295,10 +295,15 @@ pub fn build(page: &Page) {
     });
     widgets::keywords("camera reader helper hardware check");
     more.add(&r);
-    let (r, _) =
-        widgets::nav_row(Some("edit-undo-symbolic"), "If something goes wrong", "Undo the last change, or recover", "", || {
+    let (r, _) = widgets::nav_row(
+        Some("edit-undo-symbolic"),
+        "If something goes wrong",
+        if nyxos() { "Go back to an earlier generation" } else { "Undo the last change, or recover" },
+        "",
+        || {
             widgets::subpage("If something goes wrong", 600, recovery);
-        });
+        },
+    );
     widgets::keywords("undo restore rollback pam recovery");
     more.add(&r);
 
