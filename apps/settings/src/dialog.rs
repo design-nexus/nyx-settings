@@ -48,7 +48,19 @@ pub fn ask(
     extra: Option<(&str, bool)>,
     on_ok: impl Fn(Vec<String>, bool) -> Option<String> + 'static,
 ) {
-    let Some(win) = window::window() else { return };
+    ask_window(title, intro, fields, ok, extra, on_ok);
+}
+
+/// As [`ask`], returning the dialog (to hear it close).
+pub fn ask_window(
+    title: &str,
+    intro: &str,
+    fields: Vec<Field>,
+    ok: &str,
+    extra: Option<(&str, bool)>,
+    on_ok: impl Fn(Vec<String>, bool) -> Option<String> + 'static,
+) -> Option<gtk::Window> {
+    let win = window::window()?;
     let dialog = gtk::Window::builder().transient_for(&win).modal(true).title(title).build();
     dialog.add_css_class("settings-window");
     dialog.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
@@ -143,6 +155,7 @@ pub fn ask(
     if let Some(first) = first {
         first.grab_focus();
     }
+    Some(dialog)
 }
 
 /// Let focused controls handle Escape first, then dismiss through close-request guards.

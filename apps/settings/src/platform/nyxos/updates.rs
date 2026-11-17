@@ -138,8 +138,126 @@ fn describe(o: &Outcome) -> String {
     o.steps.iter().map(|s| s.message.as_str()).collect::<Vec<_>>().join(". ")
 }
 
-/// `nyx-system update WHAT… --yes --json`, then a toast saying what came of it.
+/// Update WHAT: when it includes the system, its part is built first and what it changes
+/// shown (packages, size, a restart) before anything switches; then
+/// `nyx-system update WHAT… --yes --json` and a toast saying what came of it.
 pub fn update(what: &[&str], working: &str) {
+    if busy() {
+        window::toast("Another system change is still running.");
+        return;
+    }
+    // Anything but firmware and your own apps may rebuild the system (a NyxOS tool by
+    // name too); when the plan turns out to have no system part, it just runs.
+    let touches_system = !what.iter().all(|w| matches!(*w, "firmware" | "apps")) || what.is_empty();
+    if !touches_system {
+        run_update(what, working, false);
+        return;
+    }
+    set_busy(true);
+    window::toast("Building the system update to see what it changes…");
+    let mut args = vec!["nyx-system", "update"];
+    args.extend_from_slice(what);
+    args.extend(["--prepare", "--json"]);
+    let (what, working): (Vec<String>, String) = (what.iter().map(|s| s.to_string()).collect(), working.to_string());
+    cmd::run_async(&args, move |r| {
+        set_busy(false);
+        let plan: serde_json::Value = match r.map(|t| serde_json::from_str(&t)) {
+            Ok(Ok(v)) => v,
+            Ok(Err(e)) => return window::toast(&format!("The update couldn't be read: {e}")),
+            Err(e) => {
+                let text = format!("{e:#}");
+                let last = text.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or(&text).trim().to_string();
+                return window::toast(last.trim_start_matches("nyx-system: "));
+            }
+        };
+        let preview = &plan["preview"];
+        let prepared = preview["prepared"] == true;
+        let others = plan["items"].as_array().map_or(0, |i| {
+            i.iter()
+                .filter(|i| {
+                    !matches!(
+                        i["how"].as_str(),
+                        Some("the system channel" | "comes with the system channel" | "a NyxOS tool" | "firmware")
+                    )
+                })
+                .count()
+        });
+        if !prepared && others == 0 {
+            window::toast("Everything is up to date");
+            window::rebuild("updates");
+            return;
+        }
+        let what_refs: Vec<&str> = what.iter().map(String::as_str).collect();
+        if !prepared {
+            // Only apps and tools of yours: nothing of the system's to show first.
+            return run_update(&what_refs, &working, false);
+        }
+        let accepted = std::rc::Rc::new(std::cell::Cell::new(false));
+        let a = accepted.clone();
+        let (w2, working2) = (what.clone(), working.clone());
+        let dialog = crate::dialog::ask_window(
+            "Update the system?",
+            &describe_preview(preview, others),
+            Vec::new(),
+            "Update",
+            None,
+            move |_, _| {
+                a.set(true);
+                let refs: Vec<&str> = w2.iter().map(String::as_str).collect();
+                run_update(&refs, &working2, true);
+                None
+            },
+        );
+        // Closed without updating: the prepared build is set aside.
+        if let Some(d) = dialog {
+            d.connect_close_request(move |_| {
+                if !accepted.get() {
+                    cmd::run_async(&["nyx-system", "update", "--discard"], |_| {});
+                }
+                gtk::glib::Propagation::Proceed
+            });
+        }
+    });
+}
+
+/// What the prepared system update changes, for the dialog.
+fn describe_preview(preview: &serde_json::Value, others: usize) -> String {
+    let changes = preview["changes"].as_array().cloned().unwrap_or_default();
+    let mut lines: Vec<String> = vec![format!("{} package{} change:", changes.len(), if changes.len() == 1 { "" } else { "s" })];
+    for c in changes.iter().take(12) {
+        lines.push(format!(
+            "  {}: {} → {}",
+            c["name"].as_str().unwrap_or_default(),
+            c["from"].as_str().unwrap_or_default(),
+            c["to"].as_str().unwrap_or_default()
+        ));
+    }
+    if changes.len() > 12 {
+        lines.push(format!("  and {} more", changes.len() - 12));
+    }
+    if let Some(bytes) = preview["sizeChange"].as_i64() {
+        lines.push(format!(
+            "The system's files {} by {} MB.",
+            if bytes >= 0 { "grow" } else { "shrink" },
+            (bytes as f64 / 1e6).abs().round()
+        ));
+    }
+    if preview["reboot"] == true {
+        lines.push("Restart the computer afterwards: the kernel changes.".into());
+    }
+    if let Some(apps) = preview["restart"].as_array().filter(|a| !a.is_empty()) {
+        let names: Vec<&str> = apps.iter().filter_map(|a| a.as_str()).collect();
+        lines.push(format!("Reopen afterwards: {}.", names.join(", ")));
+    }
+    if others > 0 {
+        lines.push(format!("Your own apps and tools update too ({others})."));
+    }
+    lines.join("\n")
+}
+
+/// `nyx-system update WHAT… --yes --json` (`--finish`: the prepared system update), then
+/// a toast saying what came of it.
+fn run_update(what: &[&str], working: &str, finish: bool) {
     if busy() {
         window::toast("Another system change is still running.");
         return;
@@ -148,6 +266,9 @@ pub fn update(what: &[&str], working: &str) {
     window::toast(working);
     let mut args = vec!["nyx-system", "update"];
     args.extend_from_slice(what);
+    if finish {
+        args.push("--finish");
+    }
     args.extend(["--yes", "--json"]);
     cmd::run_async(&args, |r| {
         set_busy(false);
