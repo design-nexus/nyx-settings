@@ -1,9 +1,11 @@
-# Omarchy Settings
+# Settings
 
-A native control panel for [Omarchy](https://omarchy.org). One clean, searchable
+A native control panel for NyxOS and [Omarchy](https://omarchy.org). One clean, searchable
 window for everything you'd otherwise change by editing Lua files.
 
 ![Settings: Sound, with the 9-band equalizer and preamp](docs/audio.png)
+
+On NyxOS, Settings comes with the system. On Omarchy:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/design-nexus/nyx-settings/main/install.sh | bash -s -- settings
@@ -11,7 +13,7 @@ curl -fsSL https://raw.githubusercontent.com/design-nexus/nyx-settings/main/inst
 
 ## Features
 
-- **Home**: Settings opens on an overview of this computer: model, Omarchy,
+- **Home**: Settings opens on an overview of this computer: model, NyxOS or Omarchy,
   kernel and Hyprland versions, and uptime; gauges for processor, memory, disk,
   battery and temperature; live charts of the last minute of processor, memory,
   network and per-core use; every disk and the installed package count. It also
@@ -171,6 +173,8 @@ curl -fsSL https://raw.githubusercontent.com/design-nexus/nyx-settings/main/inst
 | ![Bar layout](docs/bar.png) | |
 
 ## Install
+
+On NyxOS, Settings comes with the system. On Omarchy:
 
 **One line** (downloads the latest release, or builds from source if there
 isn't a prebuilt one for your machine):
