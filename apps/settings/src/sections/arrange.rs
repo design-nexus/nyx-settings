@@ -61,6 +61,45 @@ pub fn snap(moving: &Rect, others: &[Rect]) -> (i64, i64) {
     (x.round() as i64, y.round() as i64)
 }
 
+/// Compress extreme gaps between disconnected monitors for display on the desk so
+/// far-away outputs (such as parked virtual monitors) don't shrink every screen to a dot.
+pub fn compact_gaps(rs: &[Rect]) -> Vec<Rect> {
+    const MAX_GAP: f64 = 320.0;
+    const SHOWN_GAP: f64 = 280.0;
+
+    fn compress_axis(intervals: &[(f64, f64)]) -> Vec<f64> {
+        if intervals.is_empty() {
+            return Vec::new();
+        }
+        let mut order: Vec<usize> = (0..intervals.len()).collect();
+        order.sort_by(|&a, &b| intervals[a].0.total_cmp(&intervals[b].0));
+        let mut shifts = vec![0.0; intervals.len()];
+        let mut cluster_end = intervals[order[0]].1;
+        let mut total_shift = 0.0;
+        for &idx in &order[1..] {
+            let (start, end) = intervals[idx];
+            let gap = start - cluster_end;
+            if gap > MAX_GAP {
+                total_shift += gap - SHOWN_GAP;
+            }
+            shifts[idx] = total_shift;
+            if end > cluster_end {
+                cluster_end = end;
+            }
+        }
+        shifts
+    }
+
+    let xs: Vec<(f64, f64)> = rs.iter().map(|r| (r.x, r.x + r.w)).collect();
+    let ys: Vec<(f64, f64)> = rs.iter().map(|r| (r.y, r.y + r.h)).collect();
+    let dx = compress_axis(&xs);
+    let dy = compress_axis(&ys);
+    rs.iter()
+        .enumerate()
+        .map(|(i, r)| Rect { name: r.name.clone(), x: r.x - dx[i], y: r.y - dy[i], w: r.w, h: r.h })
+        .collect()
+}
+
 /// Shift a layout so its top-left corner is at 0,0 (Hyprland's convention).
 pub fn normalise(rects: &mut [Rect]) {
     let min_x = rects.iter().map(|r| r.x).fold(f64::INFINITY, f64::min);
@@ -128,7 +167,7 @@ pub fn canvas(
         gesture.connect_drag_begin(move |_, px, py| {
             let (s, ox, oy) = view.get();
             let (lx, ly) = ((px - ox) / s, (py - oy) / s);
-            let rs = rects.borrow();
+            let rs = compact_gaps(&rects.borrow());
             // The last drawn is on top.
             let hit = rs.iter().rposition(|r| lx >= r.x && lx <= r.x + r.w && ly >= r.y && ly <= r.y + r.h);
             *drag.borrow_mut() = hit.map(|i| (i, lx - rs[i].x, ly - rs[i].y, false));
@@ -232,6 +271,8 @@ fn draw(
     if rs.is_empty() {
         return;
     }
+    let shown = compact_gaps(rs);
+    let rs = shown.as_slice();
     let min_x = rs.iter().map(|r| r.x).fold(f64::INFINITY, f64::min);
     let min_y = rs.iter().map(|r| r.y).fold(f64::INFINITY, f64::min);
     let max_x = rs.iter().map(|r| r.x + r.w).fold(f64::NEG_INFINITY, f64::max);
@@ -255,7 +296,7 @@ fn draw(
         sketch::rounded(cr, sr.x - 2.0, sr.y - 2.0, sr.w + 4.0, sr.h + 4.0, 7.0);
         sketch::set(cr, sketch::mix(p.bg, (0.0, 0.0, 0.0), 0.35), 1.0);
         let _ = cr.fill();
-        if sr.w > 40.0 && sr.h > 30.0 {
+        if sr.w > 24.0 && sr.h > 18.0 {
             sketch::desktop(cr, p, sr);
         } else {
             sketch::rounded(cr, sr.x, sr.y, sr.w, sr.h, 3.0);
@@ -413,5 +454,17 @@ mod tests {
         let mut v = vec![r("A", 0.0, 0.0, 10.0, 10.0), r("B", -20.0, -5.0, 20.0, 10.0)];
         normalise(&mut v);
         assert_eq!((v[0].x, v[0].y, v[1].x, v[1].y), (20.0, 5.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn compacts_far_apart_monitors() {
+        // Adjacent monitors keep their exact positions.
+        let near = compact_gaps(&[r("A", 0.0, 0.0, 1600.0, 1000.0), r("B", 1600.0, 0.0, 1920.0, 1080.0)]);
+        assert_eq!((near[1].x, near[1].y), (1600.0, 0.0));
+
+        // A monitor parked far off-screen is pulled within 280px on each axis.
+        let far = compact_gaps(&[r("eDP-2", 0.0, 0.0, 1600.0, 1000.0), r("HEADLESS-20", 20000.0, 20000.0, 1280.0, 800.0)]);
+        assert_eq!((far[0].x, far[0].y), (0.0, 0.0));
+        assert_eq!((far[1].x, far[1].y), (1880.0, 1280.0));
     }
 }

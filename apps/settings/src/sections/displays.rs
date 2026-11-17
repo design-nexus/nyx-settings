@@ -343,6 +343,9 @@ pub fn build(page: &Page) {
         let (m, l) = (monitors.clone(), live.clone());
         glib::idle_add_local_once(move || open(sub, m, l));
     }
+    page.body.connect_destroy(move |_| {
+        let _ = &chooser;
+    });
 }
 
 /// The preview: Extend, Mirror or One screen and Identify, the desk, and how big
@@ -514,7 +517,8 @@ fn draw_sample(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w
 /// Extend, Mirror or One screen: Omarchy's switches for a laptop's own screen, shown
 /// while another display is plugged in.
 fn screens_mode(monitors: &[Value]) -> Option<gtk::Box> {
-    if !laptop_tools() || !cmd::present("omarchy-hyprland-monitor-internal-mirror") || monitors.len() < 2 {
+    let physical_count = monitors.iter().filter(|m| !text(m, "name").starts_with("HEADLESS-")).count();
+    if !laptop_tools() || !cmd::present("omarchy-hyprland-monitor-internal-mirror") || physical_count < 2 {
         return None;
     }
     let current = if flag("internal-monitor-mirror") {
