@@ -15,6 +15,23 @@ use std::{
     rc::Rc,
 };
 
+/// Ask nyx-maild (if running) to rediscover Online Accounts and sync immediately.
+fn sync_mail() {
+    if let Ok(conn) = gtk::gio::bus_get_sync(gtk::gio::BusType::Session, None::<&gtk::gio::Cancellable>) {
+        let _ = conn.call_sync(
+            Some("io.github.design_nexus.nyx.MailEngine"),
+            "/io/github/design_nexus/nyx/MailEngine",
+            "io.github.design_nexus.nyx.MailEngine1",
+            "Sync",
+            Some(&("",).to_variant()),
+            None,
+            gtk::gio::DBusCallFlags::NO_AUTO_START,
+            2000,
+            None::<&gtk::gio::Cancellable>,
+        );
+    }
+}
+
 fn work<T: Send + 'static>(operation: impl FnOnce(Client) -> anyhow::Result<T> + Send + 'static) {
     cmd::background(
         move || operation(Client::connect()?),
@@ -292,7 +309,9 @@ fn account_preview(shown: &gtk::Box, foot: &gtk::Label, account: &Account) {
         cmd::background(
             move || {
                 nyx_pim::Registry::connect()?.preserve_account_cache(&id)?;
-                Client::connect()?.remove(&id)
+                Client::connect()?.remove(&id)?;
+                sync_mail();
+                Ok::<_, anyhow::Error>(())
             },
             move |result| match result {
                 Ok(()) => {
@@ -795,9 +814,15 @@ fn setup_account(provider: &'static str) {
                 let client = Client::connect()?;
                 let id = client.register(&account)?;
                 // Return the ID even if a later step fails, so retry cannot create duplicates.
-                let result = client
-                    .save_secret(&id, &credentials)
-                    .and_then(|_| if oauth { client.authorize(&id).map(Some) } else { Ok(None) });
+                let result = client.save_secret(&id, &credentials).and_then(|_| {
+                    if oauth {
+                        client.authorize(&id).map(Some)
+                    } else {
+                        let _ = client.call::<String>("CheckAccount", (id.as_str(),));
+                        sync_mail();
+                        Ok(None)
+                    }
+                });
                 Ok::<_, anyhow::Error>((id, result))
             },
             move |result| match result {
@@ -988,6 +1013,8 @@ fn sign_in_part(page: &Page, body: &gtk::Box, account: &Account, redo: Rc<dyn Fn
                             display_status(&status, &errors, &a);
                             result.set_text(if a.status == "connected" {
                                 "Checked just now: it answers."
+                            } else if a.status == "configured" && a.error.is_none() {
+                                "Checked just now: app password is saved (verified when Mail syncs)."
                             } else {
                                 "Checked just now: it needs attention, as the note above says."
                             });
@@ -1122,6 +1149,10 @@ fn sign_in_part(page: &Page, body: &gtk::Box, account: &Account, redo: Rc<dyn Fn
                     }
                     c.save_secret(&edited.id, &credentials)?;
                 }
+                if !oauth {
+                    let _ = c.call::<String>("CheckAccount", (edited.id.as_str(),));
+                }
+                sync_mail();
                 // Saving and opening the browser are separate outcomes: saved changes survive an authorization error.
                 Ok::<_, anyhow::Error>(if oauth { Some(c.authorize(&edited.id)) } else { None })
             },
