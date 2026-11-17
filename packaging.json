@@ -2,8 +2,7 @@
   "application": "settings",
   "directory": "settings",
   "packages": [
-    "nyx-settings",
-    "nyx-goa-helper"
+    "nyx-settings"
   ],
   "manifest": "Cargo.toml",
   "prepare": [],
