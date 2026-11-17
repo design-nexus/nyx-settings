@@ -1,5 +1,7 @@
 name: Independent application checks
 on:
+  push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -27,3 +29,21 @@ jobs:
           bash tools/ci-bootstrap.sh $deps
       - name: Locked build, targeted tests and package
         run: python3 tools/ci.py
+
+  # The NyxOS build (--features nyxos) and its tests, as nyx-packages ships it, with this
+  # commit in place of the pinned source.
+  nyxos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31
+        with:
+          github_access_token: ${{ github.token }}
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: nyxos
+      - name: Build and test the NyxOS package
+        run: |
+          nix build --print-build-logs "github:nyxos-project/nyx-packages#nyx-settings" \
+            --override-input nyx-settings "path:$GITHUB_WORKSPACE"
