@@ -292,7 +292,7 @@ pub fn build(page: &Page) {
 fn installed() -> Vec<(String, String)> {
     let mut services: Vec<(String, String)> = PROVIDERS
         .iter()
-        .filter(|p| p.tool.is_some_and(cmd::present))
+        .filter(|p| has_app(p))
         .map(|p| (p.id.to_string(), if p.id == "pia" { "Private Internet Access".to_string() } else { p.name.to_string() }))
         .collect();
     services.extend(nm_vpns().into_iter().map(|(name, uuid, _)| (format!("nm:{uuid}"), name)));
@@ -310,7 +310,7 @@ pub fn subpage() {
 
 /// How many VPN services are set up.
 pub fn count() -> usize {
-    PROVIDERS.iter().filter(|p| p.tool.is_some_and(cmd::present)).count() + nm_vpns().len()
+    PROVIDERS.iter().filter(|p| has_app(p)).count() + nm_vpns().len()
 }
 
 /// NetworkManager's VPN connections, as (name, uuid), and which the Control Center uses
@@ -333,7 +333,7 @@ fn services(page: &Page, on_add: impl Fn() + 'static) {
         g.add(&r);
     }
     let mut any = false;
-    for p in PROVIDERS.iter().filter(|p| p.tool.is_some_and(cmd::present)) {
+    for p in PROVIDERS.iter().filter(|p| has_app(p)) {
         any = true;
         let controls = widgets::hbox(6);
         if let Some(args) = p.sign_out {
@@ -398,7 +398,7 @@ fn providers(page: &Page) {
     let g = page.group("Add a VPN");
     g.note("Services with their own app are installed and signed in here; others come as a file from your account page.");
     for p in PROVIDERS {
-        let installed = p.tool.is_some_and(cmd::present);
+        let installed = has_app(p);
         let prov = *p;
         let label = match (p.install, installed) {
             (Install::None, _) => "Import…",
@@ -420,8 +420,31 @@ fn providers(page: &Page) {
     }
 }
 
+/// Whether the provider's app is installed: its command, or on NyxOS Proton's app
+/// (nixpkgs has Proton's window, `protonvpn-app`, not its command-line client).
+fn has_app(p: &Provider) -> bool {
+    p.tool.is_some_and(cmd::present) || (p.id == "proton" && cmd::present("protonvpn-app"))
+}
+
+/// NyxOS: the Store item with the provider's app, where nixpkgs has one.
+fn store_item(id: &str) -> Option<&'static str> {
+    match id {
+        "mullvad" => Some("mullvad-vpn"),
+        "proton" => Some("proton-vpn"),
+        _ => None,
+    }
+}
+
 fn set_up(p: Provider) {
-    let installed = p.tool.is_some_and(cmd::present);
+    let installed = has_app(&p);
+    if !installed
+        && crate::platform::PLATFORM == crate::platform::Platform::NyxOS
+        && let Some(item) = store_item(p.id)
+    {
+        cmd::spawn(&["nyx-store", "--search", item]);
+        window::toast(&format!("Install {} in the Store, then come back and sign in", p.name));
+        return;
+    }
     match (p.install, installed) {
         (Install::None, _) => sign_in(p),
         (_, true) => sign_in(p),
@@ -443,6 +466,8 @@ fn set_up(p: Provider) {
 
 fn sign_in(p: Provider) {
     match p.sign_in {
+        // Proton's app signs in in its own window.
+        SignIn::Terminal(_) if p.id == "proton" && !cmd::present("protonvpn") => cmd::spawn(&["protonvpn-app"]),
         SignIn::Terminal(command) => super::accounts::terminal(command),
         SignIn::App(path) => {
             cmd::spawn(&[path]);
