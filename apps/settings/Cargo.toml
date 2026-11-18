@@ -35,7 +35,7 @@ nyx-accounts-native = { package = "nyx-accounts-service", git = "https://github.
 # The nyx-core nyx-design uses (virtual monitors included), so the app carries one nyx-desktop.
 nyx-desktop = { git = "https://github.com/design-nexus/nyx-core.git", rev = "a258c315f056ac649586fdb55e98613056221411" }
 # Omarchy's scripts done on NyxOS (its lib has no dependencies).
-nyx-platform = { git = "https://github.com/design-nexus/nyx-core.git", rev = "efb68d7da4ab85db5a117d07808047ce8cf449eb" }
+nyx-platform = { git = "https://github.com/design-nexus/nyx-core.git", rev = "344b15583175a0de74d8de1311cd528a6199da55" }
 nyx-pim = { git = "https://github.com/design-nexus/nyx-core.git", rev = "2e7937ebd156a1df7d92457f9a3b35aecfc22ac9" }
 # At their own revisions: none depends on another nyx-core crate, so the
 # app still carries one nyx-core and one nyx-desktop.
