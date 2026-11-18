@@ -326,7 +326,7 @@ pub fn all_with(fresh: bool) -> Vec<Section> {
             files: Vec::new,
             build: Build::Native(printers::build),
             visible: always,
-            needs: &["program:lpstat"],
+            needs: &[],
         },
         Section {
             id: "disks",
