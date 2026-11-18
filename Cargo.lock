@@ -1905,7 +1905,7 @@ dependencies = [
 [[package]]
 name = "nyx-platform"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nyx-core.git?rev=7939b8f761583e80afd2eedd3c0f10a14321d114#7939b8f761583e80afd2eedd3c0f10a14321d114"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=efb68d7da4ab85db5a117d07808047ce8cf449eb#efb68d7da4ab85db5a117d07808047ce8cf449eb"
 
 [[package]]
 name = "nyx-settings"
