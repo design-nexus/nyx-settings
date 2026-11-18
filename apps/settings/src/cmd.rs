@@ -2,6 +2,34 @@
 
 pub use nyx_core::cmd::*;
 
+// nyx-core's run, output, present and spawn, with Omarchy's scripts this computer lacks
+// (NyxOS) done by `nyx-platform` instead: `omarchy-network-band …` runs as
+// `nyx-platform network-band …` there, with the same arguments and output.
+
+/// Run a command to completion and return its trimmed stdout.
+pub fn run(args: &[&str]) -> Result<String> {
+    let args = nyx_platform::resolve(args);
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    nyx_core::cmd::run(&refs)
+}
+
+/// Like [`run`] but returns `None` on any failure.
+pub fn output(args: &[&str]) -> Option<String> {
+    run(args).ok()
+}
+
+/// Is `program` on `PATH` (or a script `nyx-platform` stands in for)?
+pub fn present(program: &str) -> bool {
+    nyx_platform::present(program)
+}
+
+/// Fire and forget.
+pub fn spawn(args: &[&str]) {
+    let args = nyx_platform::resolve(args);
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    nyx_core::cmd::spawn(&refs);
+}
+
 use anyhow::Result;
 use gtk::{gio, glib};
 use std::sync::Mutex;

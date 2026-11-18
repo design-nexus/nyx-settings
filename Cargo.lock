@@ -1903,6 +1903,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "nyx-platform"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=7939b8f761583e80afd2eedd3c0f10a14321d114#7939b8f761583e80afd2eedd3c0f10a14321d114"
+
+[[package]]
 name = "nyx-settings"
 version = "0.1.1"
 dependencies = [
@@ -1919,6 +1924,7 @@ dependencies = [
  "nyx-desktop",
  "nyx-devices",
  "nyx-pim",
+ "nyx-platform",
  "nyx-share-client",
  "nyx-system-proto",
  "nyx-theme",

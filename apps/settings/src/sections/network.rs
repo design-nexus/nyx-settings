@@ -620,6 +620,7 @@ fn custom_servers(text: &str) -> String {
 }
 
 fn with_stdin(args: &[&str], text: &str) -> Result<(), String> {
+    let args = nyx_platform::resolve(args);
     let (program, rest) = args.split_first().ok_or("empty command")?;
     let mut child = Command::new(program)
         .args(rest)
@@ -734,7 +735,8 @@ fn speed(text: &str) -> Option<f64> {
 }
 
 fn measure(direction: &str) -> Option<f64> {
-    let out = Command::new("timeout").args(["8", "omarchy-network-speedtest", direction]).stdin(Stdio::null()).output().ok()?;
+    let test = nyx_platform::resolve(&["omarchy-network-speedtest", direction]);
+    let out = Command::new("timeout").arg("8").args(&test).stdin(Stdio::null()).output().ok()?;
     speed(&String::from_utf8_lossy(&out.stdout))
 }
 
