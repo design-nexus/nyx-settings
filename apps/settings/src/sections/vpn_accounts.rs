@@ -76,6 +76,8 @@ struct Provider {
     /// The account it's signed in to, or `None`; unknown for apps that don't say.
     account: Option<fn() -> Option<String>>,
     sign_out: Option<fn() -> anyhow::Result<()>>,
+    /// A group its app wants you in; joining takes effect at the next login.
+    group: Option<&'static str>,
 }
 
 const PROVIDERS: &[Provider] = &[
@@ -88,6 +90,7 @@ const PROVIDERS: &[Provider] = &[
         sign_in: SignIn::Browser { start: &["nordvpn", "login"] },
         account: Some(nord_account),
         sign_out: Some(|| run_quiet(&["nordvpn", "logout", "--persist-token"])),
+        group: Some("nordvpn"),
     },
     Provider {
         id: "express",
@@ -102,6 +105,7 @@ const PROVIDERS: &[Provider] = &[
         },
         account: Some(express_account),
         sign_out: Some(express_logout),
+        group: None,
     },
     Provider {
         id: "mullvad",
@@ -112,6 +116,7 @@ const PROVIDERS: &[Provider] = &[
         sign_in: SignIn::Code { label: "Account number", help: "https://mullvad.net/account", run: mullvad_login },
         account: Some(mullvad_account),
         sign_out: Some(|| run_quiet(&["mullvad", "account", "logout"])),
+        group: None,
     },
     Provider {
         id: "proton",
@@ -122,6 +127,7 @@ const PROVIDERS: &[Provider] = &[
         sign_in: SignIn::App("protonvpn-app"),
         account: None,
         sign_out: None,
+        group: None,
     },
 ];
 
@@ -437,6 +443,8 @@ fn providers(page: &Page) {
 enum State {
     Busy(String),
     NotInstalled,
+    /// Installed and you're in its group, but this session started before you joined.
+    LogInAgain,
     Checking,
     SignedOut,
     SignedIn(String),
@@ -450,6 +458,9 @@ fn state(p: &Provider) -> State {
     }
     if !has_app(p) {
         return State::NotInstalled;
+    }
+    if p.group.is_some_and(|g| !in_session_group(g)) {
+        return State::LogInAgain;
     }
     let Some(account) = p.account else { return State::Installed };
     match ACCOUNTS.with(|a| a.borrow().get(p.id).cloned()) {
@@ -485,6 +496,10 @@ fn provider_row(p: Provider) -> gtk::Box {
             b.connect_clicked(move |_| install(p));
             (p.desc.to_string(), b.upcast())
         }
+        State::LogInAgain => {
+            let b = widgets::confirm_button("Log out", "Click again to log out now", |_| cmd::spawn(&["uwsm", "stop"]));
+            ("Installed · log out and back in once to finish (your account just joined its group)".to_string(), b.upcast())
+        }
         State::Checking => (format!("{} · checking…", p.desc), gtk::Spinner::new().upcast()),
         State::SignedOut | State::Installed => {
             let b = gtk::Button::with_label("Sign in");
@@ -519,6 +534,11 @@ fn failed(title: &str, detail: &str) {
     gtk::AlertDialog::builder().message(title).detail(detail).modal(true).build().show(window::window().as_ref());
 }
 
+/// Whether this session has `group`, which the account may have joined since it began.
+fn in_session_group(group: &str) -> bool {
+    cmd::output(&["id", "-nG"]).is_some_and(|out| out.split_whitespace().any(|g| g == group))
+}
+
 /// Whether the provider's app is installed.
 fn has_app(p: &Provider) -> bool {
     p.tools.iter().any(|t| cmd::present(t))
@@ -531,6 +551,13 @@ fn install(p: Provider) {
     cmd::run_async(&["nyx-system", "catalog", "install", p.item, "--yes"], move |r| {
         set_busy(p.id, None);
         match r {
+            Ok(_) if has_app(&p) && p.group.is_some_and(|g| !in_session_group(g)) => {
+                failed(
+                    &format!("{} is installed", p.name),
+                    &format!("Log out and back in once, then come back here and choose Sign in. Your account just joined the {} group, and this session started before that.", p.group.unwrap_or_default()),
+                );
+                refresh();
+            }
             Ok(_) if has_app(&p) => {
                 window::toast(&format!("{} installed. Now sign in.", p.name));
                 recheck(p.id);
