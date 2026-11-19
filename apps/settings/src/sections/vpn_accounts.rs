@@ -1,20 +1,29 @@
 //! VPN services, under Online Accounts and on Network: the ones set up, and adding one.
 //! The Control Center's VPN tile then works with whatever is set up here.
 //!
-//! - Services with their own Linux tool (NordVPN, ExpressVPN, Private Internet Access,
-//!   Mullvad, Proton VPN): install it, then sign in the way that tool does.
-//! - Anything else (Surfshark, Windscribe, Proton's WireGuard files, your own server): a
+//! - Services with their own app (NordVPN, ExpressVPN, Mullvad, Proton VPN): installed
+//!   here from the catalog (the System Manager asks for the password), then signed in
+//!   the way that app does, one step at a time on the same row.
+//! - Anything else (Surfshark, PIA, Windscribe, a work VPN, your own server): a
 //!   WireGuard (`.conf`) or OpenVPN (`.ovpn`) file imported into NetworkManager.
 //!
-//! Secrets (an activation code, an account number) go to the tool on stdin or in a
+//! Secrets (an activation code, an account number) go to the app on stdin or in a
 //! private temporary file removed straight after, never on a command line.
 
 use crate::widgets::{self, Page};
 use crate::{cmd, window};
 use gtk::prelude::*;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::Write;
 
-thread_local! { static ADDING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+thread_local! {
+    static ADDING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// What a provider's row is doing now ("Installing…"), shown instead of its state.
+    static BUSY: RefCell<HashMap<&'static str, String>> = RefCell::new(HashMap::new());
+    /// Each installed provider's account, once asked: `Some(name)` signed in, `None` not.
+    static ACCOUNTS: RefCell<HashMap<&'static str, Option<String>>> = RefCell::new(HashMap::new());
+}
 
 pub fn adding() -> bool {
     ADDING.with(|a| a.get())
@@ -31,28 +40,27 @@ fn refresh() {
     window::rebuild_if_built("network");
 }
 
-/// How a service is installed.
-#[derive(Clone, Copy)]
-enum Install {
-    /// From the AUR, then these commands (as root, in the same terminal).
-    Aur(&'static str, &'static str),
-    /// From the provider's page.
-    Page(&'static str),
-    /// Nothing to install: a file into NetworkManager.
-    None,
+fn busy(id: &'static str) -> Option<String> {
+    BUSY.with(|b| b.borrow().get(id).cloned())
 }
 
-/// How you sign in once it's installed.
+fn set_busy(id: &'static str, what: Option<&str>) {
+    BUSY.with(|b| match what {
+        Some(w) => b.borrow_mut().insert(id, w.to_string()),
+        None => b.borrow_mut().remove(id),
+    });
+    refresh();
+}
+
+/// How you sign in once the app is installed.
 #[derive(Clone, Copy)]
 enum SignIn {
-    /// A command that asks in a terminal (or opens the browser).
-    Terminal(&'static str),
-    /// A code typed here, handed to the tool.
-    Code { label: &'static str, run: fn(&str) -> anyhow::Result<()> },
-    /// The provider's own app.
+    /// In the browser: the app prints the page to open, and its account shows once done.
+    Browser { start: &'static [&'static str] },
+    /// A code typed here, handed to the app; `help` is where the code is found.
+    Code { label: &'static str, help: &'static str, run: fn(&str) -> anyhow::Result<()> },
+    /// In the provider's own window.
     App(&'static str),
-    /// Import a WireGuard or OpenVPN file (from `page`).
-    File(Option<&'static str>),
 }
 
 #[derive(Clone, Copy)]
@@ -60,100 +68,126 @@ struct Provider {
     id: &'static str,
     name: &'static str,
     desc: &'static str,
-    /// The program that shows it's installed.
-    tool: Option<&'static str>,
-    install: Install,
+    /// The catalog item that installs it (`nyx-system catalog install`).
+    item: &'static str,
+    /// Programs that show it's installed (any of them).
+    tools: &'static [&'static str],
     sign_in: SignIn,
-    /// Signing out (when the tool has a command for it).
-    sign_out: Option<&'static [&'static str]>,
+    /// The account it's signed in to, or `None`; unknown for apps that don't say.
+    account: Option<fn() -> Option<String>>,
+    sign_out: Option<fn() -> anyhow::Result<()>>,
 }
 
 const PROVIDERS: &[Provider] = &[
     Provider {
         id: "nord",
         name: "NordVPN",
-        desc: "Its own app; sign in in the browser",
-        tool: Some("nordvpn"),
-        install: Install::Aur("nordvpn-bin", "sudo systemctl enable --now nordvpnd && sudo usermod -aG nordvpn \"$USER\""),
-        sign_in: SignIn::Terminal("nordvpn login"),
-        sign_out: Some(&["nordvpn", "logout", "--persist-token"]),
+        desc: "NordLynx, the fastest server, every country and city",
+        item: "nordvpn",
+        tools: &["nordvpn"],
+        sign_in: SignIn::Browser { start: &["nordvpn", "login"] },
+        account: Some(nord_account),
+        sign_out: Some(|| run_quiet(&["nordvpn", "logout", "--persist-token"])),
     },
     Provider {
         id: "express",
         name: "ExpressVPN",
-        desc: "Its own app; sign in with your activation code",
-        tool: Some("expressvpnctl"),
-        install: Install::Aur("expressvpn", "true"),
-        sign_in: SignIn::Code { label: "Activation code", run: express_login },
-        sign_out: Some(&["expressvpnctl", "logout"]),
-    },
-    Provider {
-        id: "proton",
-        name: "Proton VPN",
-        desc: "Its own app (beta), or a WireGuard file from your Proton account",
-        tool: Some("protonvpn"),
-        install: Install::Page("https://protonvpn.com/support/linux-cli"),
-        sign_in: SignIn::Terminal("protonvpn signin"),
-        sign_out: Some(&["protonvpn", "signout"]),
-    },
-    Provider {
-        id: "pia",
-        name: "Private Internet Access",
-        desc: "Its own app; sign in there once",
-        tool: Some("piactl"),
-        install: Install::Aur("piavpn-bin", "true"),
-        sign_in: SignIn::App("/opt/piavpn/bin/pia-client"),
-        sign_out: Some(&["piactl", "logout"]),
+        desc: "Sign in with the activation code from your account",
+        item: "expressvpn",
+        tools: &["expressvpnctl", "expressvpn"],
+        sign_in: SignIn::Code {
+            label: "Activation code",
+            help: "https://www.expressvpn.com/setup",
+            run: express_login,
+        },
+        account: Some(express_account),
+        sign_out: Some(express_logout),
     },
     Provider {
         id: "mullvad",
         name: "Mullvad",
-        desc: "Its own app; sign in with your account number",
-        tool: Some("mullvad"),
-        install: Install::Aur("mullvad-vpn-bin", "sudo systemctl enable --now mullvad-daemon"),
-        sign_in: SignIn::Code { label: "Account number", run: mullvad_login },
-        sign_out: Some(&["mullvad", "account", "logout"]),
+        desc: "Sign in with your account number",
+        item: "mullvad-vpn",
+        tools: &["mullvad"],
+        sign_in: SignIn::Code { label: "Account number", help: "https://mullvad.net/account", run: mullvad_login },
+        account: Some(mullvad_account),
+        sign_out: Some(|| run_quiet(&["mullvad", "account", "logout"])),
     },
     Provider {
-        id: "surfshark",
-        name: "Surfshark",
-        desc: "A WireGuard file from your Surfshark account",
-        tool: None,
-        install: Install::None,
-        sign_in: SignIn::File(Some("https://my.surfshark.com/vpn/manual-setup/main/wireguard")),
-        sign_out: None,
-    },
-    Provider {
-        id: "windscribe",
-        name: "Windscribe",
-        desc: "A WireGuard file from your Windscribe account",
-        tool: None,
-        install: Install::None,
-        sign_in: SignIn::File(Some("https://windscribe.com/getconfig/wireguard")),
-        sign_out: None,
-    },
-    Provider {
-        id: "proton-file",
-        name: "Proton VPN (WireGuard)",
-        desc: "A WireGuard file from your Proton account, no app needed",
-        tool: None,
-        install: Install::None,
-        sign_in: SignIn::File(Some("https://account.protonvpn.com/downloads")),
-        sign_out: None,
-    },
-    Provider {
-        id: "other",
-        name: "Other",
-        desc: "Any WireGuard (.conf) or OpenVPN (.ovpn) file",
-        tool: None,
-        install: Install::None,
-        sign_in: SignIn::File(None),
+        id: "proton",
+        name: "Proton VPN",
+        desc: "Sign in in Proton's window",
+        item: "proton-vpn",
+        tools: &["protonvpn-app", "protonvpn"],
+        sign_in: SignIn::App("protonvpn-app"),
+        account: None,
         sign_out: None,
     },
 ];
 
-/// ExpressVPN: the code goes in a private file (it reads it from there), removed after.
+fn run_quiet(args: &[&str]) -> anyhow::Result<()> {
+    let out = std::process::Command::new(args[0]).args(&args[1..]).output()?;
+    if !out.status.success() {
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+    }
+    Ok(())
+}
+
+/// The first `Key: value` line among `keys` in a command's output.
+fn field(args: &[&str], keys: &[&str]) -> Option<String> {
+    let out = cmd::output(args)?;
+    out.lines().find_map(|l| {
+        let (k, v) = l.split_once(':')?;
+        keys.iter().any(|key| k.trim().eq_ignore_ascii_case(key)).then(|| v.trim().to_string()).filter(|v| !v.is_empty())
+    })
+}
+
+fn nord_account() -> Option<String> {
+    field(&["nordvpn", "account"], &["Email Address", "Email"])
+}
+
+fn mullvad_account() -> Option<String> {
+    field(&["mullvad", "account", "get"], &["Mullvad account"]).map(|n| format!("account {n}"))
+}
+
+/// ExpressVPN 4 (`expressvpnctl`) or 3 (`expressvpn`, as nixpkgs has it).
+fn express_v4() -> bool {
+    cmd::present("expressvpnctl")
+}
+
+fn express_account() -> Option<String> {
+    if express_v4() {
+        let out = cmd::output(&["expressvpnctl", "get", "activated"])?;
+        (out.trim() == "true").then(|| "activated".to_string())
+    } else {
+        let out = cmd::output(&["expressvpn", "status"])?;
+        (!out.to_lowercase().contains("not activated")).then(|| "activated".to_string())
+    }
+}
+
+fn express_logout() -> anyhow::Result<()> {
+    if express_v4() { run_quiet(&["expressvpnctl", "logout"]) } else { run_quiet(&["expressvpn", "logout"]) }
+}
+
+/// ExpressVPN: v4 reads the code from a private file (removed after); v3 asks for it,
+/// then whether to share diagnostics (no), on stdin.
 fn express_login(code: &str) -> anyhow::Result<()> {
+    if !express_v4() {
+        let mut child = std::process::Command::new("expressvpn")
+            .arg("activate")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?;
+        if let Some(mut stdin) = child.stdin.take() {
+            writeln!(stdin, "{}\nn", code.trim())?;
+        }
+        let out = child.wait_with_output()?;
+        if !out.status.success() {
+            anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+        }
+        return Ok(());
+    }
     let dir = gtk::glib::user_runtime_dir();
     let path = dir.join(format!("nyx-expressvpn-{}", std::process::id()));
     {
@@ -248,6 +282,8 @@ fn set_chosen(id: &str) {
 
 /// The VPN group on the Online Accounts page: which VPN the Control Center's tile
 /// connects, and adding one. Signing in and out of each is under Network › VPN services.
+/// The VPN group on the Online Accounts page: which VPN the Control Center's tile
+/// connects, and adding one. Signing in and out of each is under Network › VPN services.
 pub fn build(page: &Page) {
     let g = page.group("VPN");
     let services = installed();
@@ -255,7 +291,7 @@ pub fn build(page: &Page) {
         g.add(&widgets::icon_row(
             "security-high-symbolic",
             "No VPN yet",
-            "NordVPN, ExpressVPN, Proton, PIA, Mullvad, or a WireGuard or OpenVPN file",
+            "NordVPN, ExpressVPN, Mullvad, Proton, or a WireGuard or OpenVPN file",
             None,
         ));
     } else {
@@ -284,7 +320,7 @@ pub fn build(page: &Page) {
     }
     g.add(&super::accounts::add_row("Add a VPN", || show_add(true)));
     widgets::keywords(
-        "vpn control center tile nordvpn expressvpn proton pia private internet access mullvad surfshark windscribe wireguard openvpn",
+        "vpn control center tile nordvpn expressvpn proton mullvad surfshark pia windscribe wireguard openvpn",
     );
 }
 
@@ -293,7 +329,7 @@ fn installed() -> Vec<(String, String)> {
     let mut services: Vec<(String, String)> = PROVIDERS
         .iter()
         .filter(|p| has_app(p))
-        .map(|p| (p.id.to_string(), if p.id == "pia" { "Private Internet Access".to_string() } else { p.name.to_string() }))
+        .map(|p| (p.id.to_string(), p.name.to_string()))
         .collect();
     services.extend(nm_vpns().into_iter().map(|(name, uuid, _)| (format!("nm:{uuid}"), name)));
     services
@@ -320,6 +356,8 @@ pub fn nm_connections() -> (Vec<(String, String)>, Option<String>) {
 }
 
 /// Each VPN set up, with signing in and out or removing it (Network › VPN services).
+
+/// Each VPN set up, with signing in and out or removing it (Network › VPN services).
 fn services(page: &Page, on_add: impl Fn() + 'static) {
     let g = page.group("VPN");
     g.note("The Control Center's VPN tile shows the one chosen here.");
@@ -335,23 +373,7 @@ fn services(page: &Page, on_add: impl Fn() + 'static) {
     let mut any = false;
     for p in PROVIDERS.iter().filter(|p| has_app(p)) {
         any = true;
-        let controls = widgets::hbox(6);
-        if let Some(args) = p.sign_out {
-            let name = p.name;
-            let b = widgets::confirm_button("Sign out", "Click again to sign out", move |_| {
-                cmd::run_async(args, move |r| match r {
-                    Ok(_) => window::toast(&format!("Signed out of {name}")),
-                    Err(e) => window::toast(&format!("{name}: {e}")),
-                });
-            });
-            controls.append(&b);
-        }
-        let prov = *p;
-        let b = gtk::Button::with_label("Sign in");
-        b.set_tooltip_text(Some(&format!("Sign in to {} again", p.name)));
-        b.connect_clicked(move |_| sign_in(prov));
-        controls.append(&b);
-        g.add(&widgets::row(p.name, "Installed; connect from the Control Center", Some(controls.upcast_ref())));
+        g.add(&provider_row(*p));
     }
     for (name, uuid, kind) in nm_vpns() {
         any = true;
@@ -369,19 +391,19 @@ fn services(page: &Page, on_add: impl Fn() + 'static) {
         g.add(&widgets::row(&name, &format!("{kind} connection"), Some(del.upcast_ref())));
     }
     if !any {
-        g.add(&widgets::row("No VPN set up", "Add NordVPN, ExpressVPN, Proton, PIA, Mullvad or a WireGuard/OpenVPN file.", None));
+        g.add(&widgets::row("No VPN set up", "Add NordVPN, ExpressVPN, Mullvad, Proton, or a WireGuard or OpenVPN file.", None));
     }
     let (r, _) = widgets::button_row(
         "Add a VPN",
-        "Choose a service, then install and sign in, or import its file.",
+        "Install a VPN's app and sign in, or import a WireGuard or OpenVPN file.",
         "Add…",
         move |_| on_add(),
     );
     g.add(&r);
-    widgets::keywords("vpn nordvpn expressvpn proton pia private internet access mullvad surfshark windscribe wireguard openvpn");
+    widgets::keywords("vpn nordvpn expressvpn proton mullvad surfshark pia windscribe wireguard openvpn");
 }
 
-/// Choosing a service to add.
+/// Choosing a service to add (Online Accounts).
 pub fn add_page(page: &Page) {
     let back = gtk::Button::from_icon_name("go-previous-symbolic");
     back.set_tooltip_text(Some("Back to accounts"));
@@ -393,94 +415,143 @@ pub fn add_page(page: &Page) {
     providers(page);
 }
 
-/// Every service there is to add.
+/// Every service there is to add: one row each, with the one thing to do next, and a
+/// file for anything else.
 fn providers(page: &Page) {
-    let g = page.group("Add a VPN");
-    g.note("Services with their own app are installed and signed in here; others come as a file from your account page.");
+    let g = page.group("VPN apps");
+    g.note("Installs the provider's own app, then signs you in. The Control Center's VPN tile connects it.");
     for p in PROVIDERS {
-        let installed = has_app(p);
-        let prov = *p;
-        let label = match (p.install, installed) {
-            (Install::None, _) => "Import…",
-            (_, true) => "Sign in",
-            (Install::Aur(..), false) if aur_missing() => "Import…",
-            (Install::Aur(..), false) => "Install",
-            (Install::Page(_), false) => "Get it",
-        };
-        let b = gtk::Button::with_label(label);
-        b.connect_clicked(move |_| set_up(prov));
-        let desc = match (p.install, installed) {
-            (_, true) => format!("{} · installed", p.desc),
-            (Install::Aur(..), false) if aur_missing() => {
-                "Its app isn't available on NyxOS: import a WireGuard or OpenVPN file from your account".to_string()
+        g.add(&provider_row(*p));
+    }
+    let g = page.group("Anything else");
+    let (r, _) = widgets::button_row(
+        "Import a WireGuard or OpenVPN file",
+        "Surfshark, PIA, Windscribe, Proton's WireGuard files, a work VPN or your own server: download the file from your account, then choose it here.",
+        "Choose file…",
+        |_| import_file(),
+    );
+    g.add(&r);
+}
+
+/// Where a provider is: installing or signing in now, not installed, signed in or not.
+enum State {
+    Busy(String),
+    NotInstalled,
+    Checking,
+    SignedOut,
+    SignedIn(String),
+    /// Installed, by an app that doesn't say whether it's signed in.
+    Installed,
+}
+
+fn state(p: &Provider) -> State {
+    if let Some(what) = busy(p.id) {
+        return State::Busy(what);
+    }
+    if !has_app(p) {
+        return State::NotInstalled;
+    }
+    let Some(account) = p.account else { return State::Installed };
+    match ACCOUNTS.with(|a| a.borrow().get(p.id).cloned()) {
+        Some(Some(name)) => State::SignedIn(name),
+        Some(None) => State::SignedOut,
+        None => {
+            // Asked off the main thread (the apps' daemons can take a moment).
+            let id = p.id;
+            cmd::background(account, move |name| {
+                ACCOUNTS.with(|a| a.borrow_mut().insert(id, name));
+                refresh();
+            });
+            State::Checking
+        }
+    }
+}
+
+/// Forget what was learnt about a provider's account, so the row asks again.
+fn recheck(id: &'static str) {
+    ACCOUNTS.with(|a| a.borrow_mut().remove(id));
+}
+
+fn provider_row(p: Provider) -> gtk::Box {
+    let (desc, control): (String, gtk::Widget) = match state(&p) {
+        State::Busy(what) => {
+            let spinner = gtk::Spinner::new();
+            spinner.start();
+            (what, spinner.upcast())
+        }
+        State::NotInstalled => {
+            let b = gtk::Button::with_label("Install");
+            b.add_css_class("suggested-action");
+            b.connect_clicked(move |_| install(p));
+            (p.desc.to_string(), b.upcast())
+        }
+        State::Checking => (format!("{} · checking…", p.desc), gtk::Spinner::new().upcast()),
+        State::SignedOut | State::Installed => {
+            let b = gtk::Button::with_label("Sign in");
+            b.add_css_class("suggested-action");
+            b.connect_clicked(move |_| sign_in(p));
+            ("Installed · not signed in".to_string(), b.upcast())
+        }
+        State::SignedIn(name) => {
+            let controls = widgets::hbox(6);
+            if let Some(sign_out) = p.sign_out {
+                let b = widgets::confirm_button("Sign out", "Click again to sign out", move |_| {
+                    cmd::background(sign_out, move |r| {
+                        match r {
+                            Ok(()) => window::toast(&format!("Signed out of {}", p.name)),
+                            Err(e) => window::toast(&format!("{}: {e:#}", p.name)),
+                        }
+                        recheck(p.id);
+                        refresh();
+                    });
+                });
+                controls.append(&b);
             }
-            _ => p.desc.to_string(),
-        };
-        g.add(&widgets::row(p.name, &desc, Some(b.upcast_ref())));
-    }
+            (format!("Signed in · {name} · connect from the Control Center"), controls.upcast())
+        }
+    };
+    widgets::icon_row("security-high-symbolic", p.name, &gtk::glib::markup_escape_text(&desc), Some(&control))
 }
 
-/// Whether the provider's app is installed: its command, or on NyxOS Proton's app
-/// (nixpkgs has Proton's window, `protonvpn-app`, not its command-line client).
+/// Whether the provider's app is installed.
 fn has_app(p: &Provider) -> bool {
-    p.tool.is_some_and(cmd::present) || (p.id == "proton" && cmd::present("protonvpn-app"))
+    p.tools.iter().any(|t| cmd::present(t))
 }
 
-/// NyxOS: the Store item with the provider's app, where nixpkgs has one.
-fn store_item(id: &str) -> Option<&'static str> {
-    match id {
-        "mullvad" => Some("mullvad-vpn"),
-        "proton" => Some("proton-vpn"),
-        _ => None,
-    }
-}
-
-fn set_up(p: Provider) {
-    let installed = has_app(&p);
-    if !installed
-        && crate::platform::PLATFORM == crate::platform::Platform::NyxOS
-        && let Some(item) = store_item(p.id)
-    {
-        cmd::spawn(&["nyx-store", "--search", item]);
-        window::toast(&format!("Install {} in the Store, then come back and sign in", p.name));
-        return;
-    }
-    match (p.install, installed) {
-        (Install::None, _) => sign_in(p),
-        (_, true) => sign_in(p),
-        // NyxOS has no AUR: the provider's own WireGuard or OpenVPN file instead.
-        (Install::Aur(..), false) if aur_missing() => import_file(p.name, None),
-        (Install::Aur(pkg, then), false) => {
-            // In a terminal: the AUR build and sudo need one. Sign in afterwards.
-            let command =
-                format!("omarchy-pkg-aur-add {pkg} && {then} && echo && echo 'Installed. Back in Settings, choose Sign in.'");
-            super::accounts::terminal(&command);
-            window::toast(&format!("Installing {} in a terminal; sign in when it's done", p.name));
+/// Install the provider's app from the catalog (the System Manager asks for the
+/// password), then go straight on to signing in.
+fn install(p: Provider) {
+    set_busy(p.id, Some("Installing… (asks for your password; takes a minute or two)"));
+    cmd::run_async(&["nyx-system", "catalog", "install", p.item, "--yes"], move |r| {
+        set_busy(p.id, None);
+        match r {
+            Ok(_) if has_app(&p) => {
+                window::toast(&format!("{} installed. Now sign in.", p.name));
+                recheck(p.id);
+                sign_in(p);
+            }
+            Ok(_) => window::toast(&format!("{} installed; open Settings again if it doesn't show", p.name)),
+            Err(e) => window::toast(&format!("Couldn't install {}: {e:#}", p.name)),
         }
-        (Install::Page(url), false) => {
-            cmd::spawn(&["xdg-open", url]);
-            window::toast(&format!("Install {} from its page, then come back and sign in", p.name));
-        }
-    }
+    });
 }
 
 fn sign_in(p: Provider) {
     match p.sign_in {
-        // Proton's app signs in in its own window.
-        SignIn::Terminal(_) if p.id == "proton" && !cmd::present("protonvpn") => cmd::spawn(&["protonvpn-app"]),
-        SignIn::Terminal(command) => super::accounts::terminal(command),
-        SignIn::App(path) => {
-            cmd::spawn(&[path]);
-            // The tile can then connect without the app's window open.
-            if p.id == "pia" {
-                cmd::spawn(&["piactl", "background", "enable"]);
-            }
+        SignIn::App(program) => {
+            cmd::spawn(&[program]);
+            window::toast(&format!("Sign in in {}'s window", p.name));
         }
-        SignIn::Code { label, run } => {
+        SignIn::Browser { start } => browser_sign_in(p, start),
+        SignIn::Code { label, help, run } => {
             let name = p.name;
+            let help_page = help;
+            window::toast_action(&format!("Your {} is on your {name} account page", label.to_lowercase()), "Open it", move || {
+                cmd::spawn(&["xdg-open", help_page])
+            });
             crate::dialog::ask(
                 &format!("Sign in to {name}"),
-                &format!("Your {} from {name}'s website.", label.to_lowercase()),
+                &format!("Type the {} from your {name} account ({help}).", label.to_lowercase()),
                 vec![crate::dialog::Field::secret(label)],
                 "Sign in",
                 None,
@@ -491,7 +562,8 @@ fn sign_in(p: Provider) {
                     }
                     match run(&code) {
                         Ok(()) => {
-                            window::toast(&format!("Signed in to {name}"));
+                            window::toast(&format!("Signed in to {name}. Connect from the Control Center's VPN tile."));
+                            recheck(p.id);
                             refresh();
                             None
                         }
@@ -500,16 +572,51 @@ fn sign_in(p: Provider) {
                 },
             );
         }
-        SignIn::File(page) => import_file(p.name, page),
     }
 }
 
-/// Software comes from the system configuration, not the AUR (NyxOS).
-fn aur_missing() -> bool {
-    crate::platform::PLATFORM == crate::platform::Platform::NyxOS || !cmd::present("omarchy-pkg-aur-add")
+/// Start the app's browser sign-in, open the page it names, and wait (up to five
+/// minutes) for its account to show.
+fn browser_sign_in(p: Provider, start: &'static [&'static str]) {
+    set_busy(p.id, Some("Opening the sign-in page…"));
+    cmd::background(
+        move || {
+            let out = std::process::Command::new(start[0]).args(&start[1..]).output().ok()?;
+            let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+            text.split_whitespace().find(|w| w.starts_with("https://")).map(String::from).or_else(|| {
+                // Already signed in, or it opened the browser itself.
+                Some(String::new())
+            })
+        },
+        move |url| {
+            if let Some(url) = url.filter(|u| !u.is_empty()) {
+                cmd::spawn(&["xdg-open", &url]);
+            }
+            set_busy(p.id, Some("Finish signing in in your browser…"));
+            wait_for_account(p, 150);
+        },
+    );
 }
 
-/// NetworkManager's OpenVPN plugin: Arch's path, or NixOS's (`networking.networkmanager.plugins`).
+fn wait_for_account(p: Provider, tries: u32) {
+    let Some(account) = p.account else { return set_busy(p.id, None) };
+    gtk::glib::timeout_add_seconds_local_once(2, move || {
+        cmd::background(account, move |name| match name {
+            Some(name) => {
+                ACCOUNTS.with(|a| a.borrow_mut().insert(p.id, Some(name)));
+                set_busy(p.id, None);
+                window::toast(&format!("Signed in to {}. Connect from the Control Center's VPN tile.", p.name));
+            }
+            None if tries > 1 => wait_for_account(p, tries - 1),
+            None => {
+                set_busy(p.id, None);
+                window::toast(&format!("Still not signed in to {}; try Sign in again", p.name));
+            }
+        });
+    });
+}
+
+/// NetworkManager's OpenVPN plugin, which OpenVPN files need.
 fn openvpn_plugin() -> bool {
     ["/usr/lib/NetworkManager/VPN", "/etc/NetworkManager/VPN"]
         .iter()
@@ -517,10 +624,7 @@ fn openvpn_plugin() -> bool {
 }
 
 /// Pick a WireGuard or OpenVPN file and import it into NetworkManager.
-fn import_file(provider: &'static str, page: Option<&'static str>) {
-    if let Some(url) = page {
-        cmd::spawn(&["xdg-open", url]);
-    }
+fn import_file() {
     let filter = gtk::FileFilter::new();
     filter.set_name(Some("WireGuard or OpenVPN files"));
     filter.add_suffix("conf");
@@ -528,7 +632,7 @@ fn import_file(provider: &'static str, page: Option<&'static str>) {
     let filters = gtk::gio::ListStore::new::<gtk::FileFilter>();
     filters.append(&filter);
     let dialog = gtk::FileDialog::builder()
-        .title(format!("Choose the {provider} file"))
+        .title("Choose a WireGuard or OpenVPN file")
         .accept_label("Import")
         .filters(&filters)
         .modal(true)
@@ -538,28 +642,16 @@ fn import_file(provider: &'static str, page: Option<&'static str>) {
         let Some(path) = file.path() else { return };
         let openvpn = path.extension().is_some_and(|e| e == "ovpn");
         if openvpn && !openvpn_plugin() {
-            if aur_missing() {
-                window::toast("OpenVPN files need NetworkManager's OpenVPN plugin, which this system doesn't include");
-                return;
-            }
-            super::accounts::terminal(
-                "omarchy-pkg-add networkmanager-openvpn && echo && echo 'Done. Import the file again in Settings.'",
-            );
-            window::toast("OpenVPN files need NetworkManager's OpenVPN plugin: installing it in a terminal");
+            window::toast("OpenVPN files need NetworkManager's OpenVPN plugin, which isn't installed");
             return;
         }
         let kind = if openvpn { "openvpn" } else { "wireguard" };
         let p = path.to_string_lossy().to_string();
         cmd::run_async(&["nmcli", "connection", "import", "type", kind, "file", &p], move |r| match r {
             Ok(out) => {
-                // "Connection 'wg0' (uuid) successfully added." Name it after the provider.
-                if provider != "Other"
-                    && let Some(uuid) = out.split(['(', ')']).nth(1)
-                {
-                    let name =
-                        format!("{provider} · {}", path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default());
-                    cmd::spawn(&["nmcli", "connection", "modify", "uuid", uuid, "connection.id", &name]);
-                    // Not on by itself: the Control Center connects it.
+                // "Connection 'wg0' (uuid) successfully added." Not on by itself: the
+                // Control Center connects it.
+                if let Some(uuid) = out.split(['(', ')']).nth(1) {
                     cmd::spawn(&["nmcli", "connection", "modify", "uuid", uuid, "connection.autoconnect", "no"]);
                 }
                 window::toast("Imported. Connect it from the Control Center's VPN tile");
