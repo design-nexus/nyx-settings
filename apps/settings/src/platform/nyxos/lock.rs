@@ -22,8 +22,8 @@ const TIMES: [(&str, &str, &str, i64, f64, &str, &str); 3] = [
     ("suspend", "Sleep after", "0 never; closing the lid still sleeps", 0, 120.0, "Sleep", "weather-clear-night-symbolic"),
 ];
 
-const STYLES: [(&str, &str); 4] =
-    [("circular", "Circular"), ("cyberpunk", "Cyberpunk"), ("minimal", "Minimal"), ("edge", "Edge glow")];
+const STYLES: [(&str, &str); 5] =
+    [("halo", "Halo"), ("circular", "Circular"), ("cyberpunk", "Cyberpunk"), ("minimal", "Minimal"), ("edge", "Edge glow")];
 
 /// The transient unit that holds an idle inhibitor while Stay awake is on.
 const AWAKE_UNIT: &str = "nyx-stay-awake";
@@ -289,9 +289,9 @@ pub fn build(page: &Page) {
             .collect(),
     );
     let current =
-        get("appearance", "lock-style").filter(|s| STYLES.iter().any(|(id, _)| id == s)).unwrap_or_else(|| "circular".into());
+        get("appearance", "lock-style").filter(|s| STYLES.iter().any(|(id, _)| id == s)).unwrap_or_else(|| "halo".into());
     let style: Rc<Cell<&'static str>> =
-        Rc::new(Cell::new(STYLES.iter().find(|(id, _)| *id == current).map(|(id, _)| *id).unwrap_or("circular")));
+        Rc::new(Cell::new(STYLES.iter().find(|(id, _)| *id == current).map(|(id, _)| *id).unwrap_or("halo")));
 
     // The picture: what happens when you walk away, as four screens and a time axis.
     let pv = page.split();

@@ -583,6 +583,20 @@ pub fn draw(cr: &Context, s: Sketch, w: f64, h: f64, on: bool) {
             let _ = cr.stroke();
             let (cx, cy) = (card.cx(), card.y + (card.h - 12.0) / 2.0);
             match style {
+                "halo" => {
+                    cr.set_line_width(1.2);
+                    set(cr, p.dim, 0.35);
+                    for r in [11.0, 8.5] {
+                        cr.arc(cx, cy, r, 0.0, 2.0 * PI);
+                        let _ = cr.stroke();
+                    }
+                    set(cr, p.accent, 1.0);
+                    cr.arc(cx, cy, 11.0, -PI / 2.0, 0.0);
+                    let _ = cr.stroke();
+                    set(cr, p.accent, 0.5);
+                    cr.arc(cx, cy, 8.5, PI / 2.0, 0.8 * PI);
+                    let _ = cr.stroke();
+                }
                 "cyberpunk" => {
                     let r = 11.0;
                     cr.set_line_width(1.4);
