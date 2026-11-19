@@ -3,10 +3,12 @@ access, the nyx-deck service), brightness, profiles and pages, and what each
 key does. nyx-deck (beside this file) runs the deck itself."""
 
 import glob
+import json
 import os
 import shlex
 import shutil
 import subprocess
+import sys
 import tomllib
 
 HERE = os.path.dirname(os.path.realpath(__file__))
@@ -120,6 +122,11 @@ def pages():
 
 def setup_rows():
     rows = []
+    if os.environ.get("SETTINGS_PLATFORM") == "nyxos":
+        if not library_ready() or not os.path.exists(UDEV_RULE):
+            rows.append({"kind": "info", "title": "Stream Deck setup is unavailable in Settings on NyxOS",
+                         "desc": "Elgato Stream Deck needs its Python library and device access configured on the system."})
+        return rows
     if not library_ready():
         rows.append({"kind": "button", "key": "elgato-install", "title": "Install what it needs",
                      "desc": "The Stream Deck library (from the AUR) and helpers for shortcuts and media keys. Opens a terminal.",
@@ -314,12 +321,16 @@ def write_config(key, value):
 
 
 def unit_text():
+    python, script = (json.dumps(path.replace("%", "%%"), ensure_ascii=False)
+                      for path in (sys.executable, os.path.join(HERE, "nyx-deck")))
     return ("[Unit]\nDescription=Elgato Stream Deck (Settings)\nAfter=graphical-session.target\n\n"
-            f"[Service]\nExecStart=/usr/bin/python3 {os.path.join(HERE, 'nyx-deck')}\nRestart=on-failure\nRestartSec=5\n\n"
+            f"[Service]\nExecStart={python} {script}\nRestart=on-failure\nRestartSec=5\n\n"
             "[Install]\nWantedBy=default.target\n")
 
 
 def set_value(state, key, value, start_terminal):
+    if os.environ.get("SETTINGS_PLATFORM") == "nyxos" and key in ("elgato-install", "elgato-access"):
+        raise SystemExit("Elgato Stream Deck setup is unavailable in Settings on NyxOS")
     if key == "elgato-install":
         helper = "yay" if shutil.which("yay") else "paru" if shutil.which("paru") else None
         if not helper:

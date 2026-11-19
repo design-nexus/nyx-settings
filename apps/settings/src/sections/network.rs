@@ -554,7 +554,10 @@ fn dns(g: &widgets::Group) {
         ("Custom", "Your own servers"),
     ]);
     // Your own servers, shown once that's the choice.
-    let in_use = if current == "Custom" {
+    let nyxos = crate::platform::PLATFORM == crate::platform::Platform::NyxOS;
+    let in_use = if current == "Custom" && nyxos {
+        networkmanager_dns_servers().unwrap_or_default()
+    } else if current == "Custom" {
         custom_servers(&std::fs::read_to_string("/etc/systemd/resolved.conf").unwrap_or_default())
     } else {
         String::new()
@@ -587,7 +590,12 @@ fn dns(g: &widgets::Group) {
     );
     widgets::keywords("resolver nameserver dns custom");
     custom.set_visible(current == "Custom");
-    let (r, _) = widgets::choice_row("DNS", "Which servers look up website names. Asks for your password.", options, &current, {
+    let desc = if nyxos {
+        "Which servers look up website names for Wi-Fi and wired connections."
+    } else {
+        "Which servers look up website names. Asks for your password."
+    };
+    let (r, _) = widgets::choice_row("DNS", desc, options, &current, {
         let (current, custom) = (current.clone(), custom.clone());
         move |p| {
             if p == current {
@@ -614,7 +622,20 @@ fn dns(g: &widgets::Group) {
     g.add(&custom);
 }
 
-/// The `DNS=` line of `resolved.conf`.
+/// Match nyx-platform's choice: active Wi-Fi or Ethernet, then the first saved profile.
+fn networkmanager_dns_servers() -> Option<String> {
+    let connections = cmd::output(&["nmcli", "-e", "no", "-g", "UUID,TYPE,DEVICE", "connection", "show"])?;
+    let profiles = connections.lines().filter_map(|line| {
+        let mut fields = line.splitn(3, ':');
+        let (uuid, kind, device) = (fields.next()?, fields.next()?, fields.next()?);
+        matches!(kind, "802-11-wireless" | "802-3-ethernet").then_some((uuid, device))
+    });
+    let (uuid, _) = profiles.clone().find(|(_, device)| !device.is_empty()).or_else(|| profiles.into_iter().next())?;
+    let servers = cmd::output(&["nmcli", "-e", "no", "-g", "ipv4.dns,ipv6.dns", "connection", "show", "uuid", uuid])?;
+    Some(servers.split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" "))
+}
+
+/// The DNS= line of resolved.conf.
 fn custom_servers(text: &str) -> String {
     text.lines().find_map(|l| l.trim().strip_prefix("DNS=")).map(|v| v.trim().to_string()).unwrap_or_default()
 }

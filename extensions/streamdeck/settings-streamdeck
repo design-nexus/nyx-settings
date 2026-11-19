@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """Stream Deck for Settings: the Corsair Galleon 100 SD's built-in deck, run by
 galleon-deck (https://github.com/NLMP-DDHS/galleon-deck, MIT).
 
@@ -382,6 +382,11 @@ def glib_escape(text):
 
 
 def setup_group():
+    if os.environ.get("SETTINGS_PLATFORM") == "nyxos":
+        if missing_modules() or not galleon_installed() or not access_ready():
+            return {"title": "Set up", "rows": [{"kind": "info", "title": "Galleon setup is unavailable in Settings on NyxOS",
+                                                 "desc": "Galleon needs its software dependencies and device access configured on the system."}]}
+        return None
     rows = []
     missing = missing_modules()
     if missing:
@@ -550,6 +555,8 @@ def set_value(page_id, key, value):
         return elgato.set_value(STATE, key, value, start_terminal)
     if key.startswith("g-"):
         return galleon_page.set_value(galleon_env(), key, value)
+    if os.environ.get("SETTINGS_PLATFORM") == "nyxos" and key in ("install-packages", "install-galleon", "allow"):
+        raise SystemExit("Galleon setup is unavailable in Settings on NyxOS")
     if key == "install-packages":
         if not shutil.which("pacman"):
             raise SystemExit("Install these yourself: " + " ".join(PACKAGES))

@@ -131,7 +131,9 @@ fn display() -> (Option<Display>, usize) {
 
 /// The system's name and version: Omarchy's own, or the distribution's.
 fn system() -> (String, String) {
-    if let Some(v) = cmd::output(&["omarchy-version"]) {
+    if crate::platform::PLATFORM == crate::platform::Platform::Omarchy
+        && let Some(v) = cmd::output(&["omarchy-version"])
+    {
         return ("Omarchy".into(), v.trim().to_string());
     }
     let text = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
@@ -696,7 +698,11 @@ fn changes_page(page: &Page, c: &Changes) {
 /// Export everything to a file, or bring a backup in.
 fn export() {
     use crate::backend::backup;
-    let dialog = gtk::FileDialog::builder().title("Export settings").initial_name("omarchy-settings.json").modal(true).build();
+    let filename = match crate::platform::PLATFORM {
+        crate::platform::Platform::NyxOS => "nyx-settings.json",
+        crate::platform::Platform::Omarchy => "omarchy-settings.json",
+    };
+    let dialog = gtk::FileDialog::builder().title("Export settings").initial_name(filename).modal(true).build();
     dialog.save(window::window().as_ref(), gtk::gio::Cancellable::NONE, |res| {
         let Ok(file) = res else { return };
         let Some(path) = file.path() else { return };

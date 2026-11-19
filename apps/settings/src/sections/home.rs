@@ -118,8 +118,12 @@ fn hero(page: &Page) -> Hero {
     grid.set_column_homogeneous(true);
     grid.set_column_spacing(16);
     grid.set_row_spacing(10);
-    let omarchy = cmd::output(&["omarchy-version"]).unwrap_or_default();
-    let channel = cmd::output(&["omarchy-version-channel"]).unwrap_or_default();
+    let nyxos = crate::platform::PLATFORM == crate::platform::Platform::NyxOS;
+    let (omarchy, channel) = if nyxos {
+        (String::new(), String::new())
+    } else {
+        (cmd::output(&["omarchy-version"]).unwrap_or_default(), cmd::output(&["omarchy-version-channel"]).unwrap_or_default())
+    };
     let full_version = omarchy.clone();
     let omarchy = short_version(&omarchy);
     let omarchy = match (omarchy.is_empty(), channel.is_empty()) {
@@ -135,6 +139,7 @@ fn hero(page: &Page) -> Hero {
     let system = full_version.is_empty().then(os_name).flatten();
     let v = match &system {
         Some(name) => fact(&grid, 0, "System", name),
+        None if nyxos => fact(&grid, 0, "System", "NyxOS"),
         None => fact(&grid, 0, "Omarchy", &omarchy),
     };
     if !full_version.is_empty() {

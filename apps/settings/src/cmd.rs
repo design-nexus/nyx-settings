@@ -30,7 +30,15 @@ pub fn spawn(args: &[&str]) {
     nyx_core::cmd::spawn(&refs);
 }
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+
+/// An absolute executable path for a systemd unit, keeping profile symlinks intact.
+pub fn unit_program(name: &str) -> Result<String> {
+    let path = nyx_capability::providers::Programs::find(name).with_context(|| format!("{name} is not installed"))?;
+    let path = path.to_str().with_context(|| format!("{name} has a non-UTF-8 path"))?;
+    let path = path.replace('\\', "\\\\").replace('"', "\\\"").replace('%', "%%");
+    Ok(format!("\"{path}\""))
+}
 use gtk::{gio, glib};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};

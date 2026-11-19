@@ -277,18 +277,30 @@ fn show_follow(st: &Stage) {
     st.follow.set_visible(!together && ["left", "right"].iter().any(|d| set.action(d) == "workspace-follow"));
 }
 
-/// A switch for an Omarchy device toggle (`omarchy-toggle-touchpad on|off`). The device
-/// is off while Omarchy keeps its name in `toggles/hypr/<kind>-disabled-name`.
+/// Read the disabled-device marker from the platform that owns the toggle.
 fn device_switch(g: &crate::widgets::Group, title: &str, desc: &str, script: &'static str, keywords: &str, icon: &str) {
     let kind = script.trim_start_matches("omarchy-toggle-");
-    let on = !crate::paths::home().join(format!(".local/state/omarchy/toggles/hypr/{kind}-disabled-name")).exists();
-    let (r, _) = widgets::switch_row(title, desc, on, move |now| {
-        cmd::run_async(&[script, if now { "on" } else { "off" }], move |r| {
+    let nyxos = crate::platform::PLATFORM == crate::platform::Platform::NyxOS;
+    let (state_dir, program) = if nyxos {
+        (".local/state/nyx/toggles", vec!["nyx-platform", script.trim_start_matches("omarchy-")])
+    } else {
+        (".local/state/omarchy/toggles/hypr", vec![script])
+    };
+    let on = !crate::paths::home().join(state_dir).join(format!("{kind}-disabled-name")).exists();
+    let switch = gtk::Switch::new();
+    switch.set_active(on);
+    switch.connect_active_notify(move |switch| {
+        switch.set_sensitive(false);
+        let mut args = program.clone();
+        args.push(if switch.is_active() { "on" } else { "off" });
+        cmd::run_async(&args, move |r| {
             if let Err(e) = r {
                 window::toast(&format!("{e}"));
             }
-        })
+            window::rebuild_if_built("trackpad");
+        });
     });
+    let r = widgets::row(title, desc, Some(switch.upcast_ref()));
     g.add(&tiled(r, icon));
     widgets::keywords(keywords);
 }

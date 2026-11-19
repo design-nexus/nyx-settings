@@ -14,6 +14,7 @@ import shlex
 import shutil
 import signal
 import subprocess
+import sys
 import time
 
 import galleon_config as gc
@@ -123,7 +124,7 @@ class Env:
 
     def missing(self):
         out = []
-        if subprocess.run(["/usr/bin/python3", "-c", "import PIL"], capture_output=True).returncode != 0:
+        if subprocess.run([sys.executable, "-c", "import PIL"], capture_output=True).returncode != 0:
             out.append("python-pillow")
         if not shutil.which("playerctl"):
             out.append("playerctl")
@@ -159,7 +160,7 @@ class Env:
 
     def wallpaper_theme(self):
         image = os.path.join(HOME, ".config/omarchy/current/background")
-        argv = ["/usr/bin/python3", os.path.join(os.path.dirname(os.path.realpath(__file__)), "nyx-deck"), "--theme-from-wallpaper"]
+        argv = [sys.executable, os.path.join(os.path.dirname(os.path.realpath(__file__)), "nyx-deck"), "--theme-from-wallpaper"]
         r = subprocess.run(argv + ([os.path.realpath(image)] if os.path.exists(image) else []), capture_output=True, text=True, timeout=60)
         if r.returncode != 0:
             lines = (r.stderr or r.stdout).strip().splitlines()
@@ -379,6 +380,9 @@ def setup_rows(env):
     missing = env.missing()
     if not missing:
         return []
+    if os.environ.get("SETTINGS_PLATFORM") == "nyxos":
+        return [{"kind": "info", "title": "Dependencies must be installed on NyxOS",
+                 "desc": "Missing " + ", ".join(missing)}]
     return [env.job_row("g-needs", "Install what it needs",
                         f"<tt>{' '.join(missing)}</tt>, for the pictures on the keys and what's playing. Opens a terminal.",
                         "Install…", "galleon-needs", "Installing", "system-software-install-symbolic")]
@@ -559,6 +563,9 @@ def access_row(env):
     if env.access_ready():
         return {"kind": "info", "title": "Allow the deck and typing", "icon": "channel-secure-symbolic",
                 "desc": "The deck and the virtual keyboard can be used by you", "value": "Allowed"}
+    if os.environ.get("SETTINGS_PLATFORM") == "nyxos":
+        return {"kind": "info", "title": "Device access needs system configuration",
+                "desc": "The deck needs a udev rule and access to uinput."}
     return env.job_row("g-access", "Allow the deck and typing",
                        f"Installs <tt>{UDEV_RULE}</tt> and loads <tt>uinput</tt>. Asks for your password once, in a terminal.",
                        "Allow…", "galleon-access", "Allowing", "channel-secure-symbolic")
@@ -747,6 +754,8 @@ def set_cfg(env, table, key, value, remove=False):
 def set_value(env, key, value):
     if key == "g-run":
         return set_run(env, value == "true")
+    if os.environ.get("SETTINGS_PLATFORM") == "nyxos" and key in ("g-needs", "g-access"):
+        raise SystemExit("Set up dependencies and device access in the NyxOS system configuration")
     if key == "g-needs":
         if not shutil.which("pacman") and not env.pretend:
             raise SystemExit("Install these yourself: " + " ".join(NEEDS))

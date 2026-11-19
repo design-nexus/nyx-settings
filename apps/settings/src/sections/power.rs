@@ -506,8 +506,7 @@ fn session_group(page: &Page) {
     let g = page.group("Right now");
     let now = widgets::hbox(8);
     now.append(&widgets::command_button("Lock", crate::platform::lock_command()));
-    // Omarchy hides these when suspend is switched off or hibernation isn't set up.
-    if cmd::run(&["omarchy-toggle-enabled", "suspend-off"]).is_err() {
+    if crate::platform::suspend_available() {
         now.append(&widgets::command_button("Suspend", &["systemctl", "suspend"]));
     }
     if crate::platform::hibernation_available() {

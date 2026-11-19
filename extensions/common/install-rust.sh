@@ -17,7 +17,7 @@ if curl -fsSL --max-time 60 -o "bin/.settings-$id.tmp" "$url" 2>/dev/null; then
 fi
 rm -f "bin/.settings-$id.tmp"
 if ! command -v cargo >/dev/null; then
-  echo "Building the $name extension needs Rust: sudo pacman -S rust" >&2
+  echo "Building the $name extension requires Rust and Cargo on PATH." >&2
   exit 1
 fi
 cargo build --release --quiet

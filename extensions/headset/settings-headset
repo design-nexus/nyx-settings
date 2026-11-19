@@ -309,9 +309,11 @@ def set_warning(on):
     if on:
         os.makedirs(UNIT_DIR, exist_ok=True)
         env = f"Environment=SETTINGS_EXTENSION_STATE={STATE_DIR}\n" if STATE_DIR else ""
+        python, script = (json.dumps(path.replace("%", "%%"), ensure_ascii=False)
+                          for path in (sys.executable, os.path.realpath(__file__)))
         with open(service, "w") as f:
             f.write(f"[Unit]\nDescription=Headset battery check (Settings)\n\n[Service]\nType=oneshot\n{env}"
-                    f"ExecStart=/usr/bin/python3 {os.path.realpath(__file__)} battery-check\n")
+                    f"ExecStart={python} {script} battery-check\n")
         with open(timer, "w") as f:
             f.write("[Unit]\nDescription=Headset battery check (Settings)\n\n[Timer]\nOnBootSec=2min\nOnUnitActiveSec=5min\n\n"
                     "[Install]\nWantedBy=timers.target\n")

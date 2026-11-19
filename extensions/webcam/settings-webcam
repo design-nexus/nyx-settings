@@ -323,9 +323,11 @@ def guard_wanted(opts):
 def sync_guard(opts):
     """Run the guard service only while something needs keeping applied."""
     if guard_wanted(opts):
+        python, script = (json.dumps(path.replace("%", "%%"), ensure_ascii=False)
+                          for path in (sys.executable, os.path.join(HERE, "settings-webcam")))
         unit = ("[Unit]\nDescription=Keep webcam and microphone options applied (Settings)\n"
                 "After=pipewire.service wireplumber.service\n\n[Service]\n"
-                f"ExecStart=/usr/bin/python3 {os.path.join(HERE, 'settings-webcam')} guard\n"
+                f"ExecStart={python} {script} guard\n"
                 "Restart=on-failure\nRestartSec=10\n\n[Install]\nWantedBy=default.target\n")
         os.makedirs(os.path.dirname(UNIT_FILE), exist_ok=True)
         if not os.path.exists(UNIT_FILE) or open(UNIT_FILE).read() != unit:

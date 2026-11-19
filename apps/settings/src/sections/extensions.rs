@@ -140,7 +140,7 @@ fn installed_desc(e: &Extension) -> String {
         return "Turned off · its pages are hidden".into();
     }
     if !missing.is_empty() {
-        return if m.needs_hint.is_empty() {
+        return if crate::platform::PLATFORM == crate::platform::Platform::NyxOS || m.needs_hint.is_empty() {
             format!("Needs <tt>{}</tt>, which isn't installed", glib::markup_escape_text(&missing.join(", ")))
         } else {
             m.needs_hint.clone()
@@ -422,7 +422,7 @@ fn show(holder: &gtk::Box, e: &Extension, catalog: &[manage::Entry], sections: &
         } else if !missing.is_empty() {
             (
                 "Something it needs isn't installed",
-                if e.manifest.needs_hint.is_empty() {
+                if crate::platform::PLATFORM == crate::platform::Platform::NyxOS || e.manifest.needs_hint.is_empty() {
                     format!("It needs {}, which isn't installed.", missing.join(", "))
                 } else {
                     e.manifest.needs_hint.clone()

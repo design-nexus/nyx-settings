@@ -109,7 +109,14 @@ impl Extension {
             .env("SETTINGS_EXTENSION_DIR", &self.dir)
             .env("SETTINGS_EXTENSION_STATE", paths::state_dir().join("extensions").join(self.id()))
             .env("SETTINGS_TEMP_UNIT", if crate::units::fahrenheit() { "F" } else { "C" })
-            .env("SETTINGS_KINDS", protocol::KINDS);
+            .env("SETTINGS_KINDS", protocol::KINDS)
+            .env(
+                "SETTINGS_PLATFORM",
+                match crate::platform::PLATFORM {
+                    crate::platform::Platform::NyxOS => "nyxos",
+                    crate::platform::Platform::Omarchy => "omarchy",
+                },
+            );
         run_command(c, &self.manifest.name, timeout)
     }
 

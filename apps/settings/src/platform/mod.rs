@@ -89,6 +89,21 @@ pub fn set_hibernate_delay(secs: &str, section: &'static str) {
     }
 }
 
+pub fn suspend_available() -> bool {
+    match PLATFORM {
+        Platform::NyxOS => crate::cmd::output(&[
+            "busctl",
+            "call",
+            "org.freedesktop.login1",
+            "/org/freedesktop/login1",
+            "org.freedesktop.login1.Manager",
+            "CanSuspend",
+        ])
+        .is_some_and(|answer| matches!(answer.as_str(), "s \"yes\"" | "s \"challenge\"")),
+        Platform::Omarchy => crate::cmd::run(&["omarchy-toggle-enabled", "suspend-off"]).is_err(),
+    }
+}
+
 pub fn hibernation_available() -> bool {
     match PLATFORM {
         Platform::NyxOS => nyxos::hibernation_available(),

@@ -402,7 +402,8 @@ pub fn ssh_folders(home: &Path) -> Vec<(String, String, String)> {
             let id = name.strip_prefix("nyx-sshfs-")?.strip_suffix(".service")?.to_string();
             let text = std::fs::read_to_string(e.path()).ok()?;
             let exec = text.lines().find(|l| l.starts_with("ExecStart="))?;
-            let args: Vec<String> = exec
+            let (_, args) = exec.split_once(",idmap=user ")?;
+            let args: Vec<String> = args
                 .split('"')
                 .skip(1)
                 .step_by(2)
@@ -492,11 +493,13 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("nyx-ssh-test-{}", std::process::id()));
         let units = ssh_unit_dir(&dir);
         std::fs::create_dir_all(&units).unwrap();
-        std::fs::write(units.join(ssh_unit_name("server")), &u).unwrap();
-        assert_eq!(
-            ssh_folders(&dir),
-            vec![("server".into(), "ken@box.lan:/srv/files".into(), "/home/ken/Remote/Server box".into())]
-        );
+        let path = units.join(ssh_unit_name("server"));
+        let expected = vec![("server".into(), "ken@box.lan:/srv/files".into(), "/home/ken/Remote/Server box".into())];
+        std::fs::write(&path, &u).unwrap();
+        assert_eq!(ssh_folders(&dir), expected);
+        let migrated = u.replace("ExecStart=/usr/bin/sshfs ", "ExecStart=\"/home/ken/.nix-profile/bin/sshfs\" ");
+        std::fs::write(&path, migrated).unwrap();
+        assert_eq!(ssh_folders(&dir), expected);
         std::fs::remove_dir_all(&dir).ok();
     }
 

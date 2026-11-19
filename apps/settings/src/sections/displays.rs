@@ -518,7 +518,11 @@ fn draw_sample(cr: &gtk::cairo::Context, p: &sketch::Pal, accent: sketch::Rgb, w
 /// while another display is plugged in.
 fn screens_mode(monitors: &[Value]) -> Option<gtk::Box> {
     let physical_count = monitors.iter().filter(|m| !text(m, "name").starts_with("HEADLESS-")).count();
-    if !laptop_tools() || !cmd::present("omarchy-hyprland-monitor-internal-mirror") || physical_count < 2 {
+    if crate::platform::PLATFORM == crate::platform::Platform::NyxOS
+        || !laptop_tools(monitors)
+        || !cmd::present("omarchy-hyprland-monitor-internal-mirror")
+        || physical_count < 2
+    {
         return None;
     }
     let current = if flag("internal-monitor-mirror") {
@@ -559,7 +563,7 @@ fn screens_mode(monitors: &[Value]) -> Option<gtk::Box> {
     Some(seg)
 }
 
-/// Run Omarchy's display commands one after another, then show the result.
+/// Run display commands in order, then show the result.
 fn run_steps(mut steps: Vec<&'static [&'static str]>) {
     if steps.is_empty() {
         return;
@@ -927,10 +931,10 @@ fn more(page: &Page, monitors: &Rc<Vec<Value>>, live: &Rc<Vec<LiveMonitor>>) {
         g.add(&row(Sub::Remembered, "document-open-recent-symbolic", "Remembered displays", &remembered.len().to_string()));
         widgets::keywords("remembered disconnected unplugged previous external monitor forget");
     }
-    if laptop_tools() {
-        let state = if flag("internal-monitor-mirror") {
+    if laptop_tools(monitors) {
+        let state = if crate::platform::PLATFORM == crate::platform::Platform::Omarchy && flag("internal-monitor-mirror") {
             "Mirrored"
-        } else if flag("internal-monitor-disable") {
+        } else if laptop_screen_off(monitors) {
             "Off"
         } else {
             "On"
@@ -965,7 +969,7 @@ fn open(sub: Sub, monitors: Rc<Vec<Value>>, live: Rc<Vec<LiveMonitor>>) {
         Sub::Rendering => rendering(p, &monitors, &live),
         Sub::Split => super::virtual_monitors::build(p, &monitors),
         Sub::Remembered => remembered(p, &live),
-        Sub::Laptop => laptop_screen(p),
+        Sub::Laptop => laptop_screen(p, &monitors),
     });
     OPEN.with(|o| *o.borrow_mut() = Some((sub, win.clone())));
     win.connect_close_request(|w| {
@@ -1022,9 +1026,24 @@ fn rendering(page: &Page, monitors: &[Value], live: &[LiveMonitor]) {
     }
 }
 
-/// Omarchy's commands for a laptop's own screen, on a laptop.
-fn laptop_tools() -> bool {
-    cmd::present("omarchy-hyprland-monitor-internal") && cmd::run(&["omarchy-hw-laptop"]).is_ok()
+fn laptop_tools(monitors: &[Value]) -> bool {
+    match crate::platform::PLATFORM {
+        crate::platform::Platform::NyxOS => {
+            cmd::present("nyx-platform")
+                && nyx_platform::installed_jobs().iter().any(|job| job == "hyprland-monitor-internal")
+                && monitors.iter().any(|m| built_in(text(m, "name")))
+        }
+        crate::platform::Platform::Omarchy => {
+            cmd::present("omarchy-hyprland-monitor-internal") && cmd::run(&["omarchy-hw-laptop"]).is_ok()
+        }
+    }
+}
+
+fn laptop_screen_off(monitors: &[Value]) -> bool {
+    match crate::platform::PLATFORM {
+        crate::platform::Platform::NyxOS => monitors.iter().find(|m| built_in(text(m, "name"))).is_some_and(disabled),
+        crate::platform::Platform::Omarchy => flag("internal-monitor-disable"),
+    }
 }
 
 /// Omarchy keeps each of its display toggles as a flag file while it's in effect.
@@ -1033,20 +1052,33 @@ fn flag(name: &str) -> bool {
 }
 
 /// The built-in screen: off while an external monitor is in use, or mirrored onto it.
-fn laptop_screen(page: &Page) {
+fn laptop_screen(page: &Page, monitors: &[Value]) {
     let g = page.group("Laptop screen");
     let run = |args: &'static [&'static str]| run_steps(vec![args]);
-    let (r, _) = widgets::switch_row(
-        "Built-in screen",
-        "Turn the laptop's own screen off, for example with the lid closed on a desk.",
-        !flag("internal-monitor-disable"),
-        move |on| {
-            run(if on { &["omarchy-hyprland-monitor-internal", "on"] } else { &["omarchy-hyprland-monitor-internal", "off"] })
-        },
-    );
+    let nyxos = crate::platform::PLATFORM == crate::platform::Platform::NyxOS;
+    let off = laptop_screen_off(monitors);
+    let external_on = monitors.iter().any(|m| {
+        let name = text(m, "name");
+        !name.is_empty() && !built_in(name) && !name.starts_with("HEADLESS") && !disabled(m)
+    });
+    let can_toggle = !nyxos || off || external_on;
+    let desc = if can_toggle {
+        "Turn the laptop's own screen off, for example with the lid closed on a desk."
+    } else {
+        "Connect another display before switching off the built-in screen."
+    };
+    let (r, switch) = widgets::switch_row("Built-in screen", desc, !off, move |on| {
+        run(match (nyxos, on) {
+            (true, true) => &["nyx-platform", "hyprland-monitor-internal", "on"],
+            (true, false) => &["nyx-platform", "hyprland-monitor-internal", "off"],
+            (false, true) => &["omarchy-hyprland-monitor-internal", "on"],
+            (false, false) => &["omarchy-hyprland-monitor-internal", "off"],
+        });
+    });
+    switch.set_sensitive(can_toggle);
     g.add(&r);
     widgets::keywords("internal laptop display eDP clamshell off disable");
-    if cmd::present("omarchy-hyprland-monitor-internal-mirror") {
+    if !nyxos && cmd::present("omarchy-hyprland-monitor-internal-mirror") {
         let (r, _) = widgets::switch_row(
             "Mirror to an external screen",
             "Show the laptop's screen on the connected monitor too, for presenting.",
@@ -1066,7 +1098,13 @@ fn laptop_screen(page: &Page) {
         "Recover the built-in screen",
         "Use this if the laptop screen stays dark after unplugging a monitor.",
         "Recover",
-        move |_| run(&["omarchy-hyprland-monitor-internal", "recover"]),
+        move |_| {
+            run(if nyxos {
+                &["nyx-platform", "hyprland-monitor-internal", "recover"]
+            } else {
+                &["omarchy-hyprland-monitor-internal", "recover"]
+            })
+        },
     );
     widgets::keywords("black dark blank fix");
     g.add(&r);

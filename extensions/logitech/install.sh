@@ -16,7 +16,7 @@ fi
 rm -f bin/.settings-logitech.tmp
 
 if ! command -v cargo >/dev/null; then
-  echo "Building the Logitech extension needs Rust: sudo pacman -S rust" >&2
+  echo "Building the Logitech extension requires Rust and Cargo on PATH." >&2
   exit 1
 fi
 cargo build --release --locked --quiet

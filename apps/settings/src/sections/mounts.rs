@@ -217,7 +217,9 @@ fn smb_dialog() {
     let ro = read_only_switch(&body);
     let test = gtk::Button::with_label("Test connection");
     test.set_halign(gtk::Align::Start);
-    body.append(&test);
+    if crate::platform::PLATFORM == crate::platform::Platform::Omarchy {
+        body.append(&test);
+    }
 
     let read = {
         let (server, share, user, pass, version, folder, on_demand, ro, name) = (
@@ -394,6 +396,46 @@ fn add_network(id: String, fstype: &'static str, source: String, dir: String, op
 
 // ---------- SSH folders ----------
 
+const SSH_PROGRAMS: &[(&str, &str)] = &[("ExecStartPre", "mkdir"), ("ExecStart", "sshfs"), ("ExecStop", "fusermount3")];
+
+/// Replace legacy paths in Settings-generated SSH services, preserving their arguments.
+fn resolve_ssh_programs(mut unit: String) -> anyhow::Result<String> {
+    for (directive, name) in SSH_PROGRAMS {
+        let old = format!("\n{directive}=/usr/bin/{name} ");
+        if unit.contains(&old) {
+            let program = cmd::unit_program(name)?;
+            unit = unit.replace(&old, &format!("\n{directive}={program} "));
+        }
+    }
+    Ok(unit)
+}
+
+fn repair_ssh_units(home: &std::path::Path) -> anyhow::Result<()> {
+    let mut changed = false;
+    let result = (|| -> anyhow::Result<()> {
+        for (id, _, _) in mounts::ssh_folders(home) {
+            let path = mounts::ssh_unit_dir(home).join(mounts::ssh_unit_name(&id));
+            if !path.symlink_metadata()?.is_file() {
+                continue;
+            }
+            let old = std::fs::read_to_string(&path)?;
+            if !old.lines().any(|line| line.starts_with("Description=SSH folder ") && line.ends_with(" (Settings)")) {
+                continue;
+            }
+            let unit = resolve_ssh_programs(old.clone())?;
+            if unit != old {
+                cmd::atomic_write(&path, &unit)?;
+                changed = true;
+            }
+        }
+        Ok(())
+    })();
+    if changed {
+        cmd::run(&["systemctl", "--user", "daemon-reload"])?;
+    }
+    result
+}
+
 fn ssh_dialog() {
     if !need("sshfs", "sshfs") {
         return;
@@ -410,8 +452,7 @@ fn ssh_dialog() {
     labelled(&body, "Folder here", &folder);
     let (f2, h2) = (folder.clone(), home.clone());
     name.connect_changed(move |e| f2.set_text(&h2.join("Remote").join(e.text().trim()).to_string_lossy()));
-    let note =
-        widgets::label("It signs in with your SSH key, so the other computer needs your public key (Users → SSH keys).", "dim");
+    let note = widgets::label("Add your public key to the account on the remote computer.", "dim");
     note.set_wrap(true);
     note.set_xalign(0.0);
     body.append(&note);
@@ -450,6 +491,10 @@ fn ssh_dialog() {
         let unit = match mounts::ssh_unit(&label, user, host, remote.text().trim(), &dir) {
             Ok(u) => u,
             Err(e) => return Some(e),
+        };
+        let unit = match resolve_ssh_programs(unit) {
+            Ok(unit) => unit,
+            Err(e) => return Some(format!("Couldn't set up the SSH folder: {e:#}")),
         };
         let id = mounts::slug(&label);
         let path = mounts::ssh_unit_dir(&home).join(mounts::ssh_unit_name(&id));
@@ -743,6 +788,16 @@ struct Ui {
 }
 
 pub fn build(page: &Page) {
+    if crate::platform::PLATFORM == crate::platform::Platform::NyxOS && cmd::present("sshfs") {
+        cmd::background(
+            || repair_ssh_units(&paths::home()),
+            |r| {
+                if let Err(e) = r {
+                    window::toast(&format!("Couldn't repair SSH folders: {e:#}"));
+                }
+            },
+        );
+    }
     if let (_, Some(notice)) = crate::platform::system_notice("mounts", "adding a network share") {
         page.body.append(&notice);
     }
@@ -1087,7 +1142,7 @@ fn show(ui: &Rc<Ui>, part: Option<udisks::Part>) {
     };
     if m.kind == Kind::Ssh {
         let who = m.source.split_once(':').map_or(m.source.as_str(), |(w, _)| w);
-        opts.append(&fact_row("system-users-symbolic", "Signed in as", "With your SSH key (Users → SSH keys)", who));
+        opts.append(&fact_row("system-users-symbolic", "Signed in as", "With your SSH key", who));
     } else {
         opts.append(&fact_row("alarm-symbolic", "Mount when first opened", missing, on_off(m.on_demand())));
         opts.append(&fact_row(
