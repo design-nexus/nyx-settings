@@ -43,18 +43,136 @@ fn system_surface(key: &str) -> &str {
     if key == "lock-screen" { "lock" } else { key }
 }
 
-/// Change `nyx.biometrics` through the System Manager (one rebuild), then refresh.
-fn change_bio(edit: impl FnOnce(&mut nyx_system_proto::Biometrics), done: &'static str) {
-    let mut b = system_bio();
-    b.enable = true;
-    edit(&mut b);
-    b.surfaces.retain(|_, m| !m.is_empty());
-    if let Err(e) = b.validate() {
-        window::toast(&format!("{e:#}"));
-        window::rebuild(ID);
-        return;
+type BioEdit = Rc<dyn Fn(&mut nyx_system_proto::Biometrics)>;
+
+#[derive(Clone)]
+enum SignInEdit {
+    System(BioEdit, &'static str),
+    Local { surface: String, method: String, enabled: bool },
+}
+
+impl SignInEdit {
+    fn is_system(&self) -> bool {
+        matches!(self, Self::System(..))
     }
-    crate::platform::nyxos::apply(vec![nyx_system_proto::Change::Biometrics { value: Some(b) }], done, |_| window::rebuild(ID));
+}
+
+#[derive(Default)]
+struct SignInChanges {
+    pending: Vec<SignInEdit>,
+    applying: Vec<SignInEdit>,
+    scheduled: bool,
+}
+
+thread_local! {
+    static SIGN_IN_CHANGES: RefCell<SignInChanges> = RefCell::default();
+}
+
+fn queue_sign_in(edit: SignInEdit) {
+    SIGN_IN_CHANGES.with_borrow_mut(|changes| changes.pending.push(edit));
+    schedule_sign_in();
+}
+
+fn schedule_sign_in() {
+    let schedule = SIGN_IN_CHANGES.with_borrow_mut(|changes| {
+        if changes.scheduled || !changes.applying.is_empty() || changes.pending.is_empty() {
+            return false;
+        }
+        changes.scheduled = true;
+        true
+    });
+    if schedule {
+        gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(400), apply_sign_in);
+    }
+}
+
+fn apply_sign_in() {
+    let batch = SIGN_IN_CHANGES.with_borrow_mut(|changes| {
+        changes.scheduled = false;
+        let Some(first) = changes.pending.first() else { return Vec::new() };
+        let system = first.is_system();
+        if system && crate::platform::nyxos::busy() {
+            return Vec::new();
+        }
+        let (batch, remaining) = std::mem::take(&mut changes.pending)
+            .into_iter()
+            .partition(|edit| edit.is_system() == system);
+        changes.pending = remaining;
+        changes.applying = batch;
+        changes.applying.clone()
+    });
+    match batch.first() {
+        None => schedule_sign_in(),
+        Some(SignInEdit::System(..)) => {
+            let mut bio = system_bio();
+            let mut done = "Sign-in updated";
+            for edit in batch {
+                if let SignInEdit::System(edit, message) = edit {
+                    bio.enable = true;
+                    edit(&mut bio);
+                    done = message;
+                }
+            }
+            bio.surfaces.retain(|_, methods| !methods.is_empty());
+            if let Err(error) = bio.validate() {
+                window::toast(&format!("{error:#}"));
+                finish_sign_in();
+                return;
+            }
+            crate::platform::nyxos::apply(
+                vec![nyx_system_proto::Change::Biometrics { value: Some(bio) }],
+                done,
+                |_| finish_sign_in(),
+            );
+        }
+        Some(SignInEdit::Local { .. }) => {
+            let commands = batch.into_iter().filter_map(|edit| match edit {
+                SignInEdit::Local { surface, method, enabled } => Some((surface, method, enabled)),
+                SignInEdit::System(..) => None,
+            }).collect::<Vec<_>>();
+            cmd::background(
+                move || {
+                    let mut first_error = None;
+                    for (surface, method, enabled) in commands {
+                        let value = if enabled { "on" } else { "off" };
+                        if let Err(error) = cmd::run(&[CTL, "policy", "set", &surface, &method, value]) {
+                            first_error.get_or_insert_with(|| error.to_string());
+                        }
+                    }
+                    first_error
+                },
+                |error| {
+                    if let Some(error) = error {
+                        window::toast(error.lines().last().unwrap_or("Couldn't update sign-in"));
+                    }
+                    finish_sign_in();
+                },
+            );
+        }
+    }
+}
+
+fn finish_sign_in() {
+    let more = SIGN_IN_CHANGES.with_borrow_mut(|changes| {
+        changes.applying.clear();
+        !changes.pending.is_empty()
+    });
+    if more {
+        schedule_sign_in();
+    } else {
+        window::rebuild_if_built(ID);
+    }
+}
+
+fn change_bio(edit: impl Fn(&mut nyx_system_proto::Biometrics) + 'static, done: &'static str) {
+    queue_sign_in(SignInEdit::System(Rc::new(edit), done));
+}
+
+fn set_method(methods: &mut Vec<String>, method: &str, enabled: bool) {
+    methods.retain(|value| value != method);
+    if enabled {
+        methods.push(method.to_string());
+    }
 }
 
 /// Turn one way on or off for one place in the configuration, turning the way itself on
@@ -64,9 +182,8 @@ fn set_system_method(surface: &str, method: &str, on: bool, face_backend: Option
     change_bio(
         move |b| {
             let list = b.surfaces.entry(surface.clone()).or_default();
-            list.retain(|m| *m != method);
+            set_method(list, &method, on);
             if on {
-                list.push(method.clone());
                 let rank = |m: &String| ["face", "fingerprint", "security-key"].iter().position(|x| x == m).unwrap_or(9);
                 list.sort_by_key(rank);
                 match method.as_str() {
@@ -74,7 +191,7 @@ fn set_system_method(surface: &str, method: &str, on: bool, face_backend: Option
                     "security-key" => b.security_key = true,
                     _ => {
                         if b.face == "none" {
-                            b.face = face_backend.unwrap_or_else(|| "irlume".into());
+                            b.face = face_backend.clone().unwrap_or_else(|| "irlume".into());
                         }
                         // Ticking it for the lock screen is the choice a webcam needs.
                         if b.face == "gaze" && surface == "lock" {
@@ -191,7 +308,7 @@ pub fn build(page: &Page) {
         let (r, _) = widgets::button_row(
             "Sign in with your face, a fingerprint or a security key",
             "Nyx Biometrics becomes part of the system configuration, which is rebuilt. Your password always works too.",
-            "Turn on…",
+            "Turn on",
             |_| change_bio(|_| {}, "Nyx Biometrics is on"),
         );
         g.add(&r);
@@ -328,7 +445,7 @@ pub fn build(page: &Page) {
             let (r, _) = widgets::button_row(
                 "Finish installing",
                 "Nyx Biometrics needs its small administrator helper to make sign-in changes.",
-                "Install…",
+                "Install",
                 |_| in_terminal("sudo nyx-authctl helper install"),
             );
             ways_h.append(&r);
@@ -337,6 +454,9 @@ pub fn build(page: &Page) {
         let places =
             |m: &str| surfaces.iter().filter(|x| x["methods"].as_array().is_some_and(|ms| ms.iter().any(|v| v == m))).count();
         face_row(&ways_h, &s["face"], places("face"));
+        if nyxos() && s["face"]["installed"] == true && s["face"]["backend"] == "Irlume" {
+            hands_free_row(&ways_h);
+        }
         fingerprint_row(&ways_h, &s["fingerprint"], places("fingerprint"));
         keys_row(&ways_h, &s["keys"]);
         let r = widgets::icon_row("dialog-password-symbolic", "Password", "Always works, everywhere", None);
@@ -391,17 +511,32 @@ fn unlock_table(table: &gtk::Box, status: &Value) {
     table.append(&head);
 
     let autologin = status["autologin"] == true;
-    let bio = if nyxos() { system_bio() } else { Default::default() };
+    let mut bio = if nyxos() { system_bio() } else { Default::default() };
+    let edits = SIGN_IN_CHANGES.with_borrow(|changes| {
+        changes.applying.iter().chain(&changes.pending).cloned().collect::<Vec<_>>()
+    });
+    for edit in &edits {
+        if let SignInEdit::System(edit, _) = edit {
+            edit(&mut bio);
+        }
+    }
     let face_backend = status["face"]["backend"].as_str().map(str::to_lowercase);
     for s in status["surfaces"].as_array().into_iter().flatten() {
         let key = s["key"].as_str().unwrap_or_default().to_string();
         let system = s["system"] == true;
         let managed = system && nyxos();
-        let methods: Vec<String> = if managed {
+        let mut methods: Vec<String> = if managed {
             bio.surfaces.get(system_surface(&key)).cloned().unwrap_or_default()
         } else {
             s["methods"].as_array().into_iter().flatten().filter_map(|m| m.as_str().map(String::from)).collect()
         };
+        for edit in &edits {
+            if let SignInEdit::Local { surface, method, enabled } = edit
+                && surface == &key
+            {
+                set_method(&mut methods, method, *enabled);
+            }
+        }
         let mut order = methods.clone();
         if !order.iter().any(|m| m == "password") {
             order.push("password".into());
@@ -486,8 +621,11 @@ fn unlock_table(table: &gtk::Box, status: &Value) {
                             set_system_method(&key, &m, c.is_active(), backend.clone());
                             return;
                         }
-                        let on = if c.is_active() { "on" } else { "off" };
-                        ctl(vec!["policy".into(), "set".into(), key.clone(), m.clone(), on.into()], "");
+                        queue_sign_in(SignInEdit::Local {
+                            surface: key.clone(),
+                            method: m.clone(),
+                            enabled: c.is_active(),
+                        });
                     });
                 } else {
                     check.set_sensitive(false);
@@ -519,7 +657,7 @@ fn apply_banners(banners: &gtk::Box, status: &Value) {
             true,
         );
         b.add_css_class("sgn-apply");
-        let apply = gtk::Button::with_label("Apply…");
+        let apply = gtk::Button::with_label("Apply");
         apply.set_valign(gtk::Align::Center);
         if !(key == "login" && status["autologin"] == true) {
             apply.add_css_class("suggested-action");
@@ -543,7 +681,7 @@ fn recovery(page: &Page) {
     let (r, _) = widgets::button_row(
         "Undo the last change",
         "Put the sign-in files back the way they were before the last change.",
-        "Undo…",
+        "Undo",
         |_| in_terminal("nyx-authctl pam restore"),
     );
     widgets::keywords("undo restore rollback pam recovery");
@@ -553,6 +691,512 @@ fn recovery(page: &Page) {
          and run <tt>/usr/local/lib/nyx-biometrics/nyx-auth-helper pam-rollback ID</tt> with the newest ID from \
          <tt>/var/lib/nyx-biometrics/pam-backups</tt>.",
     );
+}
+
+const HANDS_FREE: &str = "Hands-free face authentication";
+const IRLUME: &str = "/run/current-system/sw/bin/irlume";
+
+fn hands_free_row(parent: &gtk::Box) {
+    let container = widgets::vbox(0);
+    parent.append(&container);
+    widgets::keywords("hands-free face authentication confirmation sudo administrator prompts");
+    cmd::run_async(&[IRLUME, "auth", "consent", "status"], move |result| {
+        let output = result.unwrap_or_default();
+        let mode = output.lines()
+            .find_map(|line| line.strip_prefix("[consent] privileged face authentication: "));
+        let on = match mode {
+            Some(mode) if mode.starts_with("hands-free (") => true,
+            Some(mode) if mode.starts_with("confirmation required (") => false,
+            _ => {
+                container.append(&widgets::row(HANDS_FREE, "Couldn't read Irlume's current setting.", None));
+                return;
+            }
+        };
+        let control = gtk::Switch::new();
+        control.set_active(on);
+        let overridden = output.contains("environment override");
+        control.set_sensitive(!overridden);
+        let description = if overridden {
+            "An Irlume environment override controls this setting."
+        } else {
+            "Lets sudo and administrator prompts scan automatically wherever Face is enabled. A prompt can authenticate while you are in view."
+        };
+        container.append(&widgets::row(HANDS_FREE, description, Some(control.upcast_ref())));
+        control.connect_state_set(move |control, enabled| {
+            control.set_sensitive(false);
+            let mut args = vec!["/run/wrappers/bin/pkexec", IRLUME, "auth", "consent"];
+            if enabled {
+                args.extend(["hands-free", "--yes"]);
+            } else {
+                args.push("required");
+            }
+            cmd::run_async(&args, move |result| {
+                match result {
+                    Ok(_) => window::toast(if enabled { "Hands-free face authentication is on" } else { "Face confirmation is required" }),
+                    Err(error) => window::toast(&format!("Couldn't change face confirmation: {error}")),
+                }
+                window::rebuild_if_built(ID);
+            });
+            gtk::glib::Propagation::Stop
+        });
+    });
+}
+
+type PreviewFrame = (i32, i32, Vec<u8>);
+
+#[derive(Default)]
+struct PreviewConnection {
+    stream: Option<std::os::unix::net::UnixStream>,
+    cancelled: bool,
+}
+
+impl PreviewConnection {
+    fn cancel(&mut self) {
+        self.cancelled = true;
+        if let Some(stream) = self.stream.take() {
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+        }
+    }
+}
+
+fn decode_preview(value: &Value) -> Option<PreviewFrame> {
+    let width = value["width"].as_u64().filter(|w| (1..=160).contains(w))? as usize;
+    let height = value["height"].as_u64().filter(|h| (1..=120).contains(h))? as usize;
+    let encoded = value["luma"].as_str()?.as_bytes();
+    if encoded.len() != width * height * 2 {
+        return None;
+    }
+    let mut rgb = Vec::with_capacity(width * height * 3);
+    for pair in encoded.chunks_exact(2) {
+        let value = ((pair[0] as char).to_digit(16)? * 16 + (pair[1] as char).to_digit(16)?) as u8;
+        rgb.extend_from_slice(&[value; 3]);
+    }
+    Some((width as i32, height as i32, rgb))
+}
+
+fn verification_uses_infrared_only() -> bool {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::os::unix::net::UnixStream;
+    use std::time::Duration;
+
+    let query = || -> Option<bool> {
+        let mut stream = UnixStream::connect("/run/irlume.sock").ok()?;
+        stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
+        stream.set_write_timeout(Some(Duration::from_secs(2))).ok()?;
+        writeln!(&mut stream, r#"{{"FaceSensorStatus":{{"user":null}}}}"#).ok()?;
+        let mut line = String::new();
+        BufReader::new(stream).take(8192).read_line(&mut line).ok()?;
+        let value: Value = serde_json::from_str(&line).ok()?;
+        Some(value["FaceSensorStatus"]["policy"]["explicit"] == "ir-only-experimental")
+    };
+    query().unwrap_or(false)
+}
+
+fn stream_verification(
+    connection: std::sync::Arc<std::sync::Mutex<PreviewConnection>>,
+    frames: std::sync::Arc<std::sync::Mutex<Option<PreviewFrame>>>,
+    rgb_preview: bool,
+) -> Result<(), String> {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::os::unix::net::UnixStream;
+    use std::time::Duration;
+
+    if rgb_preview && !verification_uses_infrared_only() {
+        return Err("The camera mode changed. Reopen Verify to use the current mode.".into());
+    }
+    let mut socket = UnixStream::connect("/run/irlume.sock").map_err(|e| e.to_string())?;
+    socket.set_read_timeout(Some(Duration::from_secs(25))).map_err(|e| e.to_string())?;
+    socket.set_write_timeout(Some(Duration::from_secs(2))).map_err(|e| e.to_string())?;
+    {
+        let mut state = connection.lock().unwrap();
+        if state.cancelled {
+            return Err("Verification cancelled.".into());
+        }
+        state.stream = Some(socket.try_clone().map_err(|e| e.to_string())?);
+    }
+    let user = gtk::glib::user_name();
+    let request = serde_json::json!({"VerifyWithPreview": {"user": user.to_string_lossy()}});
+    writeln!(&mut socket, "{request}").map_err(|e| e.to_string())?;
+
+    let mut reader = BufReader::new(socket);
+    loop {
+        let mut line = String::new();
+        reader.by_ref().take(65_536).read_line(&mut line).map_err(|e| e.to_string())?;
+        if !line.ends_with('\n') {
+            return Err("Irlume ended verification without a result.".into());
+        }
+        let value: Value = serde_json::from_str(&line).map_err(|_| "Irlume returned an invalid verification result.")?;
+        if let Some(frame) = value.get("VerificationPreview") {
+            if let Some(frame) = decode_preview(frame) {
+                *frames.lock().unwrap() = Some(frame);
+            }
+            continue;
+        }
+        if let Some(result) = value.get("AuthResult") {
+            let refusal = if result["refused_by_policy"] == true {
+                "policy"
+            } else if result["live"] == false {
+                "not-live"
+            } else {
+                "no-match"
+            };
+            return setup_verdict(&serde_json::json!({
+                "event": "result", "terminal": true,
+                "data": { "granted": result["granted"], "live": result["live"], "refusal": refusal }
+            }).to_string());
+        }
+        let message = value["Error"].as_str().or_else(|| value["OperationError"]["message"].as_str());
+        return Err(message.unwrap_or("Irlume couldn't finish verification. Check the camera and try again.").into());
+    }
+}
+
+fn verify_with_preview(
+    picture: &gtk::Picture,
+    status: &gtk::Label,
+    rgb_preview: bool,
+    complete: impl FnOnce(Result<(), String>) + 'static,
+) -> std::sync::Arc<std::sync::Mutex<PreviewConnection>> {
+    use gtk::{gdk, glib};
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+
+    let connection: Arc<Mutex<PreviewConnection>> = Arc::default();
+    let frames: Arc<Mutex<Option<PreviewFrame>>> = Arc::default();
+    let working = Rc::new(Cell::new(true));
+    let timer_working = working.clone();
+    let timer_frames = frames.clone();
+    let picture = picture.clone();
+    let status = status.clone();
+    let mut last = None;
+    glib::timeout_add_local(Duration::from_millis(66), move || {
+        if !timer_working.get() {
+            picture.set_paintable(None::<&gdk::Paintable>);
+            return glib::ControlFlow::Break;
+        }
+        if let Some((width, height, data)) = timer_frames.lock().unwrap().take() {
+            let pixels = glib::Bytes::from_owned(data);
+            let texture = gdk::MemoryTexture::new(width, height, gdk::MemoryFormat::R8g8b8, &pixels, width as usize * 3);
+            picture.set_paintable(Some(&texture));
+            status.set_visible(false);
+            last = Some(Instant::now());
+        } else if last.is_some_and(|frame: Instant| frame.elapsed() > Duration::from_millis(700)) {
+            picture.set_paintable(None::<&gdk::Paintable>);
+            status.set_visible(true);
+            last = None;
+        }
+        glib::ControlFlow::Continue
+    });
+
+    let worker_connection = connection.clone();
+    let reply_connection = connection.clone();
+    cmd::background(
+        move || stream_verification(worker_connection, frames, rgb_preview),
+        move |result| {
+            working.set(false);
+            let mut state = reply_connection.lock().unwrap();
+            state.stream.take();
+            if state.cancelled {
+                return;
+            }
+            drop(state);
+            complete(result);
+        },
+    );
+    connection
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FaceSetup {
+    Enroll,
+    Replace,
+    Verify,
+}
+
+struct PasswordFirst(std::path::PathBuf);
+
+impl PasswordFirst {
+    fn create() -> std::io::Result<Option<Self>> {
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+        let runtime = std::env::var_os("XDG_RUNTIME_DIR")
+            .ok_or_else(|| std::io::Error::other("The session runtime directory is unavailable"))?;
+        let directory = std::path::PathBuf::from(runtime).join("nyx-auth");
+        std::fs::DirBuilder::new().mode(0o700).recursive(true).create(&directory)?;
+        let path = directory.join("password-first");
+        match std::fs::OpenOptions::new().create_new(true).write(true).mode(0o600).open(&path) {
+            Ok(_) => Ok(Some(Self(path))),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+}
+
+impl Drop for PasswordFirst {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+fn face_setup(mode: FaceSetup) {
+    use gtk::gio;
+    use std::ffi::OsStr;
+
+    let enrolled = mode == FaceSetup::Verify;
+    let title = match mode {
+        FaceSetup::Verify => "Verify face sign-in",
+        FaceSetup::Enroll => "Set up face sign-in",
+        FaceSetup::Replace => "Replace face profile",
+    };
+    let (dialog, card) = widgets::dialog(title, 560);
+    let instruction = widgets::label(
+        "Sit at a comfortable distance. Keep your face centered, with even light in front of you.",
+        "settings-option-description",
+    );
+    instruction.set_wrap(true);
+    card.append(&instruction);
+    if mode == FaceSetup::Replace {
+        let note = widgets::label("Your existing profile stays in place until the new capture succeeds.", "dim");
+        note.set_wrap(true);
+        card.append(&note);
+    }
+
+    let preview = widgets::vbox(0);
+    preview.append(&widgets::label("Finding the camera…", "dim"));
+    card.append(&preview);
+    let camera: Rc<RefCell<Option<crate::ext::media::CameraPreview>>> = Rc::default();
+    let preview_ref = preview.downgrade();
+    let preview_camera = camera.clone();
+    let infrared_only = Rc::new(Cell::new(false));
+    let preview_mode = infrared_only.clone();
+    cmd::background(
+        || (cmd::run(&[IRLUME, "camera-mode"]), verification_uses_infrared_only()),
+        move |(result, infrared)| {
+        preview_mode.set(infrared);
+        let Some(preview) = preview_ref.upgrade() else { return };
+        if !preview.is_mapped() {
+            return;
+        }
+        clear(&preview);
+        if let Some(device) = result.as_deref().ok().and_then(setup_camera) {
+            let view = crate::ext::media::camera_preview("Camera preview", "", device, true);
+            preview.append(&view.widget);
+            *preview_camera.borrow_mut() = Some(view);
+        } else {
+            let message = widgets::label("The camera preview is unavailable. You can still start the face scan.", "dim");
+            message.set_wrap(true);
+            preview.append(&message);
+        }
+    });
+
+    let verification_view = gtk::Overlay::new();
+    let verification_picture = gtk::Picture::new();
+    verification_picture.set_content_fit(gtk::ContentFit::Contain);
+    verification_picture.set_size_request(-1, 320);
+    verification_picture.add_css_class("camera-preview");
+    verification_view.set_child(Some(&verification_picture));
+    let verification_status = widgets::label("Waiting for a live camera frame", "dim");
+    verification_status.set_halign(gtk::Align::Center);
+    verification_status.set_valign(gtk::Align::Center);
+    verification_view.add_overlay(&verification_status);
+    verification_view.set_visible(false);
+    card.append(&verification_view);
+
+    let result = widgets::label("", "settings-option-description");
+    result.set_wrap(true);
+    result.set_selectable(true);
+    result.set_visible(false);
+    card.append(&result);
+
+    let actions = widgets::hbox(8);
+    actions.set_halign(gtk::Align::End);
+    let close = gtk::Button::with_label("Close");
+    let action = gtk::Button::with_label(match mode {
+        FaceSetup::Verify => "Verify face",
+        FaceSetup::Enroll => "Enroll face",
+        FaceSetup::Replace => "Replace profile",
+    });
+    action.add_css_class("suggested-action");
+    actions.append(&close);
+    actions.append(&action);
+    card.append(&actions);
+
+    let enrolled = Rc::new(Cell::new(enrolled));
+    let process: Rc<RefCell<Option<gio::Subprocess>>> = Rc::default();
+    let verification = Rc::new(RefCell::new(None::<std::sync::Arc<std::sync::Mutex<PreviewConnection>>>));
+    let closing_verification = verification.clone();
+    let closing_process = process.clone();
+    let closing_preview = camera.clone();
+    dialog.connect_close_request(move |_| {
+        if let Some(connection) = closing_verification.borrow_mut().take() {
+            connection.lock().unwrap().cancel();
+        }
+        if let Some(child) = closing_process.borrow_mut().take() {
+            child.force_exit();
+        }
+        if let Some(camera) = closing_preview.borrow_mut().take() {
+            camera.stop();
+        }
+        window::rebuild_if_built(ID);
+        gtk::glib::Propagation::Proceed
+    });
+    let window = dialog.downgrade();
+    close.connect_clicked(move |_| {
+        if let Some(window) = window.upgrade() {
+            window.close();
+        }
+    });
+
+    action.connect_clicked(move |action| {
+        let verify = enrolled.get();
+        let rgb_preview = verify && infrared_only.get() && camera.borrow().is_some();
+        preview.set_visible(rgb_preview);
+        if let Some(camera) = camera.borrow().as_ref() {
+            if rgb_preview {
+                camera.start();
+            } else {
+                camera.stop();
+            }
+        }
+        result.set_visible(true);
+        instruction.set_text(if verify {
+            "Look at the camera and hold still while Irlume checks your face."
+        } else {
+            "Enter your password to approve enrollment, then look at the camera. The first scan may take a minute to calibrate."
+        });
+        result.set_text(if verify { "Verifying…" } else { "Enrolling…" });
+        if verify {
+            action.set_sensitive(false);
+            close.set_label("Cancel");
+            verification_status.set_visible(true);
+            verification_view.set_visible(!rgb_preview);
+            let (action, close, instruction, result, view, preview) =
+                (action.downgrade(), close.clone(), instruction.clone(), result.clone(), verification_view.clone(), preview.clone());
+            let connection = verify_with_preview(&verification_picture, &verification_status, rgb_preview, move |outcome| {
+                view.set_visible(false);
+                let Some(action) = action.upgrade() else { return };
+                close.set_label("Close");
+                match outcome {
+                    Ok(()) => {
+                        instruction.set_text("Irlume verified your face.");
+                        result.set_text("Choose where to use Face in Sign-in settings.");
+                        action.set_visible(false);
+                        close.set_label("Done");
+                    }
+                    Err(error) => {
+                        result.set_text(&error);
+                        action.set_label("Try verification again");
+                        action.set_sensitive(true);
+                        preview.set_visible(true);
+                    }
+                }
+            });
+            *verification.borrow_mut() = Some(connection);
+            return;
+        }
+        let password_first = match PasswordFirst::create() {
+            Ok(marker) => marker,
+            Err(error) => {
+                result.set_text(&format!("Couldn't prepare password authorization: {error}"));
+                return;
+            }
+        };
+        // The marker is only needed while the authorization request reaches PAM.
+        gtk::glib::timeout_add_seconds_local_once(10, move || drop(password_first));
+        let mut argv = vec![OsStr::new(IRLUME), OsStr::new("enroll")];
+        if mode == FaceSetup::Replace {
+            argv.push(OsStr::new("--reset"));
+        }
+        let child = match gio::Subprocess::newv(&argv, gio::SubprocessFlags::STDOUT_PIPE | gio::SubprocessFlags::STDERR_PIPE) {
+            Ok(child) => child,
+            Err(error) => {
+                result.set_text(&format!("Couldn't start Irlume: {error}"));
+                return;
+            }
+        };
+        action.set_sensitive(false);
+        close.set_label("Cancel");
+        *process.borrow_mut() = Some(child.clone());
+        let (process, action, close, instruction, result, enrolled) =
+            (process.clone(), action.downgrade(), close.clone(), instruction.clone(), result.clone(), enrolled.clone());
+        let (camera, preview) = (camera.clone(), preview.clone());
+        child.clone().communicate_utf8_async(None, gio::Cancellable::NONE, move |output| {
+            if process.borrow_mut().take().is_none() {
+                return;
+            }
+            close.set_label("Close");
+            let Some(action) = action.upgrade() else { return };
+            action.set_sensitive(true);
+            let (_, stderr) = match output {
+                Ok(output) => output,
+                Err(error) => {
+                    result.set_text(&format!("Couldn't read Irlume's result: {error}"));
+                    return;
+                }
+            };
+            if child.is_successful() {
+                enrolled.set(true);
+                instruction.set_text("Your face profile was saved. Verify it with a fresh scan before using it to sign in.");
+                result.set_text("Look at the camera again when you're ready.");
+                action.set_label("Verify face");
+                preview.set_visible(true);
+                if let Some(camera) = camera.borrow().as_ref() {
+                    camera.start();
+                }
+                window::rebuild_if_built(ID);
+            } else {
+                let failure = stderr.as_deref().unwrap_or_default().lines().rfind(|line| !line.trim().is_empty());
+                result.set_text(failure.unwrap_or("Irlume couldn't save a face profile."));
+            }
+        });
+    });
+    dialog.present();
+}
+
+fn setup_camera(output: &str) -> Option<&str> {
+    let device = output.lines().find_map(|line| line.strip_prefix("camera pair: rgb="))?.split_whitespace().next()?;
+    let index = device.strip_prefix("/dev/video")?;
+    (!index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit())).then_some(device)
+}
+
+fn setup_verdict(output: &str) -> Result<(), String> {
+    let event: Value = serde_json::from_str(output.lines().rfind(|line| !line.trim().is_empty()).unwrap_or_default())
+        .map_err(|_| "Irlume didn't return a verification result.".to_string())?;
+    if event["terminal"] == true && event["event"] == "result" {
+        let data = &event["data"];
+        return match (data["granted"].as_bool(), data["live"].as_bool(), data["refusal"].as_str()) {
+            (Some(true), Some(true), _) => Ok(()),
+            (_, _, Some("policy")) => Err("Irlume refused to start verification. Check the Irlume diagnostics.".into()),
+            (_, _, Some("not-live")) => Err("Irlume couldn't verify liveness. Face the camera in even light and try again.".into()),
+            (Some(false), Some(true), _) => Err("Your face didn't match the saved profile. Center your face and try again.".into()),
+            _ => Err("Irlume didn't verify your face. Check the camera and try again.".into()),
+        };
+    }
+    let error = event["error"]["message"].as_str().or_else(|| event["data"]["message"].as_str());
+    Err(error.unwrap_or("Irlume couldn't finish verification. Check the camera and try again.").into())
+}
+
+#[cfg(test)]
+mod face_setup_tests {
+    use super::*;
+
+    #[test]
+    fn setup_reports_success_only_for_a_completed_live_match() {
+        assert!(setup_verdict(r#"{"event":"result","terminal":true,"data":{"granted":true,"live":true}}"#).is_ok());
+        assert!(setup_verdict(r#"{"event":"result","terminal":true,"data":{"granted":false,"live":false,"refusal":"not-live"}}"#).is_err());
+        assert!(setup_verdict(r#"{"event":"capturing","terminal":false,"data":{}}"#).is_err());
+    }
+
+    #[test]
+    fn preview_rejects_malformed_frames() {
+        assert_eq!(decode_preview(&serde_json::json!({"width":1,"height":1,"luma":"cf"})), Some((1,1,vec![207,207,207])));
+        assert!(decode_preview(&serde_json::json!({"width":1,"height":1,"luma":"00ff"})).is_none());
+        assert!(decode_preview(&serde_json::json!({"width":161,"height":1,"luma":"01"})).is_none());
+    }
+
+    #[test]
+    fn setup_uses_the_rgb_video_device() {
+        assert_eq!(setup_camera("camera pair: rgb=/dev/video13 ir=/dev/video7\n"), Some("/dev/video13"));
+        assert_eq!(setup_camera("camera pair: rgb=/dev/random ir=/dev/video7\n"), None);
+    }
 }
 
 fn face_row(h: &gtk::Box, face: &Value, places: usize) {
@@ -566,9 +1210,17 @@ fn face_row(h: &gtk::Box, face: &Value, places: usize) {
         } else {
             "A colour camera only shows someone is there, so it only unlocks the lock screen."
         };
-        let b = gtk::Button::with_label("Manage…");
+        let b = gtk::Button::with_label("Manage");
         b.connect_clicked(|_| in_terminal("nyx-authctl face manage"));
         controls.append(&b);
+        if nyxos() && face["backend"] == "Irlume" {
+            let verify = gtk::Button::with_label("Verify");
+            verify.connect_clicked(|_| face_setup(FaceSetup::Verify));
+            controls.append(&verify);
+            let replace = gtk::Button::with_label("Re-enroll");
+            replace.connect_clicked(|_| face_setup(FaceSetup::Replace));
+            controls.append(&replace);
+        }
         let backend = face["backend"].as_str().unwrap_or("");
         let mut parts = vec![format!("{backend} · {camera} camera").trim_start_matches(" · ").to_string()];
         if places > 0 {
@@ -576,9 +1228,16 @@ fn face_row(h: &gtk::Box, face: &Value, places: usize) {
         }
         (parts.join(" · "), true, reach.to_string())
     } else if face["installed"] == true {
-        let b = gtk::Button::with_label("Set up…");
+        let b = gtk::Button::with_label("Set up");
         b.add_css_class("suggested-action");
-        b.connect_clicked(|_| in_terminal("nyx-authctl face enroll"));
+        let guided = nyxos() && face["backend"] == "Irlume";
+        b.connect_clicked(move |_| {
+            if guided {
+                face_setup(FaceSetup::Enroll);
+            } else {
+                in_terminal("nyx-authctl face enroll");
+            }
+        });
         controls.append(&b);
         (
             format!("{} is installed. Look at the camera to enroll your face.", face["backend"].as_str().unwrap_or("")),
@@ -587,11 +1246,11 @@ fn face_row(h: &gtk::Box, face: &Value, places: usize) {
         )
     } else {
         let backend = face["backend"].as_str().unwrap_or("Irlume").to_lowercase();
-        let b = gtk::Button::with_label(if nyxos() { "Turn on…" } else { "Install…" });
+        let b = gtk::Button::with_label(if nyxos() { "Turn on" } else { "Install" });
         b.connect_clicked(move |_| {
             if nyxos() {
                 let backend = backend.clone();
-                change_bio(move |b| b.face = backend, "Face sign-in is installed: set it up here");
+                change_bio(move |b| b.face = backend.clone(), "Face sign-in is installed: set it up here");
             } else {
                 in_terminal(&format!("yay -S {backend}"))
             }
@@ -617,7 +1276,7 @@ fn fingerprint_row(h: &gtk::Box, fp: &Value, places: usize) {
         Some("ready") => {
             let readers = fp["readers"].as_array().cloned().unwrap_or_default();
             let name = readers.first().and_then(|r| r["name"].as_str()).unwrap_or("Fingerprint reader").to_string();
-            let b = gtk::Button::with_label(if n == 0 { "Set up…" } else { "Add a finger…" });
+            let b = gtk::Button::with_label(if n == 0 { "Set up" } else { "Add a finger" });
             b.connect_clicked(|_| in_terminal("nyx-authctl finger enroll"));
             controls.append(&b);
             if n == 0 {
@@ -631,7 +1290,7 @@ fn fingerprint_row(h: &gtk::Box, fp: &Value, places: usize) {
             }
         }
         Some("not-installed") => {
-            let b = gtk::Button::with_label(if nyxos() { "Turn on…" } else { "Install…" });
+            let b = gtk::Button::with_label(if nyxos() { "Turn on" } else { "Install" });
             b.connect_clicked(|_| {
                 if nyxos() {
                     change_bio(|b| b.fingerprint = true, "Fingerprint sign-in is installed: add a finger here");
@@ -770,7 +1429,7 @@ fn ssh_rows(h: &gtk::Box, keys: &Value) {
     let (r, _) = widgets::button_row(
         "Bring keys to this computer",
         "Fetch the SSH keys kept on a security key into ~/.ssh.",
-        "Load…",
+        "Load",
         |_| in_terminal("nyx-authctl ssh-key load"),
     );
     widgets::keywords("ssh key security key load resident");

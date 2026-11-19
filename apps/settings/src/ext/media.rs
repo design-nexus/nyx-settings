@@ -115,6 +115,29 @@ fn camera_command(device: &str) -> Vec<String> {
 
 /// A preview of a video device, started and stopped with a button.
 pub fn camera(title: &str, desc: &str, device: &str) -> gtk::Box {
+    camera_preview(title, desc, device, false).widget
+}
+
+pub struct CameraPreview {
+    pub widget: gtk::Box,
+    running: Rc<RefCell<Option<Running<Vec<u8>>>>>,
+    button: gtk::Button,
+    stop: Rc<dyn Fn()>,
+}
+
+impl CameraPreview {
+    pub fn start(&self) {
+        if self.running.borrow().is_none() {
+            self.button.emit_clicked();
+        }
+    }
+
+    pub fn stop(&self) {
+        (self.stop)();
+    }
+}
+
+pub fn camera_preview(title: &str, desc: &str, device: &str, autostart: bool) -> CameraPreview {
     let outer = gtk::Box::new(gtk::Orientation::Vertical, 10);
     outer.add_css_class("settings-option");
     outer.add_css_class("tall");
@@ -151,10 +174,11 @@ pub fn camera(title: &str, desc: &str, device: &str) -> gtk::Box {
 
     let running: Rc<RefCell<Option<Running<Vec<u8>>>>> = Rc::default();
     let stop = {
-        let (running, button) = (running.clone(), button.clone());
+        let (running, button, picture) = (running.clone(), button.clone(), picture.clone());
         Rc::new(move || {
             running.borrow_mut().take();
             button.set_label("Start preview");
+            picture.set_paintable(None::<&gdk::Paintable>);
         })
     };
     {
@@ -196,12 +220,14 @@ pub fn camera(title: &str, desc: &str, device: &str) -> gtk::Box {
         });
     }
     // Snapshots (a developer aid) start the preview so it shows up in the picture.
-    if std::env::var_os("SETTINGS_SNAPSHOT").is_some() {
+    if autostart || std::env::var_os("SETTINGS_SNAPSHOT").is_some() {
         let b = button.clone();
         glib::idle_add_local_once(move || b.emit_clicked());
     }
     // Show new frames; stop when the page goes away.
     let weak = outer.downgrade();
+    let stop_when_hidden = stop.clone();
+    let preview_running = running.clone();
     glib::timeout_add_local(Duration::from_millis(66), move || {
         let Some(outer) = weak.upgrade() else {
             running.borrow_mut().take();
@@ -211,7 +237,7 @@ pub fn camera(title: &str, desc: &str, device: &str) -> gtk::Box {
             return glib::ControlFlow::Continue;
         }
         if !outer.is_mapped() {
-            stop();
+            stop_when_hidden();
             status.set_text("Preview stopped.");
             return glib::ControlFlow::Continue;
         }
@@ -227,7 +253,7 @@ pub fn camera(title: &str, desc: &str, device: &str) -> gtk::Box {
             status.set_visible(false);
         }
         if ended {
-            stop();
+            stop_when_hidden();
             let why = if error.contains("busy") {
                 "The camera is in use by another app.".to_string()
             } else if error.is_empty() {
@@ -240,7 +266,7 @@ pub fn camera(title: &str, desc: &str, device: &str) -> gtk::Box {
         }
         glib::ControlFlow::Continue
     });
-    outer
+    CameraPreview { widget: outer, running: preview_running, button, stop }
 }
 
 // ----- Microphone meter -----
