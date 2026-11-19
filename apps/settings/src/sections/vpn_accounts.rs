@@ -499,7 +499,7 @@ fn provider_row(p: Provider) -> gtk::Box {
                     cmd::background(sign_out, move |r| {
                         match r {
                             Ok(()) => window::toast(&format!("Signed out of {}", p.name)),
-                            Err(e) => window::toast(&format!("{}: {e:#}", p.name)),
+                            Err(e) => failed(&format!("Couldn't sign out of {}", p.name), &format!("{e:#}")),
                         }
                         recheck(p.id);
                         refresh();
@@ -511,6 +511,12 @@ fn provider_row(p: Provider) -> gtk::Box {
         }
     };
     widgets::icon_row("security-high-symbolic", p.name, &gtk::glib::markup_escape_text(&desc), Some(&control))
+}
+
+/// Something failed: a dialog that stays until it's read (a toast goes before a long
+/// message can be).
+fn failed(title: &str, detail: &str) {
+    gtk::AlertDialog::builder().message(title).detail(detail).modal(true).build().show(window::window().as_ref());
 }
 
 /// Whether the provider's app is installed.
@@ -531,7 +537,7 @@ fn install(p: Provider) {
                 sign_in(p);
             }
             Ok(_) => window::toast(&format!("{} installed; open Settings again if it doesn't show", p.name)),
-            Err(e) => window::toast(&format!("Couldn't install {}: {e:#}", p.name)),
+            Err(e) => failed(&format!("{} couldn't be installed", p.name), &format!("{e:#}")),
         }
     });
 }
@@ -660,7 +666,7 @@ fn import_file() {
                     show_add(false);
                 }
             }
-            Err(e) => window::toast(&format!("Couldn't import: {e}")),
+            Err(e) => failed("The file couldn't be imported", &format!("{e:#}")),
         });
     });
 }
